@@ -9,11 +9,27 @@ YolPol is a multilingual, SEO-first B2B catalog built with the Next.js App Route
 - `src/app` composes routes and framework metadata. Route files stay thin.
 - `src/i18n` owns supported locales, message loading, locale-aware navigation, and request routing.
 - `src/shared` contains cross-feature code only when it has a real consumer. Current modules hold site configuration and shared SEO metadata construction.
-- Future business features belong under `src/features/<feature>`, split into `domain`, `application`, `infrastructure`, and `presentation` only where those layers solve a concrete need.
+- Every business feature has permanent `domain`, `application`, `infrastructure`, `presentation`, and `testing` layers. Responsibility-based subdirectories own entities, value objects, ports, use cases, repositories, presenters, tests, and test utilities; empty directories are not created.
+
+## Product Catalog Boundary
+
+The product feature owns the `Product` aggregate, nominal value objects, repository contract, catalog use cases, static repository, presentation view models, and presenter. The aggregate keeps language-independent identity, classification, lifecycle, images, timestamps, and technical specifications separate from localized descriptive and SEO content.
+
+The framework-independent locale type lives in `src/shared/types`. Domain and application code may use that type without importing next-intl. The i18n layer consumes the same locale definition so supported locales have one source of truth.
+
+New products are created as drafts from primitive inputs. Existing records use an explicit reconstitution path that revalidates every invariant, including publication requirements. Status changes use aggregate transitions and cannot move timestamps backwards.
+
+Product repository interfaces point inward and expose only the read operations required by the catalog. The static adapter validates global ID, SKU, slug, and product-locale uniqueness plus cross-record references. It stores frozen source snapshots and hydrates fresh aggregates per result, preventing callers from mutating repository state. A future CMS or database adapter can replace it without changing domain rules or application use cases.
+
+Published products must include valid English content and at least one image with exactly one primary image. Optional technical specifications remain optional because product data availability varies. Slugs are currently global and language-independent. Other locales may be added independently; use cases return locale-unavailable results instead of silently mixing languages.
+
+Public listing fails closed to `published` when no status is supplied. Draft and archived listings require explicit status filters; a future administrative catalog should use a separate use case or authorization policy.
+
+Application DTOs carry use-case data across the application boundary. Product view models group that data for stable presentation consumption, sort images deterministically, and preserve explicit query outcomes without fetching, translating, or adding business rules.
 
 ## Dependency Direction
 
-Domain code is framework-independent. Application code may use domain abstractions. Infrastructure implements repository interfaces. Presentation invokes application use cases. App Router files compose presentation and framework concerns; they do not access product data directly.
+Dependencies flow `presentation → application → domain` and `infrastructure → application/domain`. Domain and application are framework-independent. Production code never imports testing utilities. App Router files compose presentation and framework concerns; they do not access infrastructure or product data directly.
 
 ## Rendering and Internationalization
 
@@ -25,4 +41,4 @@ Each localized home page has translated metadata, a canonical URL, locale altern
 
 ## Testing
 
-Vitest covers framework-independent rules and application use cases. Lint, strict TypeScript checking, unit tests, and a production build are the required foundation checks.
+Vitest covers framework-independent rules, repository adapters, and application use cases. Lint, strict TypeScript checking, unit tests, and a production build are the required checks.

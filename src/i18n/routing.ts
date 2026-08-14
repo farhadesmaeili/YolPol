@@ -1,9 +1,14 @@
 import {defineRouting} from "next-intl/routing";
 
+import {
+  defaultLocale,
+  supportedLocales,
+} from "@/shared/types/locale";
+
 export const routing = defineRouting({
-  locales: ["en", "tr", "fa", "ar"],
-  defaultLocale: "en",
+  locales: supportedLocales,
+  defaultLocale,
   localePrefix: "always",
 });
 
-export type Locale = (typeof routing.locales)[number];
+export type {Locale} from "@/shared/types/locale";

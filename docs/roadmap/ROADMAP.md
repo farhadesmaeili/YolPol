@@ -9,14 +9,18 @@
 
 ## 2. Product Catalog Domain
 
-- Typed product and category models
-- Locale-separated local product content
-- Repository interfaces and local implementations
-- Business-rule and use-case tests
+- [x] Typed product and category models
+- [x] Locale-separated static content boundary
+- [x] Read-oriented repository interface and static implementation
+- [x] Catalog use cases and business-rule tests
+- [x] Framework-independent product presenter and view models
+- [x] Static dataset integrity and isolated repository results
+- [ ] Confirm and enter real product data through an approved content process
 
 ## 3. Catalog Presentation
 
 - Product listing, category, and detail pages
+- Separate authorized administrative listing policy if required
 - Responsive images and accessible filtering where justified
 - Product and breadcrumb structured data
 
