@@ -1,0 +1,6 @@
+{
+  "Common": {"viewProducts": "Ürünleri görüntüle", "contactUs": "Bize ulaşın", "requestQuote": "Teklif isteyin"},
+  "Navigation": {"primary": "Ana navigasyon", "home": "Ana sayfa", "products": "Ürünler", "about": "Hakkımızda", "contact": "İletişim"},
+  "HomePage": {"eyebrow": "Küresel pazarlar için cam ambalaj", "heading": "İçecek ve ilaç markaları için güvenilir cam şişeler", "description": "YolPol, uluslararası pazarlardaki profesyonel alıcılara ihracata uygun cam ambalaj çözümleri sunar."},
+  "Metadata": {"title": "YolPol | Cam Şişe Kataloğu", "description": "Uluslararası alıcılar için YolPol'ün içecek ve ilaç cam şişelerinden oluşan çok dilli kataloğunu keşfedin."}
+}
