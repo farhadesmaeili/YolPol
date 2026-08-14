@@ -1,6 +1,7 @@
 import {hasLocale} from "next-intl";
 
-import {routing, type Locale} from "@/i18n/routing";
+import {routing} from "@/i18n/routing";
+import type {Locale} from "@/shared/types/locale";
 
 const rtlLocales: ReadonlySet<Locale> = new Set(["fa", "ar"]);
 

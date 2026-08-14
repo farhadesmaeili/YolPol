@@ -9,8 +9,12 @@ YolPol will grow from a small local catalog into multiple business capabilities.
 
 ## Decision
 
-Organize business capabilities by feature. Within a feature, introduce domain, application, infrastructure, and presentation boundaries only when real behavior requires them. Dependencies point inward: domain remains framework-free, application targets domain abstractions, infrastructure implements repository contracts, and presentation calls use cases. App Router modules remain composition roots.
+Organize every business capability by feature with permanent `domain`, `application`, `infrastructure`, `presentation`, and `testing` layers. Within those layers, use responsibility-based subdirectories only when they contain real files.
+
+Dependencies point inward: presentation uses application contracts, application uses domain, and infrastructure implements application ports using domain aggregates. Domain and application remain framework-independent. Production code never imports the testing layer, and App Router modules consume presentation/application boundaries rather than infrastructure.
+
+Layer-owned tests live in each layer's `__tests__`; reusable fixtures, builders, and fakes live in the feature-level testing layer. Presentation is a real boundary even before React UI exists and may consist of framework-independent presenters and view models.
 
 ## Consequences
 
-Business rules can be tested without Next.js, and a future content source can replace local data behind repository interfaces. The team must avoid both route-level business logic and speculative layers with no current consumer.
+Business rules can be tested without Next.js, a future content source can replace local data behind repository interfaces, and UI models remain independent of persistence. Every feature has a consistent top-level shape, but empty directories and speculative files remain prohibited.
