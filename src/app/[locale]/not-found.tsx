@@ -7,7 +7,7 @@ export default async function LocalizedNotFound() {
   const locale = await getRootLocale();
   const translations = await getTranslations({locale, namespace: "NotFound"});
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-6 py-16 sm:px-10">
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-3xl flex-col justify-center px-6 py-16 sm:px-10">
       <h1 className="text-4xl font-semibold tracking-tight text-stone-950">
         {translations("title")}
       </h1>
@@ -20,6 +20,6 @@ export default async function LocalizedNotFound() {
       >
         {translations("backHome")}
       </Link>
-    </main>
+    </div>
   );
 }

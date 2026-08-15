@@ -9,6 +9,7 @@ YolPol is a multilingual, SEO-first B2B catalog built with the Next.js App Route
 - `src/app` composes routes and framework metadata. Route files stay thin.
 - `src/i18n` owns supported locales, message loading, locale-aware navigation, and request routing.
 - `src/shared` contains cross-feature code only when it has a real consumer. Current modules hold site configuration and shared SEO metadata construction.
+- `src/shared/presentation/site-shell` owns the global header, footer, and narrowly scoped interactive navigation. The shell is cross-cutting UI, not a business feature, so it does not receive artificial domain or infrastructure layers.
 - Every business feature has permanent `domain`, `application`, `infrastructure`, `presentation`, and `testing` layers. Responsibility-based subdirectories own entities, value objects, ports, use cases, repositories, presenters, tests, and test utilities; empty directories are not created.
 
 ## Product Catalog Boundary
@@ -41,11 +42,15 @@ Dependencies flow `presentation → application → domain` and `infrastructure 
 
 English, Turkish, Persian, and Arabic use mandatory URL prefixes. The localized root layout validates the route locale, sets `lang` and text direction, loads messages on the server, and pre-generates locale parameters. Persian and Arabic render RTL; English and Turkish render LTR.
 
+The localized root layout renders one shared header, one main landmark, and one shared footer. Server Components own the shell and localized content; the navigation controller is the only Client Component and exists for mobile-menu state, active-route state, and route-preserving locale switches. Non-localized brand, contact, social, and public navigation destinations live in typed shared configuration.
+
 ## SEO Foundation
 
 Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. `robots.ts` and `sitemap.ts` use the shared site origin. The current origin is a documented placeholder and must be replaced before launch.
 
-Product listing and detail metadata use the same centralized origin and localized URL helper. Product alternates include only locales with verified content. The sitemap contains localized home/listing pages plus published product detail URLs for each available locale; drafts, archived products, and unavailable locales are excluded through application/composition boundaries.
+Product listing and detail metadata use the same centralized origin and localized URL helper. Product alternates include only locales with verified content. Generic JSON-LD serialization and script rendering live in shared presentation SEO; Product presentation and static content routes consume that shared implementation while retaining ownership of their feature-specific structured-data mapping. The sitemap contains localized home/listing pages plus published product detail URLs for each available locale; drafts, archived products, and unavailable locales are excluded through application/composition boundaries.
+
+Static category pages call the Product composition root with an explicit category filter, preserving the published-only application policy. About and Contact remain thin App Router content routes. Category, About, and Contact pages use localized canonical, alternate, Open Graph, and Breadcrumb structured data. The sitemap also includes these localized static routes.
 
 ## Testing
 

@@ -86,6 +86,10 @@ Dependency rules:
   or React components.
 - Do not access product data directly from route components.
 - Do not create abstractions without a real use case.
+- Treat cross-cutting site-shell components as shared presentation UI, not
+  as artificial business features with empty architectural layers.
+- Store non-localized brand, navigation, and contact facts in typed shared
+  configuration; keep their user-facing labels in locale messages.
 - Feature-specific metadata and structured-data mapping belong to the
   feature presentation layer. JSON-LD may contain only verified data that is
   consistent with visible page content.

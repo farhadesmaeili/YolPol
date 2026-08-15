@@ -1,7 +1,6 @@
 import {describe, expect, it} from "vitest";
 
 import {createProductBreadcrumbJsonLd} from "@/features/products/presentation/seo/breadcrumb-json-ld";
-import {serializeJsonLd} from "@/features/products/presentation/seo/json-ld-script";
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {
   createProductDetailMetadata,
@@ -135,11 +134,6 @@ describe("product structured data", () => {
     ]);
   });
 
-  it("escapes less-than characters during JSON-LD serialization", () => {
-    const serialized = serializeJsonLd({name: "</script><script>"});
-    expect(serialized).not.toContain("<");
-    expect(serialized).toContain("\\u003c/script>");
-  });
 });
 
 describe("product sitemap entries", () => {

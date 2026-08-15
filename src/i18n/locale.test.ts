@@ -42,6 +42,15 @@ describe("locale configuration", () => {
     }
   });
 
+  it("contains localized shell, category, About, and Contact messages", () => {
+    for (const messages of Object.values(messagesByLocale)) {
+      expect(messages.SiteShell.navigation).toHaveProperty("olive-oil");
+      expect(messages.CategoryPages).toHaveProperty("beverage.metadata.title");
+      expect(messages.About).toHaveProperty("metadata.description");
+      expect(messages.Contact).toHaveProperty("metadata.description");
+    }
+  });
+
   it.each([
     ["en", "Glass Bottles for Olive Oil, Food and Beverages", "pharmaceutical"],
     ["tr", "Zeytinyağı, Gıda ve İçecekler için Cam Şişeler", "ilaç"],

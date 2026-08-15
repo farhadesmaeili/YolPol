@@ -11,6 +11,8 @@ import arMessages from "@/i18n/messages/ar.json";
 import enMessages from "@/i18n/messages/en.json";
 import faMessages from "@/i18n/messages/fa.json";
 import trMessages from "@/i18n/messages/tr.json";
+import {routing} from "@/i18n/routing";
+import {localizedAbsoluteUrl} from "@/shared/seo/metadata";
 
 const messagesByLocale = {
   en: enMessages,
@@ -20,14 +22,49 @@ const messagesByLocale = {
 } as const;
 
 describe("verified Product static routes", () => {
-  it("creates 36 localized detail routes and 44 unique sitemap URLs", async () => {
+  it("creates 36 localized detail routes and 64 unique sitemap URLs", async () => {
     const routes = await listPublishedProductRoutes();
     expect(routes).toHaveLength(36);
     expect(new Set(routes.map(({locale, slug}) => `${locale}/${slug}`)).size).toBe(36);
 
     const entries = await sitemap();
-    expect(entries).toHaveLength(44);
-    expect(new Set(entries.map(({url}) => url)).size).toBe(44);
+    const urls = new Set(entries.map(({url}) => url));
+    const expectedProductUrls = routes.map(({locale, slug}) =>
+      localizedAbsoluteUrl(locale, `/products/${slug}`),
+    );
+    const staticPaths = [
+      "/",
+      "/products",
+      "/products/olive-oil",
+      "/products/food",
+      "/products/beverage",
+      "/about",
+      "/contact",
+    ] as const;
+    const expectedStaticUrls = staticPaths.flatMap((pathname) =>
+      routing.locales.map((locale) => localizedAbsoluteUrl(locale, pathname)),
+    );
+
+    expect(entries).toHaveLength(64);
+    expect(urls.size).toBe(64);
+    expect(urls).toEqual(new Set([...expectedStaticUrls, ...expectedProductUrls]));
+    expect(expectedProductUrls).toHaveLength(36);
+    expect(
+      entries.filter(({url}) =>
+        /\/products\/(?:olive-oil|food|beverage)$/.test(url),
+      ),
+    ).toHaveLength(12);
+    expect(entries.some(({url}) => url.includes("/products/pharmaceutical"))).toBe(
+      false,
+    );
+    for (const entry of entries) {
+      expect(entry.alternates?.languages).toMatchObject({
+        en: expect.stringContaining("/en"),
+        tr: expect.stringContaining("/tr"),
+        fa: expect.stringContaining("/fa"),
+        ar: expect.stringContaining("/ar"),
+      });
+    }
   });
 
   it("builds complete metadata and verified structured data for a real Product", async () => {
