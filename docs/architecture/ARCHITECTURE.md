@@ -46,7 +46,7 @@ The localized root layout renders one shared header, one main landmark, and one 
 
 ## SEO Foundation
 
-Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. `robots.ts` and `sitemap.ts` use the shared site origin. The current origin is a documented placeholder and must be replaced before launch.
+Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. `robots.ts` and `sitemap.ts` use the centrally owned approved production origin, `https://yolpol.com`.
 
 Product listing and detail metadata use the same centralized origin and localized URL helper. Product alternates include only locales with verified content. Generic JSON-LD serialization and script rendering live in shared presentation SEO; Product presentation and static content routes consume that shared implementation while retaining ownership of their feature-specific structured-data mapping. The sitemap contains localized home/listing pages plus published product detail URLs for each available locale; drafts, archived products, and unavailable locales are excluded through application/composition boundaries.
 
@@ -55,3 +55,13 @@ Static category pages call the Product composition root with an explicit categor
 ## Testing
 
 Vitest covers framework-independent rules, repository adapters, and application use cases. Lint, strict TypeScript checking, unit tests, and a production build are the required checks.
+
+## Customer Inquiry Foundation
+
+The Inquiry aggregate owns customer contact and location data, privacy-consent evidence, one or more immutable localized Product snapshots, source context, lifecycle state, and timestamps. Its feature permanently contains `domain`, `application`, `infrastructure`, `presentation`, and `testing` layers. Creation accepts untrusted primitives and starts at `received`; reconstitution revalidates persisted state; lifecycle changes use an explicit forward-only transition policy.
+
+Inquiry application code verifies Product selections through the Inquiry-owned `InquiryProductCatalog` port. A future composition adapter will translate the existing Product application boundary into trusted Product ID, SKU, global slug, publication, and localized-name facts. Every returned ID must equal the requested ID, and malformed or failed catalog responses become provider-independent dependency failures. Inquiry never imports Product aggregates or infrastructure.
+
+`SubmitInquiry` persists the aggregate before requesting independent email and Telegram notifications. Persistence failure prevents notification attempts; notification failure preserves acceptance and returns the failed provider-independent channel names. This foundation does not claim transactional Outbox, retries, idempotency, or exactly-once delivery. The integration phase must add durable PostgreSQL-backed notification jobs or an equivalent Outbox/retry mechanism.
+
+Infrastructure currently owns provider-independent persistence records, aggregate record mapping, and external-payload boundary validation only. The unknown-payload parser rejects unexpected keys and reconstructs fresh known primitive fields; semantic invariants remain in the domain. The application Clock owns both creation and consent timestamps. Source paths must begin with their matching locale and exclude dot segments, query strings, hashes, and unsafe encodings. It deliberately has no fake production repository. No public Inquiry route or form is activated until approved privacy copy and real integrations exist.

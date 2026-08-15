@@ -42,12 +42,14 @@ describe("locale configuration", () => {
     }
   });
 
-  it("contains localized shell, category, About, and Contact messages", () => {
+  it("contains localized shell, category, About, Contact, and Inquiry messages", () => {
     for (const messages of Object.values(messagesByLocale)) {
       expect(messages.SiteShell.navigation).toHaveProperty("olive-oil");
       expect(messages.CategoryPages).toHaveProperty("beverage.metadata.title");
       expect(messages.About).toHaveProperty("metadata.description");
       expect(messages.Contact).toHaveProperty("metadata.description");
+      expect(messages.Inquiry).toHaveProperty("submission.integrationUnavailable");
+      expect(messages.Inquiry).toHaveProperty("units.truckloads");
     }
   });
 

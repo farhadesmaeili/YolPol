@@ -31,4 +31,4 @@ Tests directly cover safe shared JSON-LD rendering, mixed-category composition f
 
 ## Deferred Work
 
-The production site origin, privacy page, quotation workflow, content-managed sources, search, filtering controls, analytics, and deployment remain deferred. No form submission, API route, database, CRM, logistics, pricing, inventory, or authentication capability is introduced.
+The privacy page, activated quotation workflow, content-managed sources, search, filtering controls, analytics, and deployment remain deferred. The production origin was subsequently approved as `https://yolpol.com` in Task 0006. No form submission, API route, database, CRM, logistics, pricing, inventory, or authentication capability is introduced.

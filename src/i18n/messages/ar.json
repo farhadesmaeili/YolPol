@@ -21,5 +21,6 @@
   "ProductPricing": {"inquiry": "اطلب السعر"},
   "ProductCategories": {"oliveOil": "زجاجات زيت الزيتون", "food": "زجاجات الأغذية", "beverage": "زجاجات المشروبات", "pharmaceutical": "زجاجات الأدوية"},
   "Breadcrumbs": {"label": "مسار التنقل", "home": "الرئيسية", "products": "المنتجات"},
-  "NotFound": {"title": "الصفحة غير موجودة", "description": "تعذر العثور على الصفحة المطلوبة أو نسخة المنتج بهذه اللغة.", "backHome": "العودة إلى الرئيسية"}
+  "NotFound": {"title": "الصفحة غير موجودة", "description": "تعذر العثور على الصفحة المطلوبة أو نسخة المنتج بهذه اللغة.", "backHome": "العودة إلى الرئيسية"},
+  "Inquiry": {"customerInformation": "معلومات العميل", "fullName": "الاسم الكامل", "company": "الشركة", "country": "الدولة", "city": "المدينة", "email": "البريد الإلكتروني", "phone": "الهاتف أو واتساب", "telegramUsername": "اسم مستخدم تيليغرام", "preferredContact": "طريقة التواصل المفضلة", "productSelection": "اختيار المنتجات", "quantity": "الكمية", "units": {"pieces": "قطع", "packages": "عبوات", "pallets": "منصات", "truckloads": "حمولات شاحنة"}, "destination": "الوجهة", "message": "الرسالة", "privacyConsent": "أوافق صراحة على شروط الخصوصية المذكورة.", "validation": {"required": "هذا الحقل مطلوب.", "invalid": "أدخل قيمة صحيحة.", "productUnavailable": "المنتج المحدد غير متاح."}, "submission": {"idle": "جاهز", "submitting": "جارٍ الإرسال", "accepted": "تم استلام طلبك.", "acceptedWithWarning": "تم استلام طلبك، ولكن تعذر إرسال إشعار واحد أو أكثر.", "integrationUnavailable": "إرسال الطلبات غير متاح حالياً."}}
 }

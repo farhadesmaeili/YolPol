@@ -37,7 +37,7 @@ function expectLocalizedMetadata(
   description: string,
 ) {
   const localized = (candidate: Locale) =>
-    `https://example.com/${candidate}${pathname}`;
+    `https://yolpol.com/${candidate}${pathname}`;
   expect(metadata).toMatchObject({
     title,
     description,

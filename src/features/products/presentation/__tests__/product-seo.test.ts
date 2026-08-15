@@ -48,13 +48,13 @@ describe("product metadata", () => {
       title: "Ürünler",
       description: "Ürün açıklaması",
     });
-    expect(metadata.alternates?.canonical).toBe("https://example.com/tr/products");
+    expect(metadata.alternates?.canonical).toBe("https://yolpol.com/tr/products");
     expect(metadata.alternates?.languages).toEqual({
-      en: "https://example.com/en/products",
-      tr: "https://example.com/tr/products",
-      fa: "https://example.com/fa/products",
-      ar: "https://example.com/ar/products",
-      "x-default": "https://example.com/en/products",
+      en: "https://yolpol.com/en/products",
+      tr: "https://yolpol.com/tr/products",
+      fa: "https://yolpol.com/fa/products",
+      ar: "https://yolpol.com/ar/products",
+      "x-default": "https://yolpol.com/en/products",
     });
   });
 
@@ -66,15 +66,15 @@ describe("product metadata", () => {
     expect(metadata).toMatchObject({
       title: "Verified SEO title",
       description: "Verified SEO description.",
-      alternates: {canonical: "https://example.com/en/products/test-product"},
+      alternates: {canonical: "https://yolpol.com/en/products/test-product"},
       openGraph: {
         title: "Verified SEO title",
-        images: ["https://example.com/fixtures/product.webp"],
+        images: ["https://yolpol.com/fixtures/product.webp"],
       },
     });
     expect(metadata.alternates?.languages).toHaveProperty(
       "x-default",
-      "https://example.com/en/products/test-product",
+      "https://yolpol.com/en/products/test-product",
     );
   });
 });
@@ -100,8 +100,8 @@ describe("product structured data", () => {
       category: ["Food bottles", "Beverage bottles"],
       color: "Clear",
       material: "Glass",
-      url: "https://example.com/en/products/test-product",
-      image: ["https://example.com/fixtures/product.webp"],
+      url: "https://yolpol.com/en/products/test-product",
+      image: ["https://yolpol.com/fixtures/product.webp"],
       additionalProperty: [
         {"@type": "PropertyValue", name: "Capacity", value: "500 ml"},
         {"@type": "PropertyValue", name: "Bottle shape", value: "Round"},
@@ -128,9 +128,9 @@ describe("product structured data", () => {
       productLabel: "محصول آزمایشی",
     });
     expect(jsonLd.itemListElement.map(({item}) => item)).toEqual([
-      "https://example.com/fa",
-      "https://example.com/fa/products",
-      "https://example.com/fa/products/test-product",
+      "https://yolpol.com/fa",
+      "https://yolpol.com/fa/products",
+      "https://yolpol.com/fa/products/test-product",
     ]);
   });
 
@@ -144,13 +144,13 @@ describe("product sitemap entries", () => {
       {locale: "tr", slug: "first-product"},
     ]);
     expect(entries.map(({url}) => url)).toEqual([
-      "https://example.com/en/products/first-product",
-      "https://example.com/tr/products/first-product",
-      "https://example.com/tr/products/second-product",
+      "https://yolpol.com/en/products/first-product",
+      "https://yolpol.com/tr/products/first-product",
+      "https://yolpol.com/tr/products/second-product",
     ]);
     expect(entries[0].alternates?.languages).toEqual({
-      en: "https://example.com/en/products/first-product",
-      tr: "https://example.com/tr/products/first-product",
+      en: "https://yolpol.com/en/products/first-product",
+      tr: "https://yolpol.com/tr/products/first-product",
     });
     expect(entries.some(({url}) => url.includes("/fa/products/"))).toBe(false);
   });
