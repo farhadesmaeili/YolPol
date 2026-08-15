@@ -80,10 +80,15 @@ Dependency rules:
 - When moving files, update imports, remove obsolete locations, and inspect
   the final feature tree for misplaced or loose files.
 - App Router files must remain thin.
+- App Router files consume explicit composition roots and must never wire or
+  import feature infrastructure directly.
 - Do not place business logic inside `page.tsx`, layouts, route handlers,
   or React components.
 - Do not access product data directly from route components.
 - Do not create abstractions without a real use case.
+- Feature-specific metadata and structured-data mapping belong to the
+  feature presentation layer. JSON-LD may contain only verified data that is
+  consistent with visible page content.
 
 ## Next.js Rules
 
@@ -154,6 +159,8 @@ The project must support:
 
 Never generate fake prices, reviews, ratings, availability, certificates,
 or technical specifications.
+
+Never fabricate production catalog records to demonstrate presentation.
 
 ## Product Content
 

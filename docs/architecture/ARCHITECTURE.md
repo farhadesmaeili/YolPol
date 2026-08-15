@@ -27,6 +27,10 @@ Public listing fails closed to `published` when no status is supplied. Draft and
 
 Application DTOs carry use-case data across the application boundary. Product view models group that data for stable presentation consumption, sort images deterministically, and preserve explicit query outcomes without fetching, translating, or adding business rules.
 
+Localized Product routes call `src/composition/products`, which is the only boundary that wires the static repository, use cases, and presenter. App Router modules never import Product infrastructure. Product presentation owns Server Components, product metadata, verified Product/Breadcrumb JSON-LD, and sitemap mapping.
+
+The production catalog remains empty and the listing renders a localized, crawlable empty state. Detail routes return 404 for missing, non-published, or locale-unavailable products. Known published localized slugs are statically generated with `dynamicParams = false`, so unknown slugs receive a real 404 instead of entering a streamed fallback. Adding verified local records requires a rebuild to generate their paths. A future runtime CMS adapter must revisit this policy by enabling dynamic parameters or adopting an explicit dynamic-rendering or revalidation strategy.
+
 ## Dependency Direction
 
 Dependencies flow `presentation → application → domain` and `infrastructure → application/domain`. Domain and application are framework-independent. Production code never imports testing utilities. App Router files compose presentation and framework concerns; they do not access infrastructure or product data directly.
@@ -38,6 +42,8 @@ English, Turkish, Persian, and Arabic use mandatory URL prefixes. The localized 
 ## SEO Foundation
 
 Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. `robots.ts` and `sitemap.ts` use the shared site origin. The current origin is a documented placeholder and must be replaced before launch.
+
+Product listing and detail metadata use the same centralized origin and localized URL helper. Product alternates include only locales with verified content. The sitemap contains localized home/listing pages plus published product detail URLs for each available locale; drafts, archived products, and unavailable locales are excluded through application/composition boundaries.
 
 ## Testing
 

@@ -56,6 +56,19 @@ describe("GetProductBySlug", () => {
       useCase.execute({slug: "published-product", locale: "fa"}),
     ).resolves.toEqual({status: "locale_not_available"});
   });
+
+  it("fails closed for invalid slugs and non-published products", async () => {
+    const useCase = new GetProductBySlug(createRepository());
+    await expect(
+      useCase.execute({slug: "Not Valid", locale: "en"}),
+    ).resolves.toEqual({status: "not_found"});
+    await expect(
+      useCase.execute({slug: "draft-product", locale: "en"}),
+    ).resolves.toEqual({status: "not_found"});
+    await expect(
+      useCase.execute({slug: "archived-product", locale: "en"}),
+    ).resolves.toEqual({status: "not_found"});
+  });
 });
 
 describe("ListProducts", () => {
