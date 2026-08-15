@@ -1,29 +1,42 @@
 import type {Metadata} from "next";
 
-import {getPathname} from "@/i18n/navigation";
 import {routing, type Locale} from "@/i18n/routing";
 import {siteConfig} from "@/shared/config/site";
 
-function absoluteUrl(pathname: string): string {
+export function absoluteUrl(pathname: string): string {
   return new URL(pathname, siteConfig.url).toString();
+}
+
+export function localizedAbsoluteUrl(locale: Locale, pathname: string): string {
+  const normalizedPathname = pathname === "/" ? "" : pathname;
+  return absoluteUrl(`/${locale}${normalizedPathname}`);
 }
 
 export function createLocalizedMetadata({
   locale,
   title,
   description,
+  pathname = "/",
+  alternateLocales = routing.locales,
+  images,
 }: {
   locale: Locale;
   title: string;
   description: string;
+  pathname?: string;
+  alternateLocales?: readonly Locale[];
+  images?: readonly string[];
 }): Metadata {
   const languages = Object.fromEntries(
-    routing.locales.map((alternateLocale) => [
+    alternateLocales.map((alternateLocale) => [
       alternateLocale,
-      absoluteUrl(getPathname({locale: alternateLocale, href: "/"})),
+      localizedAbsoluteUrl(alternateLocale, pathname),
     ]),
   );
-  const canonical = absoluteUrl(getPathname({locale, href: "/"}));
+  const canonical = localizedAbsoluteUrl(locale, pathname);
+  const xDefaultLocale = alternateLocales.includes(routing.defaultLocale)
+    ? routing.defaultLocale
+    : (alternateLocales[0] ?? locale);
 
   return {
     metadataBase: new URL(siteConfig.url),
@@ -33,9 +46,7 @@ export function createLocalizedMetadata({
       canonical,
       languages: {
         ...languages,
-        "x-default": absoluteUrl(
-          getPathname({locale: routing.defaultLocale, href: "/"}),
-        ),
+        "x-default": localizedAbsoluteUrl(xDefaultLocale, pathname),
       },
     },
     openGraph: {
@@ -45,6 +56,7 @@ export function createLocalizedMetadata({
       url: canonical,
       title,
       description,
+      images: images?.map((image) => absoluteUrl(image)),
     },
   };
 }

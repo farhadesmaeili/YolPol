@@ -2,5 +2,18 @@
   "Common": {"viewProducts": "View products", "contactUs": "Contact us", "requestQuote": "Request a quote"},
   "Navigation": {"primary": "Primary navigation", "home": "Home", "products": "Products", "about": "About", "contact": "Contact"},
   "HomePage": {"eyebrow": "Glass packaging for global markets", "heading": "Reliable glass bottles for beverage and pharmaceutical brands", "description": "YolPol introduces export-ready glass packaging solutions for professional buyers across international markets."},
-  "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of beverage and pharmaceutical glass bottles for international buyers."}
+  "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of beverage and pharmaceutical glass bottles for international buyers."},
+  "Products": {
+    "metadata": {"title": "Glass Bottle Products | YolPol", "description": "Browse YolPol's beverage and pharmaceutical glass bottle catalog for international buyers."},
+    "heading": "Glass bottle products",
+    "description": "Explore beverage and pharmaceutical glass packaging information prepared for professional buyers.",
+    "viewDetails": "View product details",
+    "empty": {"title": "Product information is being prepared", "description": "Verified product information will be published here after technical and editorial review.", "backHome": "Return to home"},
+    "loading": {"list": "Loading products", "detail": "Loading product details"}
+  },
+  "ProductDetails": {"category": "Category", "sku": "SKU", "applications": "Applications"},
+  "ProductSpecifications": {"heading": "Technical specifications", "capacity": "Capacity", "glassColor": "Glass color", "neckFinish": "Neck finish", "weight": "Weight", "height": "Height", "diameter": "Diameter", "milliliters": "ml", "grams": "g", "millimeters": "mm"},
+  "ProductCategories": {"beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
+  "Breadcrumbs": {"label": "Breadcrumb", "home": "Home", "products": "Products"},
+  "NotFound": {"title": "Page not found", "description": "The requested page or localized product could not be found.", "backHome": "Return to home"}
 }

@@ -19,10 +19,12 @@
 
 ## 3. Catalog Presentation
 
-- Product listing, category, and detail pages
+- [x] Localized product listing and detail routes
+- [x] Empty, loading, and localized not-found states
+- [x] Product metadata, structured data, and sitemap integration
 - Separate authorized administrative listing policy if required
-- Responsive images and accessible filtering where justified
-- Product and breadcrumb structured data
+- [ ] Responsive filtering and pagination when the verified catalog requires them
+- [ ] Confirm and publish verified product content
 
 ## 4. Company and Conversion Pages
 

@@ -20,7 +20,12 @@ export default async function HomePage({params}: HomePageProps) {
         <Link href="/" className="text-xl font-semibold tracking-tight">
           YolPol
         </Link>
-        <span className="text-sm text-stone-600">{navigation("products")}</span>
+        <Link
+          href="/products"
+          className="text-sm text-stone-600 outline-none hover:text-stone-950 hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:ring-emerald-700"
+        >
+          {navigation("products")}
+        </Link>
       </nav>
       <section className="flex flex-1 flex-col justify-center py-20">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-800">
