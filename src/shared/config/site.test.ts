@@ -3,6 +3,9 @@ import {describe, expect, it} from "vitest";
 import {primaryNavigation, publicProductCategories, siteConfig} from "@/shared/config/site";
 
 describe("site configuration", () => {
+  it("owns the approved production origin", () => {
+    expect(siteConfig.url).toBe("https://yolpol.com");
+  });
   it("defines the approved navigation without a pharmaceutical route", () => {
     expect(primaryNavigation.map(({href}) => href)).toEqual([
       "/",

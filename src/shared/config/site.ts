@@ -24,10 +24,9 @@ function requireUrl(value: string, protocols: readonly string[]): string {
   return value;
 }
 
-/** Replace the placeholder origin when YolPol's production domain is confirmed. */
 export const siteConfig = {
   name: "YolPol",
-  url: "https://example.com",
+  url: "https://yolpol.com",
   logoPath: "/images/brand/yolpol-logo.svg",
   contact: {
     email: "yolpol@gmail.com",

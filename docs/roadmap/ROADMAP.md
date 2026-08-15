@@ -32,11 +32,12 @@
 - [x] Shared multilingual header, navigation, locale switcher, and footer
 - [x] Factual localized About and Contact pages
 - Quotation request and privacy pages
-- Validated inquiry workflow without acquisition automation
+- [x] Framework-independent Customer Inquiry foundation without runtime activation
+- Validated public inquiry workflow after privacy and integration readiness
 
 ## 5. Launch Readiness
 
-- Confirm production domain and company facts
+- [x] Confirm production domain as `https://yolpol.com`
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 

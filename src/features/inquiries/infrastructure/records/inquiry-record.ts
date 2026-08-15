@@ -1,0 +1,4 @@
+import type {Locale} from "@/shared/types/locale";
+import type {InquiryStatus, InquiryUnit, PreferredContactMethod} from "@/features/inquiries/domain/types/inquiry-types";
+
+export type InquiryRecord = Readonly<{id: string; status: InquiryStatus; fullName: string; company: string | null; email: string; phone: string; telegramUsername: string | null; preferredContactMethod: PreferredContactMethod; country: string; city: string | null; destinationCountry: string | null; destinationCity: string | null; message: string | null; sourceLocale: Locale; sourcePath: string; privacyAccepted: boolean; privacyAcceptedAt: string; privacyPolicyVersion: string; createdAt: string; updatedAt: string; items: readonly Readonly<{productId: string; sku: string; slug: string; productName: string; quantity: number; unit: InquiryUnit}>[]}>;

@@ -1,0 +1,5 @@
+import type {InquiryUnit, PreferredContactMethod} from "@/features/inquiries/domain/types/inquiry-types";
+
+export type InquiryField = "fullName" | "company" | "country" | "city" | "email" | "phone" | "telegramUsername" | "preferredContactMethod" | "products" | "quantity" | "unit" | "destination" | "message" | "privacy" | "form";
+export type InquiryFormViewModel = Readonly<{customerFields: readonly InquiryField[]; productOptions: readonly Readonly<{id: string; sku: string; slug: string; name: string}>[]; selectedItems: readonly Readonly<{productId: string; quantity: number; unit: InquiryUnit}>[]; units: readonly InquiryUnit[]; contactMethods: readonly PreferredContactMethod[]; validationErrors: Readonly<Partial<Record<InquiryField, string>>>; submissionState: "idle" | "submitting" | "integration_unavailable"}>;
+export type InquiryResultViewModel = Readonly<{state: "accepted" | "accepted_with_notification_warning" | "validation_error" | "product_error" | "integration_unavailable"; inquiryId?: string; createdAt?: string; field?: InquiryField; failedChannels?: readonly ("email" | "telegram")[]}>;

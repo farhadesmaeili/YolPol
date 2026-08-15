@@ -21,7 +21,7 @@ App Router routes validate locale/slug parameters and call `src/composition/prod
 
 ## SEO and Structured Data
 
-Listing and found-detail metadata use the centralized placeholder site origin, localized canonicals, hreflang alternates, `x-default`, and Open Graph data. Product alternates are limited to locales with actual localized content.
+Listing and found-detail metadata use the centralized site origin, localized canonicals, hreflang alternates, `x-default`, and Open Graph data. Product alternates are limited to locales with actual localized content. The approved production origin is `https://yolpol.com`.
 
 Product and Breadcrumb JSON-LD are owned by Product presentation and render only for a found published product. Product JSON-LD contains verified visible name, description, SKU, category, URL, and images—never offers, prices, availability, reviews, ratings, or unsupported claims. Serialization escapes `<`.
 

@@ -21,5 +21,6 @@
   "ProductPricing": {"inquiry": "Fiyat isteyin"},
   "ProductCategories": {"oliveOil": "Zeytinyağı şişeleri", "food": "Gıda şişeleri", "beverage": "İçecek şişeleri", "pharmaceutical": "İlaç şişeleri"},
   "Breadcrumbs": {"label": "İçerik yolu", "home": "Ana sayfa", "products": "Ürünler"},
-  "NotFound": {"title": "Sayfa bulunamadı", "description": "İstenen sayfa veya yerelleştirilmiş ürün bulunamadı.", "backHome": "Ana sayfaya dön"}
+  "NotFound": {"title": "Sayfa bulunamadı", "description": "İstenen sayfa veya yerelleştirilmiş ürün bulunamadı.", "backHome": "Ana sayfaya dön"},
+  "Inquiry": {"customerInformation": "Müşteri bilgileri", "fullName": "Ad soyad", "company": "Şirket", "country": "Ülke", "city": "Şehir", "email": "E-posta", "phone": "Telefon veya WhatsApp", "telegramUsername": "Telegram kullanıcı adı", "preferredContact": "Tercih edilen iletişim yöntemi", "productSelection": "Ürün seçimi", "quantity": "Miktar", "units": {"pieces": "Adet", "packages": "Paket", "pallets": "Palet", "truckloads": "Kamyon yükü"}, "destination": "Varış yeri", "message": "Mesaj", "privacyConsent": "Belirtilen gizlilik koşullarını açıkça kabul ediyorum.", "validation": {"required": "Bu alan zorunludur.", "invalid": "Geçerli bir değer girin.", "productUnavailable": "Seçilen ürün kullanılamıyor."}, "submission": {"idle": "Hazır", "submitting": "Gönderiliyor", "accepted": "Talebiniz alındı.", "acceptedWithWarning": "Talebiniz alındı ancak bir veya daha fazla bildirim gönderilemedi.", "integrationUnavailable": "Talep gönderimi şu anda kullanılamıyor."}}
 }

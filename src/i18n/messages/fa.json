@@ -21,5 +21,6 @@
   "ProductPricing": {"inquiry": "درخواست قیمت"},
   "ProductCategories": {"oliveOil": "بطری‌های روغن زیتون", "food": "بطری‌های مواد غذایی", "beverage": "بطری‌های نوشیدنی", "pharmaceutical": "بطری‌های دارویی"},
   "Breadcrumbs": {"label": "مسیر صفحه", "home": "خانه", "products": "محصولات"},
-  "NotFound": {"title": "صفحه پیدا نشد", "description": "صفحه یا نسخه زبانی محصول موردنظر پیدا نشد.", "backHome": "بازگشت به خانه"}
+  "NotFound": {"title": "صفحه پیدا نشد", "description": "صفحه یا نسخه زبانی محصول موردنظر پیدا نشد.", "backHome": "بازگشت به خانه"},
+  "Inquiry": {"customerInformation": "اطلاعات مشتری", "fullName": "نام و نام خانوادگی", "company": "شرکت", "country": "کشور", "city": "شهر", "email": "ایمیل", "phone": "تلفن یا واتس‌اپ", "telegramUsername": "نام کاربری تلگرام", "preferredContact": "روش تماس ترجیحی", "productSelection": "انتخاب محصول", "quantity": "تعداد", "units": {"pieces": "عدد", "packages": "بسته", "pallets": "پالت", "truckloads": "کامیون"}, "destination": "مقصد", "message": "پیام", "privacyConsent": "موافقت صریح خود را با شرایط حریم خصوصی اعلام می‌کنم.", "validation": {"required": "این فیلد الزامی است.", "invalid": "یک مقدار معتبر وارد کنید.", "productUnavailable": "محصول انتخاب‌شده در دسترس نیست."}, "submission": {"idle": "آماده", "submitting": "در حال ارسال", "accepted": "درخواست شما دریافت شد.", "acceptedWithWarning": "درخواست شما دریافت شد، اما یک یا چند اعلان ارسال نشد.", "integrationUnavailable": "ارسال درخواست در حال حاضر فعال نیست."}}
 }
