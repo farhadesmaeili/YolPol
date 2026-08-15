@@ -41,7 +41,7 @@ export default async function ProductsPage({params}: ProductsPageProps) {
   ]);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-12 sm:px-10 sm:py-16">
+    <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:px-10 sm:py-16">
       <ProductListHeader
         title={translations("heading")}
         description={translations("description")}
@@ -60,7 +60,7 @@ export default async function ProductsPage({params}: ProductsPageProps) {
           inquiryLabel={translations("requestPrice")}
         />
       )}
-    </main>
+    </div>
   );
 }
 

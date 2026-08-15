@@ -6,7 +6,15 @@ import {routing} from "@/i18n/routing";
 import {localizedAbsoluteUrl} from "@/shared/seo/metadata";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticPaths = ["/", "/products"];
+  const staticPaths = [
+    "/",
+    "/products",
+    "/products/olive-oil",
+    "/products/food",
+    "/products/beverage",
+    "/about",
+    "/contact",
+  ];
   const staticEntries = staticPaths.flatMap((pathname, pathIndex) => {
     const languages = Object.fromEntries(
       routing.locales.map((locale) => [
@@ -17,7 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return routing.locales.map((locale) => ({
       url: localizedAbsoluteUrl(locale, pathname),
       changeFrequency: "monthly" as const,
-      priority: pathIndex === 0 ? (locale === routing.defaultLocale ? 1 : 0.9) : 0.8,
+      priority: pathIndex === 0 ? (locale === routing.defaultLocale ? 1 : 0.9) : pathIndex === 1 ? 0.8 : 0.7,
       alternates: {languages},
     }));
   });

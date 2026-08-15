@@ -9,7 +9,7 @@ import {
 import {ProductBreadcrumbs} from "@/features/products/presentation/components/product-breadcrumbs";
 import {ProductDetails} from "@/features/products/presentation/components/product-details";
 import {createProductBreadcrumbJsonLd} from "@/features/products/presentation/seo/breadcrumb-json-ld";
-import {JsonLdScript} from "@/features/products/presentation/seo/json-ld-script";
+import {JsonLdScript} from "@/shared/presentation/seo/json-ld-script";
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {createProductDetailMetadata} from "@/features/products/presentation/seo/product-metadata";
 import {isLocale} from "@/i18n/locale";
@@ -71,7 +71,7 @@ export default async function ProductPage({params}: ProductPageProps) {
   });
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14">
+    <div className="mx-auto w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14">
       <ProductBreadcrumbs
         homeLabel={breadcrumbs("home")}
         productsLabel={breadcrumbs("products")}
@@ -146,7 +146,7 @@ export default async function ProductPage({params}: ProductPageProps) {
         })}
       />
       <JsonLdScript data={breadcrumbData} />
-    </main>
+    </div>
   );
 }
 

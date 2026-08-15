@@ -25,10 +25,13 @@
 - Separate authorized administrative listing policy if required
 - [ ] Responsive filtering and pagination when the verified catalog requires them
 - [x] Publish verified four-locale Product content and tracked images
+- [x] Add localized category landing pages for current published categories
 
 ## 4. Company and Conversion Pages
 
-- About, contact, quotation request, and privacy pages
+- [x] Shared multilingual header, navigation, locale switcher, and footer
+- [x] Factual localized About and Contact pages
+- Quotation request and privacy pages
 - Validated inquiry workflow without acquisition automation
 
 ## 5. Launch Readiness
