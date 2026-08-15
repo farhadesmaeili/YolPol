@@ -10,6 +10,7 @@ export const primaryNavigation = [
   {id: "home", href: "/"},
   {id: "products", href: "/products"},
   ...publicProductCategories,
+  {id: "export-logistics", href: "/export-logistics"},
   {id: "about", href: "/about"},
   {id: "contact", href: "/contact"},
 ] as const;

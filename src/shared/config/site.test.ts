@@ -13,6 +13,7 @@ describe("site configuration", () => {
       "/products/olive-oil",
       "/products/food",
       "/products/beverage",
+      "/export-logistics",
       "/about",
       "/contact",
     ]);

@@ -1,5 +1,9 @@
 # YolPol Roadmap
 
+## Export Logistics foundation
+
+The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
+
 ## 1. Project Foundation
 
 - Multilingual routing and RTL/LTR document support

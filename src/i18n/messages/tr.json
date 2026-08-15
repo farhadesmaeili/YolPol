@@ -1,4 +1,65 @@
 {
+  "ExportLogistics": {
+    "metadata": {
+      "title": "İhracat Lojistiği ve Palet Planlama | YolPol",
+      "description": "Doğrulanmış ambalaj profilleriyle palet bazlı ihracat yükü planlayın."
+    },
+    "eyebrow": "İhracat lojistiği",
+    "heading": "İhracat yük planlama",
+    "introduction": "Doğrulanmış ambalaj profiline sahip ürünlerle karma palet yükü planlayın.",
+    "capacity": {
+      "heading": "Kamyon kapasitesi",
+      "text": "Planlama sınırı 26 palet ve 26.000 kg brüt ağırlıktır. Sınıra eşit yük kabul edilir."
+    },
+    "method": {
+      "heading": "Hesaplama yöntemi",
+      "text": "Yalnızca tam palet girin. Paket, şişe ve ağırlık doğrulanmış profilden hesaplanır."
+    },
+    "calculator": {
+      "heading": "Palet yük hesaplayıcı",
+      "product": "Ürün",
+      "pallets": "Palet",
+      "add": "Ürün ekle",
+      "remove": "Kaldır",
+      "reset": "Sıfırla",
+      "packages": "Paket",
+      "units": "Şişe adedi",
+      "weight": "Brüt ağırlık",
+      "totals": "Yük toplamları",
+      "maximum": "azami",
+      "remaining": "Kalan",
+      "feasible": "Planlama sınırları içinde",
+      "palletExceeded": "Palet sınırı aşıldı",
+      "weightExceeded": "Ağırlık sınırı aşıldı",
+      "bothExceeded": "Palet ve ağırlık sınırları aşıldı",
+      "invalid": "Geçerli bir yük planı girin",
+      "disclaimer": "Bu planlama hesabı doğrulanmış palet profillerini kullanır. Nihai yükleme ve araç uygunluğu operasyonel olarak teyit edilmelidir.",
+      "insufficientData": "Seçilen bir Ürün için doğrulanmış ambalaj verisi bulunmuyor.",
+      "arithmeticOverflow": "Yük güvenli biçimde hesaplanamayacak kadar büyük.",
+      "kilograms": "kg"
+    },
+    "unavailable": {
+      "heading": "Hesaplanamayan ürünler",
+      "text": "Doğrulanmış ambalaj profili bulunmadığından tahmin yapılmaz."
+    },
+    "workflow": {
+      "heading": "Alıcının ayarladığı taşıma süreci",
+      "steps": {
+        "1": "Alıcı kamyonu ayarlar.",
+        "2": "Kamyon depoya gelir.",
+        "3": "Sürücü yükü alıcıya teyit eder.",
+        "4": "Alıcı ödemeyi başlatır.",
+        "5": "Kamyon yalnızca ödeme sonrası serbest bırakılır.",
+        "6": "Uluslararası çıkış işlemlerini nakliyeci yürütür."
+      }
+    },
+    "limitations": {
+      "heading": "Önemli sınırlamalar",
+      "text": "Bu sayfa rezervasyon, navlun teklifi, hukuki belge, gümrük garantisi veya teslimat vaadi değildir."
+    },
+    "contactCta": "YolPol ile iletişime geçin",
+    "listingFailure": "Ürün ambalaj bilgileri geçici olarak kullanılamıyor."
+  },
   "Common": {"viewProducts": "Ürünleri görüntüle", "contactUs": "Bize ulaşın"},
   "HomePage": {"eyebrow": "Çok dilli cam şişe kataloğu", "heading": "Zeytinyağı, gıda ve içecek uygulamaları için cam şişeler", "description": "YolPol'ün şeffaf ve zeytin yeşili cam şişe kataloğunu inceleyin. Ürün bilgileri dört dilde sunulur ve fiyatlar talep üzerine paylaşılır."},
   "Metadata": {"title": "YolPol | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğunu keşfedin."},
@@ -11,7 +72,45 @@
     "empty": {"title": "Ürün bilgileri hazırlanıyor", "description": "Doğrulanmış ürün bilgileri teknik ve editoryal incelemenin ardından burada yayımlanacaktır.", "backHome": "Ana sayfaya dön"},
     "loading": {"list": "Ürünler yükleniyor", "detail": "Ürün detayları yükleniyor"}
   },
-  "SiteShell": {"homeLabel": "YolPol ana sayfası", "primaryLabel": "Ana navigasyon", "openMenu": "Navigasyon menüsünü aç", "closeMenu": "Navigasyon menüsünü kapat", "languagesLabel": "Dil seçin", "navigation": {"home": "Ana sayfa", "products": "Ürünler", "olive-oil": "Zeytinyağı", "food": "Gıda", "beverage": "İçecek", "about": "Hakkımızda", "contact": "İletişim"}, "locales": {"en": "İngilizce", "tr": "Türkçe", "fa": "Farsça", "ar": "Arapça"}, "footer": {"description": "Zeytinyağı, gıda ve içecek uygulamaları için şeffaf ve zeytin yeşili cam şişelerden oluşan çok dilli katalog.", "navigation": "Navigasyon", "categories": "Ürün kategorileri", "contact": "İletişim", "rights": "Tüm hakları saklıdır."}, "contact": {"whatsapp": "WhatsApp", "location": "Konum"}, "social": {"instagram": "YolPol'ü Instagram'da ziyaret edin", "linkedin": "YolPol'ü LinkedIn'de ziyaret edin", "telegram": "YolPol'ü Telegram'da ziyaret edin"}},
+  "SiteShell": {
+    "homeLabel": "YolPol ana sayfası",
+    "primaryLabel": "Ana navigasyon",
+    "openMenu": "Navigasyon menüsünü aç",
+    "closeMenu": "Navigasyon menüsünü kapat",
+    "languagesLabel": "Dil seçin",
+    "navigation": {
+      "home": "Ana sayfa",
+      "products": "Ürünler",
+      "olive-oil": "Zeytinyağı",
+      "food": "Gıda",
+      "beverage": "İçecek",
+      "about": "Hakkımızda",
+      "contact": "İletişim",
+      "export-logistics": "İhracat Lojistiği"
+    },
+    "locales": {
+      "en": "İngilizce",
+      "tr": "Türkçe",
+      "fa": "Farsça",
+      "ar": "Arapça"
+    },
+    "footer": {
+      "description": "Zeytinyağı, gıda ve içecek uygulamaları için şeffaf ve zeytin yeşili cam şişelerden oluşan çok dilli katalog.",
+      "navigation": "Navigasyon",
+      "categories": "Ürün kategorileri",
+      "contact": "İletişim",
+      "rights": "Tüm hakları saklıdır."
+    },
+    "contact": {
+      "whatsapp": "WhatsApp",
+      "location": "Konum"
+    },
+    "social": {
+      "instagram": "YolPol'ü Instagram'da ziyaret edin",
+      "linkedin": "YolPol'ü LinkedIn'de ziyaret edin",
+      "telegram": "YolPol'ü Telegram'da ziyaret edin"
+    }
+  },
   "CategoryPages": {"oliveOil": {"metadata": {"title": "Zeytinyağı için Cam Şişeler | YolPol", "description": "Zeytinyağı uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Zeytinyağı için Cam Şişeler", "description": "Zeytinyağı uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "food": {"metadata": {"title": "Gıda için Cam Şişeler | YolPol", "description": "Gıda uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Gıda için Cam Şişeler", "description": "Gıda uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "beverage": {"metadata": {"title": "İçecekler için Cam Şişeler | YolPol", "description": "İçecek uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "İçecekler için Cam Şişeler", "description": "İçecek uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}},
   "About": {"metadata": {"title": "YolPol Hakkında | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğu hakkında bilgi edinin."}, "eyebrow": "YolPol hakkında", "heading": "Doğrulanmış bilgilere dayalı çok dilli cam şişe kataloğu", "introduction": "YolPol cam şişe bilgilerini İngilizce, Türkçe, Farsça ve Arapça sunar.", "catalog": "Mevcut katalogda zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili şişeler bulunur.", "pricing": "Ürün fiyatları talep üzerine sunulur.", "location": "YolPol iletişim konumu Tahran, İran'dır.", "contactCta": "YolPol ile iletişime geçin"},
   "Contact": {"metadata": {"title": "YolPol ile İletişim", "description": "Cam şişe kataloğu hakkında YolPol'e e-posta, telefon, WhatsApp veya sosyal kanallardan ulaşın."}, "eyebrow": "İletişim", "heading": "YolPol ile İletişim", "introduction": "YolPol kataloğundaki ürünlerle ilgili talepleriniz için aşağıdaki doğrulanmış iletişim bilgilerini kullanın.", "email": "E-posta", "phone": "Telefon", "whatsapp": "WhatsApp", "location": "Konum", "social": "Sosyal kanallar", "instagramLabel": "YolPol'ü Instagram'da ziyaret edin", "linkedinLabel": "YolPol'ü LinkedIn'de ziyaret edin", "telegramLabel": "YolPol'ü Telegram'da ziyaret edin"},
