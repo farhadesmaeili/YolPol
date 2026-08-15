@@ -7,9 +7,10 @@ const defaultInput = (): ReconstituteProductInput => ({
   id: "product-1",
   sku: "TEST-001",
   slug: "test-product",
-  category: "beverage",
+  categories: ["beverage"],
   status: "draft",
   specifications: {capacityMl: 500},
+  pricing: {mode: "inquiry"},
   images: [
     {
       id: "image-1",
@@ -46,8 +47,10 @@ export class ProductTestBuilder {
       id: this.input.id,
       sku: this.input.sku,
       slug: this.input.slug,
-      category: this.input.category,
+      categories: this.input.categories,
       specifications: this.input.specifications,
+      packaging: this.input.packaging,
+      pricing: this.input.pricing,
       images: this.input.images,
       content: this.input.content,
       createdAt: this.input.createdAt,

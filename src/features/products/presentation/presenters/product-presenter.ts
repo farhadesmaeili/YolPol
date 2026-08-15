@@ -25,7 +25,7 @@ export class ProductPresenter {
   private toViewModel(product: ProductDto): ProductViewModel {
     return {
       identity: {id: product.id, sku: product.sku, slug: product.slug},
-      category: product.category,
+      categories: [...product.categories],
       status: product.status,
       content: {
         locale: product.locale,
@@ -36,6 +36,8 @@ export class ProductPresenter {
         seo: {title: product.seoTitle, description: product.seoDescription},
       },
       specifications: {...product.specifications},
+      packaging: product.packaging ? {...product.packaging} : undefined,
+      pricing: {...product.pricing},
       images: product.images
         .map((image) => ({...image}))
         .sort((left, right) => left.sortOrder - right.sortOrder),

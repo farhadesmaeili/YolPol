@@ -4,6 +4,7 @@ type SpecificationLabels = Readonly<{
   heading: string;
   capacity: string;
   glassColor: string;
+  bottleShape: string;
   neckFinish: string;
   weight: string;
   height: string;
@@ -11,6 +12,8 @@ type SpecificationLabels = Readonly<{
   milliliters: string;
   grams: string;
   millimeters: string;
+  glassColors: Readonly<Record<"olive-green" | "clear", string>>;
+  bottleShapes: Readonly<Record<"round" | "square", string>>;
 }>;
 
 export function ProductSpecifications({
@@ -26,7 +29,10 @@ export function ProductSpecifications({
       : [labels.capacity, `${specifications.capacityMl} ${labels.milliliters}`],
     specifications.glassColor === undefined
       ? null
-      : [labels.glassColor, specifications.glassColor],
+      : [labels.glassColor, labels.glassColors[specifications.glassColor]],
+    specifications.bottleShape === undefined
+      ? null
+      : [labels.bottleShape, labels.bottleShapes[specifications.bottleShape]],
     specifications.neckFinish === undefined
       ? null
       : [labels.neckFinish, specifications.neckFinish],

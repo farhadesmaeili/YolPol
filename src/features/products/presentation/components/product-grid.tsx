@@ -5,10 +5,12 @@ export function ProductGrid({
   products,
   categoryLabels,
   viewLabel,
+  inquiryLabel,
 }: {
   products: readonly ProductViewModel[];
-  categoryLabels: Readonly<Record<ProductViewModel["category"], string>>;
+  categoryLabels: Readonly<Record<ProductViewModel["categories"][number], string>>;
   viewLabel: string;
+  inquiryLabel: string;
 }) {
   return (
     <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -16,8 +18,9 @@ export function ProductGrid({
         <li key={product.identity.id}>
           <ProductCard
             product={product}
-            categoryLabel={categoryLabels[product.category]}
+            categoryLabels={product.categories.map((category) => categoryLabels[category])}
             viewLabel={viewLabel}
+            inquiryLabel={inquiryLabel}
           />
         </li>
       ))}

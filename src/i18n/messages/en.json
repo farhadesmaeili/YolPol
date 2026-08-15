@@ -1,19 +1,22 @@
 {
   "Common": {"viewProducts": "View products", "contactUs": "Contact us", "requestQuote": "Request a quote"},
   "Navigation": {"primary": "Primary navigation", "home": "Home", "products": "Products", "about": "About", "contact": "Contact"},
-  "HomePage": {"eyebrow": "Glass packaging for global markets", "heading": "Reliable glass bottles for beverage and pharmaceutical brands", "description": "YolPol introduces export-ready glass packaging solutions for professional buyers across international markets."},
-  "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of beverage and pharmaceutical glass bottles for international buyers."},
+  "HomePage": {"eyebrow": "Glass packaging for global markets", "heading": "Glass bottles for olive oil, food and beverage applications", "description": "YolPol introduces export-ready glass packaging solutions for professional buyers across international markets."},
+  "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."},
   "Products": {
-    "metadata": {"title": "Glass Bottle Products | YolPol", "description": "Browse YolPol's beverage and pharmaceutical glass bottle catalog for international buyers."},
-    "heading": "Glass bottle products",
-    "description": "Explore beverage and pharmaceutical glass packaging information prepared for professional buyers.",
+    "metadata": {"title": "Glass Bottles for Olive Oil, Food and Beverages | YolPol", "description": "Explore YolPol's catalog of clear and olive-green glass bottles for olive oil, food and beverage applications. Product prices are available by inquiry."},
+    "heading": "Glass Bottles for Olive Oil, Food and Beverages",
+    "description": "Explore YolPol's catalog of clear and olive-green glass bottles for olive oil, food and beverage applications. Product prices are available by inquiry.",
     "viewDetails": "View product details",
+    "requestPrice": "Request price",
     "empty": {"title": "Product information is being prepared", "description": "Verified product information will be published here after technical and editorial review.", "backHome": "Return to home"},
     "loading": {"list": "Loading products", "detail": "Loading product details"}
   },
-  "ProductDetails": {"category": "Category", "sku": "SKU", "applications": "Applications"},
-  "ProductSpecifications": {"heading": "Technical specifications", "capacity": "Capacity", "glassColor": "Glass color", "neckFinish": "Neck finish", "weight": "Weight", "height": "Height", "diameter": "Diameter", "milliliters": "ml", "grams": "g", "millimeters": "mm"},
-  "ProductCategories": {"beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
+  "ProductDetails": {"categories": "Categories", "sku": "SKU", "applications": "Applications"},
+  "ProductSpecifications": {"heading": "Technical specifications", "capacity": "Capacity", "glassColor": "Glass color", "bottleShape": "Bottle shape", "neckFinish": "Neck finish", "weight": "Weight", "height": "Height", "diameter": "Diameter", "milliliters": "ml", "grams": "g", "millimeters": "mm", "materials": {"glass": "Glass"}, "glassColors": {"oliveGreen": "Olive green", "clear": "Clear"}, "bottleShapes": {"round": "Round", "square": "Square"}},
+  "ProductPackaging": {"heading": "Packaging", "unitsPerPackage": "Units per package", "packagesPerPallet": "Packages per pallet", "unitsPerPallet": "Units per pallet", "palletGrossWeight": "Gross pallet weight", "kilograms": "kg"},
+  "ProductPricing": {"inquiry": "Request price"},
+  "ProductCategories": {"oliveOil": "Olive oil bottles", "food": "Food bottles", "beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
   "Breadcrumbs": {"label": "Breadcrumb", "home": "Home", "products": "Products"},
   "NotFound": {"title": "Page not found", "description": "The requested page or localized product could not be found.", "backHome": "Return to home"}
 }

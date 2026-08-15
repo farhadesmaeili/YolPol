@@ -13,7 +13,7 @@ export function toProductDto(product: Product, locale: Locale): ProductDto | nul
     id: product.id.value,
     sku: product.sku.value,
     slug: product.slug.value,
-    category: product.category,
+    categories: [...product.categories],
     status: product.status,
     locale,
     name: content.name.value,
@@ -23,6 +23,8 @@ export function toProductDto(product: Product, locale: Locale): ProductDto | nul
     seoTitle: content.seoTitle,
     seoDescription: content.seoDescription,
     specifications: {...product.specifications},
+    packaging: product.packaging ? {...product.packaging} : undefined,
+    pricing: {...product.pricing},
     images: product.images.map((image) => ({
       id: image.id,
       source: image.source,

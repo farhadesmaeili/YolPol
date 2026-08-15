@@ -30,8 +30,8 @@ export class InvalidProductNameError extends ProductDomainError {
 }
 
 export class InvalidProductCategoryError extends ProductDomainError {
-  constructor() {
-    super("Product category is not supported.");
+  constructor(reason = "category is not supported") {
+    super(`Invalid Product categories: ${reason}.`);
   }
 }
 
@@ -44,6 +44,18 @@ export class InvalidProductStatusError extends ProductDomainError {
 export class InvalidTechnicalSpecificationError extends ProductDomainError {
   constructor(field: string) {
     super(`Product specification "${field}" has an invalid value.`);
+  }
+}
+
+export class InvalidProductPackagingError extends ProductDomainError {
+  constructor(field: string) {
+    super(`Product packaging field "${field}" has an invalid value.`);
+  }
+}
+
+export class InvalidProductPricingError extends ProductDomainError {
+  constructor() {
+    super("Product pricing mode is not supported.");
   }
 }
 

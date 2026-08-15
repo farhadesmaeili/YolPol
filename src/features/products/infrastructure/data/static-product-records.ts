@@ -1,5 +1,7 @@
 import type {
   ProductCategory,
+  ProductPackagingInput,
+  ProductPricing,
   ProductSpecifications,
   ProductStatus,
 } from "@/features/products/domain/types/product-types";
@@ -16,9 +18,11 @@ export type StaticTechnicalProductRecord = Readonly<{
   id: string;
   sku: string;
   slug: string;
-  category: ProductCategory;
+  categories: readonly ProductCategory[];
   status: ProductStatus;
   specifications: ProductSpecifications;
+  packaging?: ProductPackagingInput;
+  pricing: ProductPricing;
   images: readonly StaticProductImageRecord[];
   createdAt: string;
   updatedAt: string;

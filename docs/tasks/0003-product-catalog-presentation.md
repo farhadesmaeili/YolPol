@@ -5,7 +5,7 @@
 
 ## Scope
 
-Add localized Product listing/detail routes, framework-integrated Server Components, composition-root wiring, localized interface messages, metadata, structured data, sitemap integration, loading states, and localized 404 handling. Production product datasets remain empty.
+Add localized Product listing/detail routes, framework-integrated Server Components, composition-root wiring, localized interface messages, metadata, structured data, sitemap integration, loading states, and localized 404 handling. The presentation supports both an empty catalog and verified Product records supplied through the repository.
 
 ## Request Flow
 
@@ -14,7 +14,7 @@ App Router routes validate locale/slug parameters and call `src/composition/prod
 ## Rendering Behavior
 
 - `/[locale]/products` invokes `ListProducts` without a status override, preserving its published-only default.
-- An empty published catalog renders a localized server-rendered empty state with a locale-aware home link.
+- An empty published catalog remains a supported localized state; the verified catalog renders nine Product cards per locale.
 - `/[locale]/products/[slug]` returns 404 for invalid, missing, draft, archived, or locale-unavailable products.
 - Product images use verified localized alternative text and deterministic presenter ordering.
 - Listing/detail loading states contain no fabricated skeleton product data.
@@ -25,7 +25,7 @@ Listing and found-detail metadata use the centralized placeholder site origin, l
 
 Product and Breadcrumb JSON-LD are owned by Product presentation and render only for a found published product. Product JSON-LD contains verified visible name, description, SKU, category, URL, and images—never offers, prices, availability, reviews, ratings, or unsupported claims. Serialization escapes `<`.
 
-The sitemap includes localized home and products pages plus published product URLs for each available locale. Empty production data yields no product detail entries. Known localized product slugs feed static parameters and `dynamicParams = false` rejects every path not generated at build time, guaranteeing a real 404 for unknown slugs. Adding verified local records therefore requires a rebuild. A future runtime CMS adapter must enable dynamic parameters or adopt an explicit dynamic-rendering or revalidation strategy before newly added paths can resolve without a rebuild.
+The sitemap includes localized home and products pages plus published product URLs for each available locale. The nine four-locale Products yield 36 detail entries and 44 total URLs. Known localized product slugs feed static parameters and `dynamicParams = false` rejects every path not generated at build time, guaranteeing a real 404 for unknown slugs. Adding verified local records therefore requires a rebuild.
 
 ## Testing and Validation
 
@@ -33,4 +33,4 @@ Vitest covers presenter/SEO/structured-data/sitemap behavior and public visibili
 
 ## Deferred Work
 
-Verified product entry, filtering, pagination, search, CMS/database integration, administration, authentication, and inquiry submission remain future work.
+Filtering, pagination, search, CMS/database integration, administration, authentication, inquiry submission, visible-price policy, and export logistics remain future work.

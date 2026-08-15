@@ -13,6 +13,7 @@ import {JsonLdScript} from "@/features/products/presentation/seo/json-ld-script"
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {createProductDetailMetadata} from "@/features/products/presentation/seo/product-metadata";
 import {isLocale} from "@/i18n/locale";
+import type {ProductCategory} from "@/features/products/domain/types/product-types";
 
 type ProductPageProps = {params: Promise<{locale: string; slug: string}>};
 
@@ -49,13 +50,18 @@ export default async function ProductPage({params}: ProductPageProps) {
   const {detail} = await getProductCatalogItem(slug, locale);
   if (detail.status !== "ready") notFound();
 
-  const [details, specifications, categories, breadcrumbs] = await Promise.all([
+  const [details, specifications, packaging, pricing, categories, breadcrumbs] = await Promise.all([
     getTranslations({locale, namespace: "ProductDetails"}),
     getTranslations({locale, namespace: "ProductSpecifications"}),
+    getTranslations({locale, namespace: "ProductPackaging"}),
+    getTranslations({locale, namespace: "ProductPricing"}),
     getTranslations({locale, namespace: "ProductCategories"}),
     getTranslations({locale, namespace: "Breadcrumbs"}),
   ]);
   const product = detail.product;
+  const categoryNames = product.categories.map((category) =>
+    categories(categoryMessageKey(category)),
+  );
   const breadcrumbData = createProductBreadcrumbJsonLd({
     locale,
     slug: product.identity.slug,
@@ -75,14 +81,16 @@ export default async function ProductPage({params}: ProductPageProps) {
       <ProductDetails
         product={product}
         labels={{
-          category: details("category"),
+          categories: details("categories"),
           sku: details("sku"),
           applications: details("applications"),
-          categoryName: categories(product.category),
+          categoryNames,
+          inquiryPricing: pricing("inquiry"),
           specifications: {
             heading: specifications("heading"),
             capacity: specifications("capacity"),
             glassColor: specifications("glassColor"),
+            bottleShape: specifications("bottleShape"),
             neckFinish: specifications("neckFinish"),
             weight: specifications("weight"),
             height: specifications("height"),
@@ -90,16 +98,60 @@ export default async function ProductPage({params}: ProductPageProps) {
             milliliters: specifications("milliliters"),
             grams: specifications("grams"),
             millimeters: specifications("millimeters"),
+            glassColors: {
+              "olive-green": specifications("glassColors.oliveGreen"),
+              clear: specifications("glassColors.clear"),
+            },
+            bottleShapes: {
+              round: specifications("bottleShapes.round"),
+              square: specifications("bottleShapes.square"),
+            },
+          },
+          packaging: {
+            heading: packaging("heading"),
+            unitsPerPackage: packaging("unitsPerPackage"),
+            packagesPerPallet: packaging("packagesPerPallet"),
+            unitsPerPallet: packaging("unitsPerPallet"),
+            palletGrossWeight: packaging("palletGrossWeight"),
+            kilograms: packaging("kilograms"),
           },
         }}
       />
       <JsonLdScript
         data={createProductJsonLd({
           product,
-          categoryName: categories(product.category),
+          categoryNames,
+          labels: {
+            capacity: specifications("capacity"),
+            milliliters: specifications("milliliters"),
+            bottleShape: specifications("bottleShape"),
+            materialName: specifications("materials.glass"),
+            colorName:
+              product.specifications.glassColor === undefined
+                ? undefined
+                : specifications(
+                    product.specifications.glassColor === "olive-green"
+                      ? "glassColors.oliveGreen"
+                      : "glassColors.clear",
+                  ),
+            shapeName:
+              product.specifications.bottleShape === undefined
+                ? undefined
+                : specifications(
+                    product.specifications.bottleShape === "round"
+                      ? "bottleShapes.round"
+                      : "bottleShapes.square",
+                  ),
+          },
         })}
       />
       <JsonLdScript data={breadcrumbData} />
     </main>
   );
+}
+
+function categoryMessageKey(
+  category: ProductCategory,
+): "oliveOil" | "food" | "beverage" | "pharmaceutical" {
+  return category === "olive-oil" ? "oliveOil" : category;
 }

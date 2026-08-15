@@ -2,6 +2,8 @@ import {
   InvalidLocalizedContentError,
   InvalidProductCategoryError,
   InvalidProductImageError,
+  InvalidProductPackagingError,
+  InvalidProductPricingError,
   InvalidProductStatusError,
   InvalidProductStatusTransitionError,
   InvalidProductTimestampError,
@@ -10,6 +12,8 @@ import {
 } from "@/features/products/domain/errors/product-errors";
 import {
   productCategories,
+  productBottleShapes,
+  productGlassColors,
   productStatuses,
   type LocalizedProductContent,
   type ProductCategory,
@@ -17,6 +21,9 @@ import {
   type ProductContentInputByLocale,
   type ProductImage,
   type ProductImageInput,
+  type ProductPackaging,
+  type ProductPackagingInput,
+  type ProductPricing,
   type ProductSpecifications,
   type ProductStatus,
 } from "@/features/products/domain/types/product-types";
@@ -35,8 +42,10 @@ export type CreateProductInput = Readonly<{
   id: string;
   sku: string;
   slug: string;
-  category: ProductCategory;
+  categories: readonly ProductCategory[];
   specifications: ProductSpecifications;
+  packaging?: ProductPackagingInput;
+  pricing: ProductPricing;
   images: readonly ProductImageInput[];
   content: ProductContentInputByLocale;
   createdAt: Date;
@@ -62,15 +71,19 @@ const numericSpecificationKeys = [
 ] as const satisfies readonly (keyof ProductSpecifications)[];
 
 const productCategorySet: ReadonlySet<string> = new Set(productCategories);
+const productGlassColorSet: ReadonlySet<string> = new Set(productGlassColors);
+const productBottleShapeSet: ReadonlySet<string> = new Set(productBottleShapes);
 const productStatusSet: ReadonlySet<string> = new Set(productStatuses);
 
 export class Product {
   readonly id: ProductId;
   readonly sku: ProductSku;
   readonly slug: ProductSlug;
-  readonly category: ProductCategory;
+  readonly categories: readonly ProductCategory[];
+  readonly pricing: ProductPricing;
 
   private readonly productSpecifications: ProductSpecifications;
+  private readonly productPackaging?: ProductPackaging;
   private readonly productImages: readonly ProductImage[];
   private readonly localizedContent: ProductContentByLocale;
   private readonly createdTimestamp: Date;
@@ -81,9 +94,11 @@ export class Product {
     this.id = ProductId.create(input.id);
     this.sku = ProductSku.create(input.sku);
     this.slug = ProductSlug.create(input.slug);
-    this.category = input.category;
+    this.categories = freezeCategories(input.categories);
+    this.pricing = Object.freeze({...input.pricing});
     this.currentStatus = input.status;
     this.productSpecifications = freezeSpecifications(input.specifications);
+    this.productPackaging = freezePackaging(input.packaging);
     this.productImages = freezeImages(input.images);
     this.localizedContent = freezeContent(input.content);
     this.createdTimestamp = new Date(input.createdAt);
@@ -99,15 +114,17 @@ export class Product {
   }
 
   private static build(input: ReconstituteProductInput): Product {
-    validateCategory(input.category);
+    validateCategories(input.categories, input.status);
     validateStatus(input.status);
     validateTimestamps(input.createdAt, input.updatedAt);
     validateSpecifications(input.specifications);
+    validatePackaging(input.packaging);
+    validatePricing(input.pricing);
     validateImages(input.images);
     validateLocalizedContent(input.content);
 
     if (input.status === "published") {
-      validatePublication(input.content, input.images);
+      validatePublication(input.categories, input.content, input.images);
     }
 
     return new Product(input);
@@ -119,6 +136,10 @@ export class Product {
 
   get specifications(): ProductSpecifications {
     return this.productSpecifications;
+  }
+
+  get packaging(): ProductPackaging | undefined {
+    return this.productPackaging;
   }
 
   get images(): readonly ProductImage[] {
@@ -149,7 +170,7 @@ export class Product {
     validateTimestamps(this.currentUpdatedAt, updatedAt);
 
     if (status === "published") {
-      validatePublication(this.localizedContent, this.productImages);
+      validatePublication(this.categories, this.localizedContent, this.productImages);
     }
 
     this.currentStatus = status;
@@ -157,9 +178,23 @@ export class Product {
   }
 }
 
-function validateCategory(category: string): asserts category is ProductCategory {
-  if (!productCategorySet.has(category)) {
-    throw new InvalidProductCategoryError();
+function validateCategories(
+  categories: readonly ProductCategory[],
+  status: ProductStatus,
+): void {
+  if (status === "published" && categories.length === 0) {
+    throw new InvalidProductCategoryError("published Products require a category");
+  }
+
+  const seen = new Set<ProductCategory>();
+  for (const category of categories) {
+    if (!productCategorySet.has(category)) {
+      throw new InvalidProductCategoryError(`unsupported category "${category}"`);
+    }
+    if (seen.has(category)) {
+      throw new InvalidProductCategoryError(`duplicate category "${category}"`);
+    }
+    seen.add(category);
   }
 }
 
@@ -188,12 +223,44 @@ function validateSpecifications(specifications: ProductSpecifications): void {
     }
   }
 
-  for (const key of ["glassColor", "neckFinish"] as const) {
-    const value = specifications[key];
+  if (
+    specifications.glassColor !== undefined &&
+    !productGlassColorSet.has(specifications.glassColor)
+  ) {
+    throw new InvalidTechnicalSpecificationError("glassColor");
+  }
+  if (
+    specifications.bottleShape !== undefined &&
+    !productBottleShapeSet.has(specifications.bottleShape)
+  ) {
+    throw new InvalidTechnicalSpecificationError("bottleShape");
+  }
+  if (
+    specifications.neckFinish !== undefined &&
+    specifications.neckFinish.trim().length === 0
+  ) {
+    throw new InvalidTechnicalSpecificationError("neckFinish");
+  }
+}
 
-    if (value !== undefined && value.trim().length === 0) {
-      throw new InvalidTechnicalSpecificationError(key);
+function validatePackaging(packaging?: ProductPackagingInput): void {
+  if (!packaging) return;
+  for (const key of ["unitsPerPackage", "packagesPerPallet"] as const) {
+    if (!Number.isInteger(packaging[key]) || packaging[key] <= 0) {
+      throw new InvalidProductPackagingError(key);
     }
+  }
+  if (
+    !Number.isFinite(packaging.palletGrossWeightKg) ||
+    packaging.palletGrossWeightKg <= 0
+  ) {
+    throw new InvalidProductPackagingError("palletGrossWeightKg");
+  }
+}
+
+function validatePricing(pricing: ProductPricing): void {
+  if (pricing.mode !== "inquiry") {
+    throw new InvalidProductPricingError();
   }
 }
 
@@ -271,9 +338,13 @@ function validateLocalizedContent(content: ProductContentInputByLocale): void {
 }
 
 function validatePublication(
+  categories: readonly ProductCategory[],
   content: ProductContentInputByLocale | ProductContentByLocale,
   images: readonly ProductImageInput[] | readonly ProductImage[],
 ): void {
+  if (categories.length === 0) {
+    throw new ProductPublicationError("at least one category is required");
+  }
   if (!content[defaultLocale]) {
     throw new ProductPublicationError(`${defaultLocale} content is required`);
   }
@@ -289,6 +360,23 @@ function freezeSpecifications(
   specifications: ProductSpecifications,
 ): ProductSpecifications {
   return Object.freeze({...specifications});
+}
+
+function freezeCategories(
+  categories: readonly ProductCategory[],
+): readonly ProductCategory[] {
+  return Object.freeze([...categories]);
+}
+
+function freezePackaging(
+  packaging?: ProductPackagingInput,
+): ProductPackaging | undefined {
+  return packaging
+    ? Object.freeze({
+        ...packaging,
+        unitsPerPallet: packaging.unitsPerPackage * packaging.packagesPerPallet,
+      })
+    : undefined;
 }
 
 function freezeImages(images: readonly ProductImageInput[]): readonly ProductImage[] {

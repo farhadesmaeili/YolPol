@@ -13,7 +13,7 @@ YolPol is a multilingual, SEO-first B2B catalog built with the Next.js App Route
 
 ## Product Catalog Boundary
 
-The product feature owns the `Product` aggregate, nominal value objects, repository contract, catalog use cases, static repository, presentation view models, and presenter. The aggregate keeps language-independent identity, classification, lifecycle, images, timestamps, and technical specifications separate from localized descriptive and SEO content.
+The product feature owns the `Product` aggregate, nominal value objects, repository contract, catalog use cases, static repository, presentation view models, and presenter. The aggregate keeps language-independent identity, multi-category classification, lifecycle, inquiry pricing, optional packaging, images, timestamps, and technical specifications separate from localized descriptive and SEO content.
 
 The framework-independent locale type lives in `src/shared/types`. Domain and application code may use that type without importing next-intl. The i18n layer consumes the same locale definition so supported locales have one source of truth.
 
@@ -21,7 +21,9 @@ New products are created as drafts from primitive inputs. Existing records use a
 
 Product repository interfaces point inward and expose only the read operations required by the catalog. The static adapter validates global ID, SKU, slug, and product-locale uniqueness plus cross-record references. It stores frozen source snapshots and hydrates fresh aggregates per result, preventing callers from mutating repository state. A future CMS or database adapter can replace it without changing domain rules or application use cases.
 
-Published products must include valid English content and at least one image with exactly one primary image. Optional technical specifications remain optional because product data availability varies. Slugs are currently global and language-independent. Other locales may be added independently; use cases return locale-unavailable results instead of silently mixing languages.
+Published products must include at least one unique supported category, valid English content, and at least one image with exactly one primary image. The current taxonomy is olive oil, food, beverage, and pharmaceutical. All nine verified Products belong to the first three categories; pharmaceutical remains available for future Products with no current assignment. Glass is the verified material for all nine current Products. Capacity, glass color, and bottle shape use typed technical values. Other technical specifications remain optional because verified data availability varies. Slugs are global and language-independent. Public listing copy must describe the categories assigned to the current published catalog rather than unused future taxonomy options.
+
+Packaging is optional and stores units per package, packages per pallet, and gross pallet weight. Units per pallet is derived rather than persisted. Export truck planning is outside Product and belongs to a future `export-logistics` feature. Public pricing is inquiry-only; numeric IRR amounts are neither stored nor exposed. Any future visible-price model must define currency, basis, cap inclusion, and validity semantics.
 
 Public listing fails closed to `published` when no status is supplied. Draft and archived listings require explicit status filters; a future administrative catalog should use a separate use case or authorization policy.
 
@@ -29,7 +31,7 @@ Application DTOs carry use-case data across the application boundary. Product vi
 
 Localized Product routes call `src/composition/products`, which is the only boundary that wires the static repository, use cases, and presenter. App Router modules never import Product infrastructure. Product presentation owns Server Components, product metadata, verified Product/Breadcrumb JSON-LD, and sitemap mapping.
 
-The production catalog remains empty and the listing renders a localized, crawlable empty state. Detail routes return 404 for missing, non-published, or locale-unavailable products. Known published localized slugs are statically generated with `dynamicParams = false`, so unknown slugs receive a real 404 instead of entering a streamed fallback. Adding verified local records requires a rebuild to generate their paths. A future runtime CMS adapter must revisit this policy by enabling dynamic parameters or adopting an explicit dynamic-rendering or revalidation strategy.
+The production catalog contains nine verified Products, each with four localized records and one tracked primary WebP image. Detail routes return 404 for missing, non-published, or locale-unavailable products. The resulting 36 localized detail paths are statically generated with `dynamicParams = false`, so unknown slugs receive a real 404. Adding verified local records requires a rebuild. A future runtime CMS adapter must revisit this policy by enabling dynamic parameters or adopting an explicit dynamic-rendering or revalidation strategy.
 
 ## Dependency Direction
 

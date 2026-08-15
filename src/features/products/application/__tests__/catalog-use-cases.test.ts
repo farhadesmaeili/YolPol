@@ -12,7 +12,7 @@ function createRepository() {
         id: "published-1",
         sku: "TEST-PUB-1",
         slug: "published-product",
-        category: "beverage",
+        categories: ["food", "beverage"],
         status: "published",
       })
       .buildReconstituted(),
@@ -21,7 +21,7 @@ function createRepository() {
         id: "draft-1",
         sku: "TEST-DRA-1",
         slug: "draft-product",
-        category: "pharmaceutical",
+        categories: ["pharmaceutical"],
         status: "draft",
       })
       .buildReconstituted(),
@@ -30,7 +30,7 @@ function createRepository() {
         id: "archived-1",
         sku: "TEST-ARC-1",
         slug: "archived-product",
-        category: "beverage",
+        categories: ["beverage"],
         status: "archived",
       })
       .buildReconstituted(),
@@ -43,7 +43,13 @@ describe("GetProductBySlug", () => {
     const result = await useCase.execute({slug: "published-product", locale: "en"});
     expect(result).toMatchObject({
       status: "found",
-      product: {id: "published-1", locale: "en", name: "Test Bottle"},
+      product: {
+        id: "published-1",
+        locale: "en",
+        name: "Test Bottle",
+        categories: ["food", "beverage"],
+        pricing: {mode: "inquiry"},
+      },
     });
   });
 

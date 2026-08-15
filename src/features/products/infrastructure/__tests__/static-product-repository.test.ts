@@ -24,9 +24,11 @@ function createRepository() {
 }
 
 describe("StaticProductRepository integrity", () => {
-  it("accepts an empty production dataset", async () => {
+  it("loads the nine verified production Products", async () => {
     const repository = new StaticProductRepository();
-    await expect(repository.list()).resolves.toEqual([]);
+    const products = await repository.list();
+    expect(products).toHaveLength(9);
+    expect(products.every((product) => product.status === "published")).toBe(true);
   });
 
   it.each([
@@ -115,6 +117,17 @@ describe("StaticProductRepository behavior", () => {
     ]);
   });
 
+  it("matches membership in a multi-category Product", async () => {
+    const repository = createRepository();
+    const food = await repository.list({category: "food", status: "published"});
+    const beverage = await repository.list({
+      category: "beverage",
+      status: "published",
+    });
+    expect(food.map((product) => product.id.value)).toEqual(["beverage-1"]);
+    expect(beverage.map((product) => product.id.value)).toEqual(["beverage-1"]);
+  });
+
   it("hydrates independent aggregates for every result", async () => {
     const repository = createRepository();
     const first = await repository.findBySlug(ProductSlug.create("pharma-fixture"));
@@ -146,6 +159,7 @@ describe("StaticProductRepository behavior", () => {
     const repository = new StaticProductRepository(technicalRecords, localizedRecords);
 
     Reflect.set(technicalRecords[0], "status", "draft");
+    Reflect.set(technicalRecords[0].categories, 0, "pharmaceutical");
     Reflect.set(technicalRecords[0].specifications, "capacityMl", 999);
     Reflect.set(localizedRecords[0], "name", "Changed name");
     technicalRecords.push({...technicalRecords[0], id: "later-product"});
@@ -154,6 +168,7 @@ describe("StaticProductRepository behavior", () => {
       ProductSlug.create("beverage-fixture"),
     );
     expect(product?.status).toBe("published");
+    expect(product?.categories).toEqual(["food", "beverage"]);
     expect(product?.specifications.capacityMl).toBe(330);
     expect(product?.getContent("en")?.name.value).toBe("Beverage Test Bottle");
     await expect(repository.list()).resolves.toHaveLength(3);
