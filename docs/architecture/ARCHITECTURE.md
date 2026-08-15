@@ -1,5 +1,9 @@
 # YolPol Architecture
 
+## Export Logistics boundary
+
+`src/features/export-logistics` follows the domain/application/infrastructure/presentation/testing feature structure. Its pure domain services own request validation, the 26-pallet and 26,000,000-gram policy, and checked integer arithmetic. An anti-corruption adapter receives Product application DTO queries by dependency injection; application mapping runtime-validates identity, publication status, locale, and packaging before creating trusted snapshots. Listing dependency failures use typed results. Product records and packaging values remain owned exclusively by the Product feature. A dedicated composition root owns wiring, while the App Router imports only that composition boundary. Interactive state and strict decimal input parsing are isolated to the pallet calculator presentation boundary.
+
 ## Purpose
 
 YolPol is a multilingual, SEO-first B2B catalog built with the Next.js App Router. The foundation favors static Server Components, crawlable locale-prefixed URLs, and explicit boundaries that can grow with the product catalog.

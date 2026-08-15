@@ -1,4 +1,65 @@
 {
+  "ExportLogistics": {
+    "metadata": {
+      "title": "Export Logistics and Pallet Load Planning | YolPol",
+      "description": "Plan pallet-based glass bottle export loads using verified packaging profiles."
+    },
+    "eyebrow": "Export logistics",
+    "heading": "Export load planning",
+    "introduction": "Plan a mixed pallet load from Products with verified packaging profiles.",
+    "capacity": {
+      "heading": "Truck capacity",
+      "text": "The planning limit is 26 pallets and 26,000 kg gross weight. Exact limits are allowed."
+    },
+    "method": {
+      "heading": "How calculation works",
+      "text": "Enter whole pallets only. Packages, bottles and gross weight come from verified Product profiles."
+    },
+    "calculator": {
+      "heading": "Pallet load calculator",
+      "product": "Product",
+      "pallets": "Pallets",
+      "add": "Add Product",
+      "remove": "Remove",
+      "reset": "Reset",
+      "packages": "Packages",
+      "units": "Bottle units",
+      "weight": "Gross weight",
+      "totals": "Load totals",
+      "maximum": "maximum",
+      "remaining": "Remaining",
+      "feasible": "Within planning limits",
+      "palletExceeded": "Pallet limit exceeded",
+      "weightExceeded": "Gross-weight limit exceeded",
+      "bothExceeded": "Pallet and gross-weight limits exceeded",
+      "invalid": "Enter a valid load plan",
+      "disclaimer": "This planning calculation uses verified pallet profiles. Final loading and vehicle suitability must be confirmed operationally; feasibility does not guarantee carrier, road, axle, customs or border acceptance.",
+      "insufficientData": "Verified packaging data is unavailable for a selected Product.",
+      "arithmeticOverflow": "The load is too large to calculate safely.",
+      "kilograms": "kg"
+    },
+    "unavailable": {
+      "heading": "Products unavailable for calculation",
+      "text": "These Products lack a verified packaging profile, so no values are estimated."
+    },
+    "workflow": {
+      "heading": "Current buyer-arranged transport workflow",
+      "steps": {
+        "1": "The buyer arranges the truck.",
+        "2": "The truck arrives at the warehouse.",
+        "3": "The driver confirms the loaded cargo to the buyer.",
+        "4": "The buyer begins payment.",
+        "5": "The truck is released only after settlement.",
+        "6": "International exit procedures are handled through the freight carrier."
+      }
+    },
+    "limitations": {
+      "heading": "Important limitations",
+      "text": "This is not carrier booking, a freight quotation, a legal transport document, a customs guarantee or a delivery promise."
+    },
+    "contactCta": "Contact YolPol",
+    "listingFailure": "Product packaging information is temporarily unavailable."
+  },
   "Common": {"viewProducts": "View products", "contactUs": "Contact us"},
   "HomePage": {"eyebrow": "Multilingual glass bottle catalog", "heading": "Glass bottles for olive oil, food and beverage applications", "description": "Explore YolPol's clear and olive-green glass bottle catalog. Product information is available in four languages and pricing is available by inquiry."},
   "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."},
@@ -11,7 +72,45 @@
     "empty": {"title": "Product information is being prepared", "description": "Verified product information will be published here after technical and editorial review.", "backHome": "Return to home"},
     "loading": {"list": "Loading products", "detail": "Loading product details"}
   },
-  "SiteShell": {"homeLabel": "YolPol home", "primaryLabel": "Primary navigation", "openMenu": "Open navigation menu", "closeMenu": "Close navigation menu", "languagesLabel": "Choose language", "navigation": {"home": "Home", "products": "Products", "olive-oil": "Olive Oil", "food": "Food", "beverage": "Beverage", "about": "About", "contact": "Contact"}, "locales": {"en": "English", "tr": "Turkish", "fa": "Persian", "ar": "Arabic"}, "footer": {"description": "A multilingual catalog of clear and olive-green glass bottles for olive oil, food and beverage applications.", "navigation": "Navigation", "categories": "Product categories", "contact": "Contact", "rights": "All rights reserved."}, "contact": {"whatsapp": "WhatsApp", "location": "Location"}, "social": {"instagram": "Visit YolPol on Instagram", "linkedin": "Visit YolPol on LinkedIn", "telegram": "Visit YolPol on Telegram"}},
+  "SiteShell": {
+    "homeLabel": "YolPol home",
+    "primaryLabel": "Primary navigation",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "languagesLabel": "Choose language",
+    "navigation": {
+      "home": "Home",
+      "products": "Products",
+      "olive-oil": "Olive Oil",
+      "food": "Food",
+      "beverage": "Beverage",
+      "about": "About",
+      "contact": "Contact",
+      "export-logistics": "Export Logistics"
+    },
+    "locales": {
+      "en": "English",
+      "tr": "Turkish",
+      "fa": "Persian",
+      "ar": "Arabic"
+    },
+    "footer": {
+      "description": "A multilingual catalog of clear and olive-green glass bottles for olive oil, food and beverage applications.",
+      "navigation": "Navigation",
+      "categories": "Product categories",
+      "contact": "Contact",
+      "rights": "All rights reserved."
+    },
+    "contact": {
+      "whatsapp": "WhatsApp",
+      "location": "Location"
+    },
+    "social": {
+      "instagram": "Visit YolPol on Instagram",
+      "linkedin": "Visit YolPol on LinkedIn",
+      "telegram": "Visit YolPol on Telegram"
+    }
+  },
   "CategoryPages": {"oliveOil": {"metadata": {"title": "Olive Oil Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for olive oil applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Olive Oil", "description": "Explore clear and olive-green glass bottles listed for olive oil applications. Product prices are available by inquiry."}, "food": {"metadata": {"title": "Food Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for food applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Food", "description": "Explore clear and olive-green glass bottles listed for food applications. Product prices are available by inquiry."}, "beverage": {"metadata": {"title": "Beverage Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for beverage applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Beverages", "description": "Explore clear and olive-green glass bottles listed for beverage applications. Product prices are available by inquiry."}},
   "About": {"metadata": {"title": "About YolPol | Glass Bottle Catalog", "description": "Learn about YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."}, "eyebrow": "About YolPol", "heading": "A factual, multilingual glass bottle catalog", "introduction": "YolPol presents glass bottle information in English, Turkish, Persian and Arabic.", "catalog": "The current catalog includes clear and olive-green bottles for olive oil, food and beverage applications.", "pricing": "Product pricing is available by inquiry.", "location": "YolPol's contact location is Tehran, Iran.", "contactCta": "Contact YolPol"},
   "Contact": {"metadata": {"title": "Contact YolPol", "description": "Contact YolPol by email, phone, WhatsApp or social channels about the glass bottle catalog."}, "eyebrow": "Contact", "heading": "Contact YolPol", "introduction": "Use the verified contact details below for inquiries about products in the YolPol catalog.", "email": "Email", "phone": "Phone", "whatsapp": "WhatsApp", "location": "Location", "social": "Social channels", "instagramLabel": "Visit YolPol on Instagram", "linkedinLabel": "Visit YolPol on LinkedIn", "telegramLabel": "Visit YolPol on Telegram"},

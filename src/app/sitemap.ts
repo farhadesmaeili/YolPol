@@ -14,6 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/products/beverage",
     "/about",
     "/contact",
+    "/export-logistics",
   ];
   const staticEntries = staticPaths.flatMap((pathname, pathIndex) => {
     const languages = Object.fromEntries(

@@ -1,6 +1,9 @@
 import {GetProductBySlug} from "@/features/products/application/use-cases/get-product-by-slug";
 import type {ProductRepository} from "@/features/products/application/ports/product-repository";
 import {ListProducts} from "@/features/products/application/use-cases/list-products";
+import {toProductDto} from "@/features/products/application/mappers/product-dto-mapper";
+import type {ProductDto} from "@/features/products/application/dto/product-dto";
+import {ProductId} from "@/features/products/domain/value-objects/product-id";
 import {StaticProductRepository} from "@/features/products/infrastructure/repositories/static-product-repository";
 import {ProductPresenter} from "@/features/products/presentation/presenters/product-presenter";
 import type {
@@ -11,6 +14,33 @@ import {supportedLocales, type Locale} from "@/shared/types/locale";
 import type {ProductCategory} from "@/features/products/domain/types/product-types";
 
 export type PublishedProductRoute = Readonly<{locale: Locale; slug: string}>;
+
+export type ProductApplicationLookup =
+  | Readonly<{status: "found"; product: ProductDto}>
+  | Readonly<{status: "missing" | "unpublished" | "locale_unavailable" | "invalid_product_id"}>;
+
+export async function listPublishedProductDtos(locale: Locale): Promise<readonly ProductDto[]> {
+  const repository = new StaticProductRepository();
+  const products = await repository.list({status: "published"});
+  return products.flatMap((product) => {
+    const dto = toProductDto(product, locale);
+    return dto ? [dto] : [];
+  });
+}
+
+export async function findProductDtoById(id: string, locale: Locale): Promise<ProductApplicationLookup> {
+  if (typeof id !== "string" || id.trim() !== id) return {status: "invalid_product_id"};
+  let productId: ProductId;
+  try { productId = ProductId.create(id); }
+  catch { return {status: "invalid_product_id"}; }
+  let product;
+  try { product = await new StaticProductRepository().findById(productId); }
+  catch { return {status: "missing"}; }
+  if (!product) return {status: "missing"};
+  if (product.status !== "published") return {status: "unpublished"};
+  const dto = toProductDto(product, locale);
+  return dto ? {status: "found", product: dto} : {status: "locale_unavailable"};
+}
 
 export async function listProductCatalog(
   locale: Locale,
