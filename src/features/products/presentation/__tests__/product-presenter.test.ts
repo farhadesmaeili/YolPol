@@ -7,7 +7,7 @@ const productDto = (): ProductDto => ({
   id: "product-1",
   sku: "TEST-001",
   slug: "test-product",
-  category: "beverage",
+  categories: ["food", "beverage"],
   status: "published",
   locale: "en",
   name: "Test Bottle",
@@ -16,7 +16,14 @@ const productDto = (): ProductDto => ({
   applications: ["Testing"],
   seoTitle: "SEO title",
   seoDescription: "SEO description",
-  specifications: {capacityMl: 500},
+  specifications: {capacityMl: 500, glassColor: "clear", bottleShape: "round"},
+  packaging: {
+    unitsPerPackage: 10,
+    packagesPerPallet: 20,
+    unitsPerPallet: 200,
+    palletGrossWeightKg: 300,
+  },
+  pricing: {mode: "inquiry"},
   images: [
     {id: "second", source: "/second.webp", sortOrder: 2, isPrimary: false},
     {
@@ -41,6 +48,14 @@ describe("ProductPresenter", () => {
       status: "ready",
       product: {
         identity: {id: "product-1", sku: "TEST-001", slug: "test-product"},
+        categories: ["food", "beverage"],
+        specifications: {
+          capacityMl: 500,
+          glassColor: "clear",
+          bottleShape: "round",
+        },
+        packaging: {unitsPerPallet: 200},
+        pricing: {mode: "inquiry"},
         content: {
           locale: "en",
           name: "Test Bottle",
@@ -52,6 +67,7 @@ describe("ProductPresenter", () => {
         },
       },
     });
+    expect(JSON.stringify(result)).not.toMatch(/amount|currency|offers/i);
   });
 
   it("preserves images in deterministic sort order without mutating the DTO", () => {

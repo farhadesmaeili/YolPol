@@ -11,7 +11,7 @@ The feature permanently uses `domain`, `application`, `infrastructure`, `present
 
 ## Aggregate Boundary
 
-`Product` owns identity, SKU, global language-independent slug, category, lifecycle status, optional technical specifications, images, localized content, and timestamps. Product ID, SKU, slug, and name are nominal, runtime-frozen value objects.
+`Product` owns identity, SKU, global language-independent slug, an immutable unique category collection, lifecycle status, inquiry pricing, optional packaging, optional technical specifications, images, localized content, and timestamps. Product ID, SKU, slug, and name are nominal, runtime-frozen value objects.
 
 `Product.create` accepts primitives and always creates a draft with equal creation/update timestamps. `Product.reconstitute` restores draft, published, or archived persisted state while revalidating every invariant. `transitionTo` is the only supported lifecycle mutation and rejects backwards timestamps; same-status transitions are timestamp-preserving no-ops.
 
@@ -21,11 +21,12 @@ Technical fields are language-independent. Names, descriptions, applications, SE
 
 A product can be published only when it has:
 
+- At least one supported category
 - Complete English localized content, including SEO fields and at least one application
 - At least one product image
 - Exactly one primary product image
 
-Optional technical specifications are not publication requirements. Product data must never be filled with invented values merely to satisfy publication.
+Packaging and optional technical specifications are not publication requirements. Product data must never be filled with invented values merely to satisfy publication.
 
 Allowed transitions are `draft → published`, `draft → archived`, `published → archived`, and `archived → draft`. Reapplying the current status is a no-op. Other transitions are rejected explicitly.
 
@@ -33,7 +34,7 @@ Allowed transitions are `draft → published`, `draft → archived`, `published 
 
 Application use cases depend on the product repository port. Public listing defaults to published products; draft and archived results require explicit status filters. A future administrative listing must use a separate explicit use case or authorization policy.
 
-The static adapter combines language-independent and localized records. It rejects duplicate IDs, normalized SKUs, global slugs, product-locale records, orphan localized records, and technical records without content. It snapshots source records and reconstitutes a fresh aggregate for every result, so callers cannot mutate repository state. Production data remains empty; tests provide fixtures.
+The static adapter combines language-independent and localized records. It rejects duplicate IDs, normalized SKUs, global slugs, product-locale records, orphan localized records, and technical records without content. It snapshots source records and reconstitutes a fresh aggregate for every result, so callers cannot mutate repository state. Repository category filtering uses membership in the Product category collection.
 
 A future CMS or database integration should implement the same port and perform boundary validation before constructing aggregates. Domain and application modules must remain unaware of the persistence technology.
 

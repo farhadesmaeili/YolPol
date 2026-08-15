@@ -5,12 +5,14 @@ import {Link} from "@/i18n/navigation";
 
 export function ProductCard({
   product,
-  categoryLabel,
+  categoryLabels,
   viewLabel,
+  inquiryLabel,
 }: {
   product: ProductViewModel;
-  categoryLabel: string;
+  categoryLabels: readonly string[];
   viewLabel: string;
+  inquiryLabel: string;
 }) {
   const image = product.images.find(
     (candidate) => candidate.isPrimary && candidate.alternativeText,
@@ -30,13 +32,18 @@ export function ProductCard({
         </div>
       ) : null}
       <div className="flex flex-1 flex-col p-6">
-        <p className="text-sm font-medium text-emerald-800">{categoryLabel}</p>
+        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-emerald-800">
+          {categoryLabels.map((categoryLabel) => (
+            <li key={categoryLabel}>{categoryLabel}</li>
+          ))}
+        </ul>
         <h2 className="mt-2 text-xl font-semibold text-stone-950">
           {product.content.name}
         </h2>
         <p className="mt-3 line-clamp-3 leading-7 text-stone-600">
           {product.content.shortDescription}
         </p>
+        <p className="mt-4 text-sm font-medium text-stone-700">{inquiryLabel}</p>
         <Link
           href={`/products/${product.identity.slug}`}
           aria-label={`${viewLabel}: ${product.content.name}`}

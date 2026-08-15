@@ -1,20 +1,43 @@
 import type {ProductName} from "@/features/products/domain/value-objects/product-name";
 import type {Locale} from "@/shared/types/locale";
 
-export const productCategories = ["beverage", "pharmaceutical"] as const;
+export const productCategories = [
+  "olive-oil",
+  "food",
+  "beverage",
+  "pharmaceutical",
+] as const;
 export type ProductCategory = (typeof productCategories)[number];
+
+export const productGlassColors = ["olive-green", "clear"] as const;
+export type ProductGlassColor = (typeof productGlassColors)[number];
+
+export const productBottleShapes = ["round", "square"] as const;
+export type ProductBottleShape = (typeof productBottleShapes)[number];
 
 export const productStatuses = ["draft", "published", "archived"] as const;
 export type ProductStatus = (typeof productStatuses)[number];
 
 export type ProductSpecifications = Readonly<{
   capacityMl?: number;
-  glassColor?: string;
+  glassColor?: ProductGlassColor;
+  bottleShape?: ProductBottleShape;
   neckFinish?: string;
   weightGrams?: number;
   heightMm?: number;
   diameterMm?: number;
 }>;
+
+export type ProductPackagingInput = Readonly<{
+  unitsPerPackage: number;
+  packagesPerPallet: number;
+  palletGrossWeightKg: number;
+}>;
+
+export type ProductPackaging = ProductPackagingInput &
+  Readonly<{unitsPerPallet: number}>;
+
+export type ProductPricing = Readonly<{mode: "inquiry"}>;
 
 export type ProductImage = Readonly<{
   id: string;

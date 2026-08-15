@@ -2,7 +2,7 @@ import type {ProductDto} from "@/features/products/application/dto/product-dto";
 
 export type ProductViewModel = Readonly<{
   identity: Readonly<{id: string; sku: string; slug: string}>;
-  category: ProductDto["category"];
+  categories: ProductDto["categories"];
   status: ProductDto["status"];
   content: Readonly<{
     locale: ProductDto["locale"];
@@ -13,6 +13,8 @@ export type ProductViewModel = Readonly<{
     seo: Readonly<{title: string; description: string}>;
   }>;
   specifications: ProductDto["specifications"];
+  packaging?: ProductDto["packaging"];
+  pricing: ProductDto["pricing"];
   images: readonly Readonly<{
     id: string;
     source: string;

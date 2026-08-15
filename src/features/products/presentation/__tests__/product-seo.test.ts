@@ -14,7 +14,7 @@ import {supportedLocales} from "@/shared/types/locale";
 function productViewModel(): ProductViewModel {
   return {
     identity: {id: "product-1", sku: "TEST-001", slug: "test-product"},
-    category: "beverage",
+    categories: ["food", "beverage"],
     status: "published",
     content: {
       locale: "en",
@@ -24,7 +24,8 @@ function productViewModel(): ProductViewModel {
       applications: ["Testing"],
       seo: {title: "Verified SEO title", description: "Verified SEO description."},
     },
-    specifications: {capacityMl: 500},
+    specifications: {capacityMl: 500, glassColor: "clear", bottleShape: "round"},
+    pricing: {mode: "inquiry"},
     images: [
       {
         id: "image-1",
@@ -83,19 +84,34 @@ describe("product structured data", () => {
   it("uses only verified Product fields and omits commercial schemas", () => {
     const jsonLd = createProductJsonLd({
       product: productViewModel(),
-      categoryName: "Beverage bottles",
+      categoryNames: ["Food bottles", "Beverage bottles"],
+      labels: {
+        capacity: "Capacity",
+        milliliters: "ml",
+        bottleShape: "Bottle shape",
+        materialName: "Glass",
+        colorName: "Clear",
+        shapeName: "Round",
+      },
     });
     expect(jsonLd).toMatchObject({
       "@type": "Product",
       name: "Verified test product",
       sku: "TEST-001",
-      category: "Beverage bottles",
+      category: ["Food bottles", "Beverage bottles"],
+      color: "Clear",
+      material: "Glass",
       url: "https://example.com/en/products/test-product",
       image: ["https://example.com/fixtures/product.webp"],
+      additionalProperty: [
+        {"@type": "PropertyValue", name: "Capacity", value: "500 ml"},
+        {"@type": "PropertyValue", name: "Bottle shape", value: "Round"},
+      ],
     });
     for (const forbiddenField of [
       "offers",
       "price",
+      "currency",
       "availability",
       "aggregateRating",
       "review",

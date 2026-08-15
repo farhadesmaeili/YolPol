@@ -57,6 +57,7 @@ export default async function ProductsPage({params}: ProductsPageProps) {
           products={catalog.products}
           categoryLabels={categoryLabels(categories)}
           viewLabel={translations("viewDetails")}
+          inquiryLabel={translations("requestPrice")}
         />
       )}
     </main>
@@ -65,8 +66,12 @@ export default async function ProductsPage({params}: ProductsPageProps) {
 
 function categoryLabels(
   translations: Awaited<ReturnType<typeof getTranslations<"ProductCategories">>>,
-): Readonly<Record<"beverage" | "pharmaceutical", string>> {
+): Readonly<
+  Record<"olive-oil" | "food" | "beverage" | "pharmaceutical", string>
+> {
   return {
+    "olive-oil": translations("oliveOil"),
+    food: translations("food"),
     beverage: translations("beverage"),
     pharmaceutical: translations("pharmaceutical"),
   };

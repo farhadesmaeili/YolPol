@@ -1,5 +1,7 @@
 import type {
   ProductCategory,
+  ProductPackaging,
+  ProductPricing,
   ProductSpecifications,
   ProductStatus,
 } from "@/features/products/domain/types/product-types";
@@ -17,7 +19,7 @@ export type ProductDto = Readonly<{
   id: string;
   sku: string;
   slug: string;
-  category: ProductCategory;
+  categories: readonly ProductCategory[];
   status: ProductStatus;
   locale: Locale;
   name: string;
@@ -27,6 +29,8 @@ export type ProductDto = Readonly<{
   seoTitle: string;
   seoDescription: string;
   specifications: ProductSpecifications;
+  packaging?: ProductPackaging;
+  pricing: ProductPricing;
   images: readonly ProductImageDto[];
   createdAt: string;
   updatedAt: string;

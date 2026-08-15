@@ -23,7 +23,7 @@ export class FakeProductRepository implements ProductRepository {
     this.listQueries.push({...query});
     return this.products.filter(
       (product) =>
-        (query.category === undefined || product.category === query.category) &&
+        (query.category === undefined || product.categories.includes(query.category)) &&
         (query.status === undefined || product.status === query.status),
     );
   }

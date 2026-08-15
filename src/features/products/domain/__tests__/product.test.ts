@@ -4,6 +4,8 @@ import {Product} from "@/features/products/domain/entities/product";
 import {
   InvalidProductIdError,
   InvalidProductImageError,
+  InvalidProductCategoryError,
+  InvalidProductPackagingError,
   InvalidProductStatusTransitionError,
   InvalidProductTimestampError,
   InvalidTechnicalSpecificationError,
@@ -25,8 +27,9 @@ describe("Product lifecycle", () => {
           id: {value: "product-1"},
           sku: "TEST-001",
           slug: "test-product",
-          category: "beverage",
+          categories: ["beverage"],
           specifications: {},
+          pricing: {mode: "inquiry"},
           images: [],
           content: {
             en: {
@@ -117,7 +120,8 @@ describe("Product data invariants", () => {
     ["weightGrams", -1],
     ["heightMm", Number.NaN],
     ["diameterMm", Number.POSITIVE_INFINITY],
-    ["glassColor", " "],
+    ["glassColor", "amber"],
+    ["bottleShape", "oval"],
     ["neckFinish", ""],
   ] as const)("rejects invalid %s", (field, value) => {
     expect(() =>
@@ -125,6 +129,62 @@ describe("Product data invariants", () => {
         .with({specifications: {[field]: value}})
         .buildReconstituted(),
     ).toThrow(InvalidTechnicalSpecificationError);
+  });
+
+  it("supports immutable unique categories and rejects duplicates", () => {
+    const categories: ("olive-oil" | "food" | "beverage" | "pharmaceutical")[] = [
+      "olive-oil",
+      "food",
+      "beverage",
+    ];
+    const product = new ProductTestBuilder().with({categories}).buildReconstituted();
+    expect(product.categories).toEqual(categories);
+    expect(Object.isFrozen(product.categories)).toBe(true);
+    categories[0] = "pharmaceutical";
+    expect(product.categories).toEqual(["olive-oil", "food", "beverage"]);
+    expect(() =>
+      new ProductTestBuilder()
+        .with({categories: ["food", "food"]})
+        .buildReconstituted(),
+    ).toThrow(InvalidProductCategoryError);
+  });
+
+  it("requires at least one category for publication", () => {
+    expect(() =>
+      new ProductTestBuilder()
+        .with({status: "published", categories: []})
+        .buildReconstituted(),
+    ).toThrow(InvalidProductCategoryError);
+  });
+
+  it("validates packaging and derives immutable units per pallet", () => {
+    const packaging = {
+      unitsPerPackage: 70,
+      packagesPerPallet: 64,
+      palletGrossWeightKg: 925,
+    };
+    const product = new ProductTestBuilder().with({packaging}).buildReconstituted();
+    expect(product.packaging).toEqual({...packaging, unitsPerPallet: 4480});
+    expect(Object.isFrozen(product.packaging)).toBe(true);
+    packaging.unitsPerPackage = 1;
+    expect(product.packaging?.unitsPerPackage).toBe(70);
+
+    for (const invalidPackaging of [
+      {...packaging, unitsPerPackage: 1.5},
+      {...packaging, packagesPerPallet: 0},
+      {...packaging, palletGrossWeightKg: Number.NaN},
+    ]) {
+      expect(() =>
+        new ProductTestBuilder().with({packaging: invalidPackaging}).buildReconstituted(),
+      ).toThrow(InvalidProductPackagingError);
+    }
+  });
+
+  it("allows omitted packaging and exposes inquiry-only pricing", () => {
+    const product = new ProductTestBuilder().with({packaging: undefined}).buildReconstituted();
+    expect(product.packaging).toBeUndefined();
+    expect(product.pricing).toEqual({mode: "inquiry"});
+    expect(Object.isFrozen(product.pricing)).toBe(true);
   });
 
   it("rejects duplicate image identifiers and sort orders", () => {
@@ -227,8 +287,9 @@ describe("Product data invariants", () => {
       id: "product-1",
       sku: "TEST-001",
       slug: "test-product",
-      category: "beverage",
+      categories: ["beverage"],
       specifications,
+      pricing: {mode: "inquiry"},
       images,
       content: {
         en: {

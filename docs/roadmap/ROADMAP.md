@@ -15,7 +15,7 @@
 - [x] Catalog use cases and business-rule tests
 - [x] Framework-independent product presenter and view models
 - [x] Static dataset integrity and isolated repository results
-- [ ] Confirm and enter real product data through an approved content process
+- [x] Enter the nine verified Product records through the approved content process
 
 ## 3. Catalog Presentation
 
@@ -24,7 +24,7 @@
 - [x] Product metadata, structured data, and sitemap integration
 - Separate authorized administrative listing policy if required
 - [ ] Responsive filtering and pagination when the verified catalog requires them
-- [ ] Confirm and publish verified product content
+- [x] Publish verified four-locale Product content and tracked images
 
 ## 4. Company and Conversion Pages
 

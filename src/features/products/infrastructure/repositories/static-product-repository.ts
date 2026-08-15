@@ -55,7 +55,7 @@ export class StaticProductRepository implements ProductRepository {
     return this.technicalRecords
       .filter(
         (record) =>
-          (query.category === undefined || record.category === query.category) &&
+          (query.category === undefined || record.categories.includes(query.category)) &&
           (query.status === undefined || record.status === query.status),
       )
       .map((record) => this.hydrate(record));
@@ -127,7 +127,12 @@ function freezeTechnicalRecords(
     records.map((record) =>
       Object.freeze({
         ...record,
+        categories: Object.freeze([...record.categories]),
         specifications: Object.freeze({...record.specifications}),
+        packaging: record.packaging
+          ? Object.freeze({...record.packaging})
+          : undefined,
+        pricing: Object.freeze({...record.pricing}),
         images: Object.freeze(record.images.map((image) => Object.freeze({...image}))),
       }),
     ),
