@@ -1,4 +1,6 @@
 import type {ProductViewModel} from "@/features/products/presentation/view-models/product-view-model";
+import {formatHumanNumber, NumberUnit} from "@/shared/presentation/bidi/bidi-isolate";
+import type {Locale} from "@/shared/types/locale";
 
 export type ProductPackagingLabels = Readonly<{
   heading: string;
@@ -12,17 +14,19 @@ export type ProductPackagingLabels = Readonly<{
 export function ProductPackaging({
   packaging,
   labels,
+  locale,
 }: {
   packaging: NonNullable<ProductViewModel["packaging"]>;
   labels: ProductPackagingLabels;
+  locale: Locale;
 }) {
   const rows = [
-    [labels.unitsPerPackage, String(packaging.unitsPerPackage)],
-    [labels.packagesPerPallet, String(packaging.packagesPerPallet)],
-    [labels.unitsPerPallet, String(packaging.unitsPerPallet)],
+    [labels.unitsPerPackage, formatHumanNumber(locale, packaging.unitsPerPackage)],
+    [labels.packagesPerPallet, formatHumanNumber(locale, packaging.packagesPerPallet)],
+    [labels.unitsPerPallet, formatHumanNumber(locale, packaging.unitsPerPallet)],
     [
       labels.palletGrossWeight,
-      `${packaging.palletGrossWeightKg} ${labels.kilograms}`,
+      <NumberUnit key="weight" locale={locale} value={packaging.palletGrossWeightKg} unit={labels.kilograms} />,
     ],
   ] as const;
 

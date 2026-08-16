@@ -22,7 +22,7 @@ const messagesByLocale = {
 } as const;
 
 describe("verified Product static routes", () => {
-  it("creates 36 localized detail routes and 68 unique sitemap URLs", async () => {
+  it("creates 36 localized detail routes and 72 unique sitemap URLs", async () => {
     const routes = await listPublishedProductRoutes();
     expect(routes).toHaveLength(36);
     expect(new Set(routes.map(({locale, slug}) => `${locale}/${slug}`)).size).toBe(36);
@@ -41,13 +41,15 @@ describe("verified Product static routes", () => {
       "/about",
       "/contact",
       "/export-logistics",
+      "/inquiry",
     ] as const;
     const expectedStaticUrls = staticPaths.flatMap((pathname) =>
       routing.locales.map((locale) => localizedAbsoluteUrl(locale, pathname)),
     );
 
-    expect(entries).toHaveLength(68);
-    expect(urls.size).toBe(68);
+    expect(entries).toHaveLength(72);
+    expect(urls.size).toBe(72);
+    expect(entries.filter(({url}) => url.endsWith("/inquiry"))).toHaveLength(4);
     expect(urls).toEqual(new Set([...expectedStaticUrls, ...expectedProductUrls]));
     expect(expectedProductUrls).toHaveLength(36);
     expect(

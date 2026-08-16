@@ -14,6 +14,7 @@ describe("site configuration", () => {
       "/products/food",
       "/products/beverage",
       "/export-logistics",
+      "/inquiry",
       "/about",
       "/contact",
     ]);

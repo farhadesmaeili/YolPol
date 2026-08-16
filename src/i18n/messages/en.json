@@ -1,4 +1,6 @@
 {
+  "InquiryProductSelection": {"emptyTitle":"No products added yet","emptyDescription":"Select one or more products and enter the requested quantity and unit for each one.","selectProduct":"Select product","productPlaceholder":"Choose a product","addProduct":"Add product","addAnotherProduct":"Add another product","allProductsAdded":"All available products have been added."},
+  "InquiryFormCorrections": {"requestedQuantityRequired":"Requested quantity (required)","unitRequiredLabel":"Unit (required)","selectUnit":"Select unit","invalidField":"Enter a valid value for this field.","quantityRequired":"Enter a requested quantity.","quantityInvalid":"Enter a positive whole requested quantity.","quantityTooLarge":"Requested quantity cannot exceed 1,000,000,000.","unitRequired":"Select a requested unit.","productsRequired":"Select at least one available product.","privacyRequired":"Consent is required to prepare the inquiry.","destinationDependency":"Enter the destination country when a destination city is provided."},
   "ExportLogistics": {
     "metadata": {
       "title": "Export Logistics and Pallet Load Planning | YolPol",
@@ -86,7 +88,8 @@
       "beverage": "Beverage",
       "about": "About",
       "contact": "Contact",
-      "export-logistics": "Export Logistics"
+      "export-logistics": "Export Logistics",
+      "inquiry": "Request a quote"
     },
     "locales": {
       "en": "English",
@@ -121,5 +124,6 @@
   "ProductCategories": {"oliveOil": "Olive oil bottles", "food": "Food bottles", "beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
   "Breadcrumbs": {"label": "Breadcrumb", "home": "Home", "products": "Products"},
   "NotFound": {"title": "Page not found", "description": "The requested page or localized product could not be found.", "backHome": "Return to home"},
+  "InquiryPage": {"metadata":{"title":"Request a Glass Bottle Quote | YolPol","description":"Prepare an inquiry for verified YolPol glass bottle products."},"eyebrow":"Customer inquiry","heading":"Request a product quote","introduction":"Select one or more published products and organize your contact, quantity, and destination details.","pricing":"Product pricing is provided by inquiry.","form":{"customer":"Contact information","fullName":"Full name (required)","company":"Company name (optional)","country":"Country (required)","city":"City (optional)","email":"Email (required)","phone":"Phone or WhatsApp (required)","preferredContact":"Preferred contact method","products":"Products","product":"Product","quantity":"Quantity","unit":"Unit","addProduct":"Add product","removeProduct":"Remove product","destination":"Shipment destination","destinationCountry":"Destination country (optional)","destinationCity":"Destination city (optional)","message":"Message (optional)","privacy":"I consent to YolPol using these details to respond to this inquiry.","review":"Review inquiry","prepared":"Your inquiry details are valid and ready to share through the contact options below.","invalid":"Complete the required fields, select a product, and accept the consent statement.","submissionUnavailable":"Secure online submission is not active yet. Your information remains in this page only; contact YolPol directly.","emailAction":"Email YolPol","whatsappAction":"WhatsApp YolPol"},"contactMethods":{"email":"Email","whatsapp":"WhatsApp","telegram":"Telegram","phone":"Phone"},"units":{"pieces":"Pieces","packages":"Packages","pallets":"Pallets","truckloads":"Truckloads"}},
   "Inquiry": {"customerInformation": "Customer information", "fullName": "Full name", "company": "Company", "country": "Country", "city": "City", "email": "Email", "phone": "Phone or WhatsApp", "telegramUsername": "Telegram username", "preferredContact": "Preferred contact method", "productSelection": "Product selection", "quantity": "Quantity", "units": {"pieces": "Pieces", "packages": "Packages", "pallets": "Pallets", "truckloads": "Truckloads"}, "destination": "Destination", "message": "Message", "privacyConsent": "I explicitly consent to the stated privacy terms.", "validation": {"required": "This field is required.", "invalid": "Enter a valid value.", "productUnavailable": "The selected product is unavailable."}, "submission": {"idle": "Ready", "submitting": "Submitting", "accepted": "Your inquiry was received.", "acceptedWithWarning": "Your inquiry was received, but one or more notifications could not be sent.", "integrationUnavailable": "Inquiry submission is not currently available."}}
 }
