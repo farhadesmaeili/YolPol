@@ -52,7 +52,11 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} dir={getLocaleDirection(locale as Locale)}>
+    <html
+      lang={locale}
+      dir={getLocaleDirection(locale as Locale)}
+      data-scroll-behavior="smooth"
+    >
       <body className="min-h-screen bg-background text-foreground antialiased">
         <NextIntlClientProvider messages={messages}>
           <div className="flex min-h-screen flex-col">

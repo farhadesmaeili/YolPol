@@ -59,3 +59,13 @@ export function createContactMetadata(locale: Locale): Metadata {
     pathname: "/contact",
   });
 }
+
+export function createPrivacyMetadata(locale: Locale): Metadata {
+  const metadata = messages[locale].PrivacyPage.metadata;
+  return createLocalizedMetadata({
+    locale,
+    title: metadata.title,
+    description: metadata.description,
+    pathname: "/privacy",
+  });
+}

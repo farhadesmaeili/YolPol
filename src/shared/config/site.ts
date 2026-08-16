@@ -18,6 +18,16 @@ export const primaryNavigation = [
 
 export type PrimaryNavigationId = (typeof primaryNavigation)[number]["id"];
 
+export const legalNavigation = [{id: "privacy", href: "/privacy"}] as const;
+
+export const privacyPolicy = {
+  operator: "YolPol",
+  publicLocation: "Iran – Tehran",
+  lastUpdated: "2026-08-16",
+  inquiryRetentionMonths: 24,
+  securityRetentionDays: 30,
+} as const;
+
 function requireUrl(value: string, protocols: readonly string[]): string {
   const url = new URL(value);
   if (!protocols.includes(url.protocol)) {
