@@ -80,12 +80,14 @@ export default async function ProductPage({params}: ProductPageProps) {
       />
       <ProductDetails
         product={product}
+        locale={locale}
         labels={{
           categories: details("categories"),
           sku: details("sku"),
           applications: details("applications"),
           categoryNames,
           inquiryPricing: pricing("inquiry"),
+          requestAction: pricing("inquiry"),
           specifications: {
             heading: specifications("heading"),
             capacity: specifications("capacity"),

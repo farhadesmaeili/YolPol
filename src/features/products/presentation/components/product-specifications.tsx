@@ -1,4 +1,7 @@
 import type {ProductViewModel} from "@/features/products/presentation/view-models/product-view-model";
+import type {ReactNode} from "react";
+import {LtrIsolate, NumberUnit} from "@/shared/presentation/bidi/bidi-isolate";
+import type {Locale} from "@/shared/types/locale";
 
 type SpecificationLabels = Readonly<{
   heading: string;
@@ -19,14 +22,16 @@ type SpecificationLabels = Readonly<{
 export function ProductSpecifications({
   specifications,
   labels,
+  locale,
 }: {
   specifications: ProductViewModel["specifications"];
   labels: SpecificationLabels;
+  locale: Locale;
 }) {
-  const rows = [
+  const rows: Array<[string, ReactNode] | null> = [
     specifications.capacityMl === undefined
       ? null
-      : [labels.capacity, `${specifications.capacityMl} ${labels.milliliters}`],
+      : [labels.capacity, <NumberUnit key="capacity" locale={locale} value={specifications.capacityMl} unit={labels.milliliters} />],
     specifications.glassColor === undefined
       ? null
       : [labels.glassColor, labels.glassColors[specifications.glassColor]],
@@ -35,19 +40,20 @@ export function ProductSpecifications({
       : [labels.bottleShape, labels.bottleShapes[specifications.bottleShape]],
     specifications.neckFinish === undefined
       ? null
-      : [labels.neckFinish, specifications.neckFinish],
+      : [labels.neckFinish, <LtrIsolate key="neck-finish">{specifications.neckFinish}</LtrIsolate>],
     specifications.weightGrams === undefined
       ? null
-      : [labels.weight, `${specifications.weightGrams} ${labels.grams}`],
+      : [labels.weight, <NumberUnit key="weight" locale={locale} value={specifications.weightGrams} unit={labels.grams} />],
     specifications.heightMm === undefined
       ? null
-      : [labels.height, `${specifications.heightMm} ${labels.millimeters}`],
+      : [labels.height, <NumberUnit key="height" locale={locale} value={specifications.heightMm} unit={labels.millimeters} />],
     specifications.diameterMm === undefined
       ? null
-      : [labels.diameter, `${specifications.diameterMm} ${labels.millimeters}`],
-  ].filter((row): row is [string, string] => row !== null);
+      : [labels.diameter, <NumberUnit key="diameter" locale={locale} value={specifications.diameterMm} unit={labels.millimeters} />],
+  ];
+  const visibleRows = rows.filter((row): row is [string, ReactNode] => row !== null);
 
-  if (rows.length === 0) return null;
+  if (visibleRows.length === 0) return null;
 
   return (
     <section aria-labelledby="product-specifications-heading">
@@ -55,7 +61,7 @@ export function ProductSpecifications({
         {labels.heading}
       </h2>
       <dl className="mt-5 divide-y divide-stone-200 border-y border-stone-200">
-        {rows.map(([label, value]) => (
+        {visibleRows.map(([label, value]) => (
           <div key={label} className="grid gap-1 py-4 sm:grid-cols-2 sm:gap-6">
             <dt className="font-medium text-stone-700">{label}</dt>
             <dd className="text-stone-950">{value}</dd>

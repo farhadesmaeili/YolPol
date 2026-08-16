@@ -1,4 +1,6 @@
 {
+  "InquiryProductSelection": {"emptyTitle":"هنوز محصولی اضافه نشده است","emptyDescription":"یک یا چند محصول انتخاب کنید و مقدار و واحد درخواستی هرکدام را وارد کنید.","selectProduct":"انتخاب محصول","productPlaceholder":"یک محصول انتخاب کنید","addProduct":"افزودن محصول","addAnotherProduct":"افزودن محصول دیگر","allProductsAdded":"همه محصولات موجود اضافه شده‌اند."},
+  "InquiryFormCorrections": {"requestedQuantityRequired":"مقدار درخواستی (اجباری)","unitRequiredLabel":"واحد (اجباری)","selectUnit":"واحد را انتخاب کنید","invalidField":"برای این فیلد مقدار معتبری وارد کنید.","quantityRequired":"مقدار درخواستی را وارد کنید.","quantityInvalid":"مقدار درخواستی را به‌صورت عدد صحیح مثبت وارد کنید.","quantityTooLarge":"مقدار درخواستی نمی‌تواند از ۱٬۰۰۰٬۰۰۰٬۰۰۰ بیشتر باشد.","unitRequired":"واحد درخواست را انتخاب کنید.","productsRequired":"حداقل یک محصول موجود انتخاب کنید.","privacyRequired":"برای آماده‌سازی درخواست، رضایت الزامی است.","destinationDependency":"در صورت وارد کردن شهر مقصد، کشور مقصد را نیز وارد کنید."},
   "ExportLogistics": {
     "metadata": {
       "title": "لجستیک صادرات و برنامه‌ریزی پالت | YolPol",
@@ -86,7 +88,8 @@
       "beverage": "نوشیدنی",
       "about": "درباره ما",
       "contact": "تماس",
-      "export-logistics": "لجستیک صادرات"
+      "export-logistics": "لجستیک صادرات",
+      "inquiry": "درخواست قیمت"
     },
     "locales": {
       "en": "انگلیسی",
@@ -121,5 +124,6 @@
   "ProductCategories": {"oliveOil": "بطری‌های روغن زیتون", "food": "بطری‌های مواد غذایی", "beverage": "بطری‌های نوشیدنی", "pharmaceutical": "بطری‌های دارویی"},
   "Breadcrumbs": {"label": "مسیر صفحه", "home": "خانه", "products": "محصولات"},
   "NotFound": {"title": "صفحه پیدا نشد", "description": "صفحه یا نسخه زبانی محصول موردنظر پیدا نشد.", "backHome": "بازگشت به خانه"},
+  "InquiryPage": {"metadata":{"title":"درخواست قیمت بطری شیشه‌ای | یول‌پل","description":"برای محصولات تأییدشده بطری شیشه‌ای یول‌پل درخواست آماده کنید."},"eyebrow":"درخواست مشتری","heading":"درخواست قیمت محصول","introduction":"یک یا چند محصول منتشرشده را انتخاب کنید و اطلاعات تماس، مقدار و مقصد را آماده کنید.","pricing":"قیمت محصولات پس از درخواست ارائه می‌شود.","form":{"customer":"اطلاعات تماس","fullName":"نام کامل (الزامی)","company":"نام شرکت (اختیاری)","country":"کشور (الزامی)","city":"شهر (اختیاری)","email":"ایمیل (الزامی)","phone":"تلفن یا واتس‌اپ (الزامی)","preferredContact":"روش تماس ترجیحی","products":"محصولات","product":"محصول","quantity":"مقدار","unit":"واحد","addProduct":"افزودن محصول","removeProduct":"حذف محصول","destination":"مقصد ارسال","destinationCountry":"کشور مقصد (اختیاری)","destinationCity":"شهر مقصد (اختیاری)","message":"پیام (اختیاری)","privacy":"رضایت می‌دهم یول‌پل از این اطلاعات برای پاسخ به درخواست من استفاده کند.","review":"بررسی درخواست","prepared":"اطلاعات درخواست معتبر و آماده اشتراک از راه‌های تماس زیر است.","invalid":"فیلدهای الزامی را تکمیل کنید، محصولی برگزینید و رضایت را تأیید کنید.","submissionUnavailable":"ارسال امن آنلاین هنوز فعال نیست. اطلاعات فقط در همین صفحه می‌ماند؛ مستقیماً با یول‌پل تماس بگیرید.","emailAction":"ایمیل به یول‌پل","whatsappAction":"واتس‌اپ یول‌پل"},"contactMethods":{"email":"ایمیل","whatsapp":"واتس‌اپ","telegram":"تلگرام","phone":"تلفن"},"units":{"pieces":"عدد","packages":"بسته","pallets":"پالت","truckloads":"بار کامیون"}},
   "Inquiry": {"customerInformation": "اطلاعات مشتری", "fullName": "نام و نام خانوادگی", "company": "شرکت", "country": "کشور", "city": "شهر", "email": "ایمیل", "phone": "تلفن یا واتس‌اپ", "telegramUsername": "نام کاربری تلگرام", "preferredContact": "روش تماس ترجیحی", "productSelection": "انتخاب محصول", "quantity": "تعداد", "units": {"pieces": "عدد", "packages": "بسته", "pallets": "پالت", "truckloads": "کامیون"}, "destination": "مقصد", "message": "پیام", "privacyConsent": "موافقت صریح خود را با شرایط حریم خصوصی اعلام می‌کنم.", "validation": {"required": "این فیلد الزامی است.", "invalid": "یک مقدار معتبر وارد کنید.", "productUnavailable": "محصول انتخاب‌شده در دسترس نیست."}, "submission": {"idle": "آماده", "submitting": "در حال ارسال", "accepted": "درخواست شما دریافت شد.", "acceptedWithWarning": "درخواست شما دریافت شد، اما یک یا چند اعلان ارسال نشد.", "integrationUnavailable": "ارسال درخواست در حال حاضر فعال نیست."}}
 }

@@ -5,6 +5,9 @@ import {
 } from "@/features/products/presentation/components/product-packaging";
 import {ProductSpecifications} from "@/features/products/presentation/components/product-specifications";
 import type {ProductViewModel} from "@/features/products/presentation/view-models/product-view-model";
+import {Link} from "@/i18n/navigation";
+import {LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
+import type {Locale} from "@/shared/types/locale";
 
 type ProductDetailLabels = Readonly<{
   categories: string;
@@ -12,6 +15,7 @@ type ProductDetailLabels = Readonly<{
   applications: string;
   categoryNames: readonly string[];
   inquiryPricing: string;
+  requestAction: string;
   specifications: Parameters<typeof ProductSpecifications>[0]["labels"];
   packaging: ProductPackagingLabels;
 }>;
@@ -19,9 +23,11 @@ type ProductDetailLabels = Readonly<{
 export function ProductDetails({
   product,
   labels,
+  locale,
 }: {
   product: ProductViewModel;
   labels: ProductDetailLabels;
+  locale: Locale;
 }) {
   return (
     <article className="mt-8">
@@ -52,10 +58,11 @@ export function ProductDetails({
             </div>
             <div>
               <dt className="text-sm text-stone-600">{labels.sku}</dt>
-              <dd className="mt-1 font-medium text-stone-950">{product.identity.sku}</dd>
+              <dd className="mt-1 font-medium text-stone-950"><LtrIsolate>{product.identity.sku}</LtrIsolate></dd>
             </div>
           </dl>
           <p className="mt-5 font-medium text-emerald-900">{labels.inquiryPricing}</p>
+          <Link href={`/inquiry?product=${encodeURIComponent(product.identity.id)}`} className="mt-5 inline-flex min-h-11 items-center bg-emerald-900 px-5 font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">{labels.requestAction}</Link>
         </div>
       </div>
       <div className="mt-12 grid gap-12 lg:grid-cols-[1.2fr_0.8fr]">
@@ -80,9 +87,10 @@ export function ProductDetails({
         <ProductSpecifications
           specifications={product.specifications}
           labels={labels.specifications}
+          locale={locale}
         />
         {product.packaging ? (
-          <ProductPackaging packaging={product.packaging} labels={labels.packaging} />
+          <ProductPackaging packaging={product.packaging} labels={labels.packaging} locale={locale} />
         ) : null}
       </div>
     </article>
