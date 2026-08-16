@@ -1,5 +1,11 @@
 # YolPol Architecture
 
+## Privacy content boundary
+
+The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved operator, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.
+
+The current site may use next-intl's essential `NEXT_LOCALE` preference cookie. No analytics tracker or Inquiry submission endpoint is active. Secure Inquiry persistence, limited security metadata, providers, and international processing are described conditionally and require future implementation plus a policy review before activation.
+
 ## Customer Inquiry presentation boundary
 
 The localized Inquiry route obtains narrow published Product options through composition and keeps interactive draft state in a focused Client Component. It produces application-compatible customer-owned values but performs no submission or persistence. Canonical contact and technical values use shared LTR isolation; localized human numbers use presentation-owned `Intl.NumberFormat`. Query preselection contains only a validated Product ID and does not alter the clean canonical URL.
@@ -72,4 +78,4 @@ Inquiry application code verifies Product selections through the Inquiry-owned `
 
 `SubmitInquiry` persists the aggregate before requesting independent email and Telegram notifications. Persistence failure prevents notification attempts; notification failure preserves acceptance and returns the failed provider-independent channel names. This foundation does not claim transactional Outbox, retries, idempotency, or exactly-once delivery. The integration phase must add durable PostgreSQL-backed notification jobs or an equivalent Outbox/retry mechanism.
 
-Infrastructure currently owns provider-independent persistence records, aggregate record mapping, and external-payload boundary validation only. The unknown-payload parser rejects unexpected keys and reconstructs fresh known primitive fields; semantic invariants remain in the domain. The application Clock owns both creation and consent timestamps. Source paths must begin with their matching locale and exclude dot segments, query strings, hashes, and unsafe encodings. It deliberately has no fake production repository. The public Inquiry preparation form does not invoke this submission workflow; activation still requires approved privacy copy and real integrations.
+Infrastructure currently owns provider-independent persistence records, aggregate record mapping, and external-payload boundary validation only. The unknown-payload parser rejects unexpected keys and reconstructs fresh known primitive fields; semantic invariants remain in the domain. The application Clock owns both creation and consent timestamps. Source paths must begin with their matching locale and exclude dot segments, query strings, hashes, and unsafe encodings. It deliberately has no fake production repository. The public Inquiry preparation form does not invoke this submission workflow; activation still requires real integrations and a final legal review of the published Privacy Policy.

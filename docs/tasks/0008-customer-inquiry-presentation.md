@@ -7,7 +7,7 @@ Adds four localized Inquiry pages, published-Product selection, safe Product-ID 
 
 The Server Component obtains narrow localized Product options through composition. The Client Component owns only transient interaction. Machine-readable contacts, IDs, and SKUs remain canonical ASCII. Shared bidi primitives isolate LTR technical text, while `Intl.NumberFormat` owns localized human numbers and number/unit groups.
 
-Metadata, clean canonicals, alternates, Breadcrumb JSON-LD, navigation, sitemap integration, labels, consent, responsive layouts, live feedback, and Product-specific remove names are included. Persistence, an approved Privacy route, abuse controls, notifications, and durable delivery remain deferred.
+Metadata, clean canonicals, alternates, Breadcrumb JSON-LD, navigation, sitemap integration, labels, consent, responsive layouts, live feedback, and Product-specific remove names are included. The consent experience now links to the localized Privacy Policy implemented by Task 0009. Persistence, abuse controls, notifications, and durable delivery remain deferred.
 
 Every selected Product owns an explicit, mandatory requested quantity and canonical unit (`pieces`, `packages`, `pallets`, or `truckloads`). New and preselected lines begin empty, so neither quantity nor unit is silently inferred from trusted Product or logistics data. The presentation mapper reuses the Inquiry domain's framework-independent normalization boundary and returns typed, line-specific failures that connect localized errors to controls with `aria-invalid` and `aria-describedby`. Any form edit clears the previous reviewed result.
 

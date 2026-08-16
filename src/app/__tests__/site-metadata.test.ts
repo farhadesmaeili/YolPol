@@ -5,6 +5,7 @@ import {
   createAboutMetadata,
   createCategoryMetadata,
   createContactMetadata,
+  createPrivacyMetadata,
   type CategoryRoute,
 } from "@/app/[locale]/_site-metadata";
 import arMessages from "@/i18n/messages/ar.json";
@@ -96,5 +97,11 @@ describe("actual localized static-route metadata", () => {
       expected.title,
       expected.description,
     );
+  });
+
+  it.each(localeCases)("wires Privacy metadata for %s", (locale) => {
+    const metadata = createPrivacyMetadata(locale);
+    const expected = messages[locale].PrivacyPage.metadata;
+    expectLocalizedMetadata(metadata, locale, "/privacy", expected.title, expected.description);
   });
 });

@@ -1,5 +1,6 @@
 import {describe, expect, it} from "vitest";
-import {existsSync} from "node:fs";
+import {createHash} from "node:crypto";
+import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
 import {localizedProducts} from "@/features/products/infrastructure/data/localized-products";
@@ -38,6 +39,23 @@ describe("verified Product dataset", () => {
         existsSync(join(process.cwd(), "public", `images/products/${slug}/01-primary.webp`)),
       ).toBe(true);
     }
+  });
+
+  it("keeps every approved primary image nonempty, WebP-encoded, and content-unique", () => {
+    const hashes = technicalProducts.map(({images}) => {
+      expect(images).toHaveLength(1);
+      const image = images[0];
+      if (!image) throw new Error("Expected one primary Product image");
+      expect(image.isPrimary).toBe(true);
+      expect(image.source.endsWith("/01-primary.webp")).toBe(true);
+      const bytes = readFileSync(join(process.cwd(), "public", image.source));
+      expect(bytes.length).toBeGreaterThan(0);
+      expect(bytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+      expect(bytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
+      return createHash("sha256").update(bytes).digest("hex");
+    });
+
+    expect(new Set(hashes).size).toBe(approvedProducts.length);
   });
 
   it("publishes every Product in the three approved categories with inquiry pricing", () => {

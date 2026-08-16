@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 
-import {primaryNavigation, publicProductCategories, siteConfig} from "@/shared/config/site";
+import {legalNavigation, primaryNavigation, privacyPolicy, publicProductCategories, siteConfig} from "@/shared/config/site";
 
 describe("site configuration", () => {
   it("owns the approved production origin", () => {
@@ -27,5 +27,11 @@ describe("site configuration", () => {
     expect(siteConfig.social).toEqual({instagram: "https://www.instagram.com/yolpol/", linkedin: "https://www.linkedin.com/company/yolpol/", telegram: "https://t.me/yolpol"});
     for (const href of Object.values(siteConfig.social)) expect(new URL(href).protocol).toBe("https:");
     expect(JSON.stringify({primaryNavigation, siteConfig})).not.toContain('"#"');
+  });
+
+  it("owns stable approved Privacy facts and a footer-only route", () => {
+    expect(privacyPolicy).toEqual({operator: "YolPol", publicLocation: "Iran – Tehran", lastUpdated: "2026-08-16", inquiryRetentionMonths: 24, securityRetentionDays: 30});
+    expect(legalNavigation).toEqual([{id: "privacy", href: "/privacy"}]);
+    expect(primaryNavigation.map(({href}) => href)).not.toContain("/privacy");
   });
 });

@@ -1,8 +1,12 @@
 # YolPol Roadmap
 
+## Privacy and future measurement
+
+The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata, and sitemap integration are implemented. No analytics tracker is active. Google Search Console is planned separately for search-performance monitoring; self-hosted Umami is the preferred future traffic analytics option, while GA4 remains deferred. Privacy content and consent requirements must be reviewed before any tracker is activated, and analytics implementation belongs in a separate future task or branch.
+
 ## Customer Inquiry presentation
 
-Localized inquiry preparation, Product preselection, bidi-safe contact rendering, metadata, navigation, and sitemap integration are implemented. Secure persistence, approved privacy-policy publication, abuse controls, and durable notification delivery remain deferred.
+Localized inquiry preparation, Product preselection, bidi-safe contact rendering, Privacy Policy consent linkage, metadata, navigation, and sitemap integration are implemented. Secure persistence, abuse controls, and durable notification delivery remain deferred.
 
 ## Export Logistics foundation
 
@@ -39,7 +43,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 - [x] Shared multilingual header, navigation, locale switcher, and footer
 - [x] Factual localized About and Contact pages
-- Quotation request and privacy pages
+- [x] Quotation preparation and localized Privacy Policy pages
 - [x] Framework-independent Customer Inquiry foundation without runtime activation
 - Validated public inquiry workflow after privacy and integration readiness
 
