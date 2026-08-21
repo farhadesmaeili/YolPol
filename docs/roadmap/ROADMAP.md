@@ -8,6 +8,8 @@ The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata,
 
 Localized inquiry preparation, Product preselection, bidi-safe contact rendering, Privacy Policy consent linkage, metadata, navigation, and sitemap integration are implemented. Secure persistence, abuse controls, and durable notification delivery remain deferred.
 
+The PostgreSQL persistence foundation is implemented behind the inactive submission workflow. Public activation, abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
+
 ## Export Logistics foundation
 
 The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
@@ -53,4 +55,4 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 
-Databases, authentication, payments, a CMS, an admin dashboard, and customer acquisition automation remain outside the current phase.
+Public Product persistence, authentication, payments, a CMS, an admin dashboard, and customer acquisition automation remain outside the current phase. The inactive Inquiry PostgreSQL foundation does not make public submission or production operations complete.

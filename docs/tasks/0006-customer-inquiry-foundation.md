@@ -27,23 +27,23 @@ Source paths begin with exactly one slash followed by the matching supported loc
 
 The aggregate is persisted before notification dispatch. Email and Telegram are both attempted independently after persistence; failed channels produce `accepted_with_notification_failures`, while the accepted Inquiry remains persisted. Persistence failure prevents every notification attempt. This is not an exactly-once or transactional-Outbox guarantee.
 
-No fake production adapter exists because an in-memory or file-backed repository would imply runtime durability that the application does not provide. Infrastructure currently defines a future PostgreSQL persistence record and validating round-trip mapper, not a database schema, migration, or client.
+No fake production adapter was added to imply durability. Task 0010 subsequently implemented the existing repository port with self-hosted PostgreSQL, Drizzle, node-postgres, committed migrations, and real integration tests; the validating provider-independent record mapper remains the boundary between rows and domain reconstitution.
 
 Testing fakes snapshot primitive aggregate state and reconstitute fresh instances so mutations cannot alter simulated persistence. Notification dispatch results contain only `requested` or `failed`; the use case associates failures with the channel it requested, preventing contradictory channel results.
 
 ## Deferred Integration
 
-Activation requires approved privacy copy/version, a public abuse-prevention design, a composition boundary, PostgreSQL/Neon persistence, durable Outbox or equivalent retry jobs, Resend email, Telegram Bot API notifications, operational monitoring, and secrets configured by the deployment environment. Future variable names are `DATABASE_URL`, `RESEND_API_KEY`, `INQUIRY_EMAIL_FROM`, `INQUIRY_EMAIL_TO`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `NEXT_PUBLIC_SITE_URL`.
+Activation still requires a public abuse-prevention design, durable Outbox or equivalent retry jobs, email and Telegram adapters, operational monitoring, and secrets configured on the private self-hosted deployment. PostgreSQL persistence and the published Privacy Policy now exist as inactive foundations. Future integration variables may include `RESEND_API_KEY`, `INQUIRY_EMAIL_FROM`, `INQUIRY_EMAIL_TO`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID`; database access uses server-only `DATABASE_URL`.
 
-File uploads, object storage, n8n automation, idempotency, rate limiting, CAPTCHA, administration, CRM, quotes, prices, shipping calculations, and deployment remain deferred. No Privacy Policy text or route is invented. No Inquiry route, form, navigation entry, sitemap entry, Server Action, route handler, provider SDK, environment reader, or external call is introduced.
+File uploads, object storage, n8n automation, idempotency, rate limiting, CAPTCHA, administration, CRM, quotes, prices, shipping calculations, and deployment remain deferred. Task 0006 itself introduced no Privacy Policy text or route, Inquiry route, form, navigation entry, sitemap entry, Server Action, route handler, provider SDK, environment reader, or external call; Task 0010 later added the server-only PostgreSQL environment reader.
 
 ## Integration Activation Checklist
 
-- Approve final Privacy Policy text and versioning.
-- Select and implement the PostgreSQL schema and Neon adapter.
+- [x] Publish the reviewed Privacy Policy foundation and stable version.
+- [x] Implement the self-hosted PostgreSQL schema and repository adapter.
 - Persist Inquiry plus durable notification jobs atomically.
 - Add retry/idempotency and operational failure visibility.
 - Implement Resend and Telegram adapters behind application ports.
-- Configure secrets in Vercel without committing them.
+- Configure production secrets on the private server without committing them.
 - Add validated abuse controls and a real public submission boundary.
 - Add integration and end-to-end tests before exposing a route or form.

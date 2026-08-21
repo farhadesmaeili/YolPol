@@ -1,11 +1,15 @@
 "use client";
 
-import {useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {Link, usePathname} from "@/i18n/navigation";
-import type {Locale} from "@/shared/types/locale";
+import { Link, usePathname } from "@/i18n/navigation";
+import type { Locale } from "@/shared/types/locale";
 
-export type NavigationItem = Readonly<{id: string; href: string; label: string}>;
+export type NavigationItem = Readonly<{
+  id: string;
+  href: string;
+  label: string;
+}>;
 
 export function SiteNavigation({
   items,
@@ -15,8 +19,13 @@ export function SiteNavigation({
 }: {
   items: readonly NavigationItem[];
   locale: Locale;
-  locales: readonly Readonly<{id: Locale; label: string}>[];
-  labels: Readonly<{primary: string; openMenu: string; closeMenu: string; languages: string}>;
+  locales: readonly Readonly<{ id: Locale; label: string }>[];
+  labels: Readonly<{
+    primary: string;
+    openMenu: string;
+    closeMenu: string;
+    languages: string;
+  }>;
 }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -35,7 +44,11 @@ export function SiteNavigation({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [isOpen]);
   const activeHref = items
-    .filter((item) => item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .filter((item) =>
+      item.href === "/"
+        ? pathname === "/"
+        : pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )
     .sort((left, right) => right.href.length - left.href.length)[0]?.href;
 
   const links = (
@@ -59,7 +72,10 @@ export function SiteNavigation({
   );
 
   const localeLinks = (
-    <div aria-label={labels.languages} className="flex flex-wrap items-center gap-1">
+    <div
+      aria-label={labels.languages}
+      className="flex flex-wrap items-center gap-1"
+    >
       {locales.map((candidate) => (
         <Link
           key={candidate.id}
@@ -88,15 +104,29 @@ export function SiteNavigation({
         onClick={() => setIsOpen((current) => !current)}
         className="inline-flex min-h-11 min-w-11 items-center justify-center border border-border text-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus lg:hidden"
       >
-        <span aria-hidden="true" className="text-xl">{isOpen ? "×" : "☰"}</span>
+        <span aria-hidden="true" className="text-xl">
+          {isOpen ? "×" : "☰"}
+        </span>
       </button>
-      <nav aria-label={labels.primary} className="hidden items-center gap-4 lg:flex">
+      <nav
+        aria-label={labels.primary}
+        className="hidden items-center gap-4 lg:flex"
+      >
         {links}
         {localeLinks}
       </nav>
       {isOpen ? (
-        <nav id="mobile-site-navigation" aria-label={labels.primary} className="absolute inset-x-0 top-full z-50 border-y border-border bg-surface px-6 py-5 shadow-lg lg:hidden">
-          <div className="mx-auto max-w-6xl">{links}<div className="mt-4 border-t border-border pt-4">{localeLinks}</div></div>
+        <nav
+          id="mobile-site-navigation"
+          aria-label={labels.primary}
+          className="absolute inset-x-0 top-full z-50 border-y border-border bg-surface px-6 py-5 shadow-lg lg:hidden"
+        >
+          <div className="mx-auto max-w-6xl">
+            {links}
+            <div className="mt-4 border-t border-border pt-4">
+              {localeLinks}
+            </div>
+          </div>
         </nav>
       ) : null}
     </>
