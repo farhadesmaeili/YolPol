@@ -1,7 +1,7 @@
 import Image from "next/image";
 
-import type {ProductViewModel} from "@/features/products/presentation/view-models/product-view-model";
-import {Link} from "@/i18n/navigation";
+import type { ProductViewModel } from "@/features/products/presentation/view-models/product-view-model";
+import { Link } from "@/i18n/navigation";
 
 export function ProductCard({
   product,
@@ -43,7 +43,12 @@ export function ProductCard({
         <p className="mt-3 line-clamp-3 leading-7 text-stone-600">
           {product.content.shortDescription}
         </p>
-        <Link href={`/inquiry?product=${encodeURIComponent(product.identity.id)}`} className="mt-4 inline-flex w-fit text-sm font-semibold text-emerald-900 underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700">{inquiryLabel}</Link>
+        <Link
+          href={`/inquiry?product=${encodeURIComponent(product.identity.id)}`}
+          className="mt-4 inline-flex w-fit text-sm font-semibold text-emerald-900 underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700"
+        >
+          {inquiryLabel}
+        </Link>
         <Link
           href={`/products/${product.identity.slug}`}
           aria-label={`${viewLabel}: ${product.content.name}`}

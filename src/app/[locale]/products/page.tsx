@@ -1,27 +1,32 @@
-import type {Metadata} from "next";
-import {getTranslations, setRequestLocale} from "next-intl/server";
-import {notFound} from "next/navigation";
+import type { Metadata } from "next";
+import { getTranslations, setRequestLocale } from "next-intl/server";
+import { notFound } from "next/navigation";
 
-import {listProductCatalog} from "@/composition/products/product-catalog";
-import {ProductEmptyState} from "@/features/products/presentation/components/product-empty-state";
-import {ProductGrid} from "@/features/products/presentation/components/product-grid";
-import {ProductListHeader} from "@/features/products/presentation/components/product-list-header";
-import {createProductListingMetadata} from "@/features/products/presentation/seo/product-metadata";
-import {isLocale} from "@/i18n/locale";
-import {supportedLocales} from "@/shared/types/locale";
+import { listProductCatalog } from "@/composition/products/product-catalog";
+import { ProductEmptyState } from "@/features/products/presentation/components/product-empty-state";
+import { ProductGrid } from "@/features/products/presentation/components/product-grid";
+import { ProductListHeader } from "@/features/products/presentation/components/product-list-header";
+import { createProductListingMetadata } from "@/features/products/presentation/seo/product-metadata";
+import { isLocale } from "@/i18n/locale";
+import { supportedLocales } from "@/shared/types/locale";
 
-type ProductsPageProps = {params: Promise<{locale: string}>};
+type ProductsPageProps = { params: Promise<{ locale: string }> };
 
 export const dynamic = "force-static";
 
 export function generateStaticParams() {
-  return supportedLocales.map((locale) => ({locale}));
+  return supportedLocales.map((locale) => ({ locale }));
 }
 
-export async function generateMetadata({params}: ProductsPageProps): Promise<Metadata> {
-  const {locale} = await params;
+export async function generateMetadata({
+  params,
+}: ProductsPageProps): Promise<Metadata> {
+  const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const translations = await getTranslations({locale, namespace: "Products.metadata"});
+  const translations = await getTranslations({
+    locale,
+    namespace: "Products.metadata",
+  });
   return createProductListingMetadata({
     locale,
     title: translations("title"),
@@ -29,15 +34,15 @@ export async function generateMetadata({params}: ProductsPageProps): Promise<Met
   });
 }
 
-export default async function ProductsPage({params}: ProductsPageProps) {
-  const {locale} = await params;
+export default async function ProductsPage({ params }: ProductsPageProps) {
+  const { locale } = await params;
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
 
   const [catalog, translations, categories] = await Promise.all([
     listProductCatalog(locale),
-    getTranslations({locale, namespace: "Products"}),
-    getTranslations({locale, namespace: "ProductCategories"}),
+    getTranslations({ locale, namespace: "Products" }),
+    getTranslations({ locale, namespace: "ProductCategories" }),
   ]);
 
   return (
@@ -65,7 +70,9 @@ export default async function ProductsPage({params}: ProductsPageProps) {
 }
 
 function categoryLabels(
-  translations: Awaited<ReturnType<typeof getTranslations<"ProductCategories">>>,
+  translations: Awaited<
+    ReturnType<typeof getTranslations<"ProductCategories">>
+  >,
 ): Readonly<
   Record<"olive-oil" | "food" | "beverage" | "pharmaceutical", string>
 > {
