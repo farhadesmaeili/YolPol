@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "YolPol Persian";
+  src: url("/fonts/persian/brand-persian.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "YolPol Arabic";
+  src: url("/fonts/arabic/brand-arabic.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
 :root {
   --background: #f7f6f1;
   --surface: #ffffff;
@@ -42,6 +58,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
+}
+
+.font-brand-persian {
+  font-family: "YolPol Persian", Arial, Helvetica, sans-serif;
+}
+
+.font-brand-arabic {
+  font-family: "YolPol Arabic", Arial, Helvetica, sans-serif;
 }
 
 a,

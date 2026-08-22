@@ -1,147 +1,85 @@
 import { getTranslations } from "next-intl/server";
 
-import { Link } from "@/i18n/navigation";
 import {
   legalNavigation,
   primaryNavigation,
   publicProductCategories,
-  siteConfig,
 } from "@/shared/config/site";
-import { LtrIsolate } from "@/shared/presentation/bidi/bidi-isolate";
+import { FooterBackground } from "@/shared/presentation/site-shell/footer/footer-background";
+import { FooterBrand } from "@/shared/presentation/site-shell/footer/footer-brand";
+import { FooterCallToAction } from "@/shared/presentation/site-shell/footer/footer-call-to-action";
+import { FooterContact } from "@/shared/presentation/site-shell/footer/footer-contact";
+import { FooterExportStrip } from "@/shared/presentation/site-shell/footer/footer-export-strip";
+import { FooterLinkColumn } from "@/shared/presentation/site-shell/footer/footer-link-column";
 import type { Locale } from "@/shared/types/locale";
-
-const externalLinkClass =
-  "outline-none hover:text-white hover:underline focus-visible:ring-2 focus-visible:ring-accent";
 
 export async function SiteFooter({ locale }: { locale: Locale }) {
   const t = await getTranslations({ locale, namespace: "SiteShell" });
+  const isRtl = locale === "fa" || locale === "ar";
+  const navigationItems = primaryNavigation.filter(
+    ({ id }) =>
+      !publicProductCategories.some((category) => category.id === id),
+  );
+
   return (
-    <footer className="bg-footer text-footer-foreground">
-      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 sm:px-8 md:grid-cols-2 lg:grid-cols-4">
-        <section>
-          <h2 className="text-xl font-semibold">{siteConfig.name}</h2>
-          <p className="mt-4 max-w-sm text-sm leading-7 text-stone-300">
-            {t("footer.description")}
-          </p>
-          <ul className="mt-5 text-sm text-stone-300">
-            {legalNavigation.map(({ id, href }) => (
-              <li key={id}>
-                <Link href={href} className={externalLinkClass}>
-                  {t(`footer.${id}`)}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <nav aria-labelledby="footer-navigation">
-          <h2 id="footer-navigation" className="font-semibold">
-            {t("footer.navigation")}
-          </h2>
-          <ul className="mt-4 space-y-3 text-sm text-stone-300">
-            {primaryNavigation
-              .filter(
-                ({ id }) =>
-                  !publicProductCategories.some(
-                    (category) => category.id === id,
-                  ),
-              )
-              .map(({ id, href }) => (
-                <li key={id}>
-                  <Link href={href} className={externalLinkClass}>
-                    {t(`navigation.${id}`)}
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        </nav>
-        <nav aria-labelledby="footer-categories">
-          <h2 id="footer-categories" className="font-semibold">
-            {t("footer.categories")}
-          </h2>
-          <ul className="mt-4 space-y-3 text-sm text-stone-300">
-            {publicProductCategories.map(({ id, href }) => (
-              <li key={id}>
-                <Link href={href} className={externalLinkClass}>
-                  {t(`navigation.${id}`)}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <section>
-          <h2 className="font-semibold">{t("footer.contact")}</h2>
-          <address className="mt-4 space-y-3 text-sm not-italic text-stone-300">
-            <p>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.contact.emailHref}
-              >
-                <LtrIsolate>{siteConfig.contact.email}</LtrIsolate>
-              </a>
-            </p>
-            <p>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.contact.phoneHref}
-              >
-                <LtrIsolate>{siteConfig.contact.phone}</LtrIsolate>
-              </a>
-            </p>
-            <p>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.contact.whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t("contact.whatsapp")}:{" "}
-                <LtrIsolate>{siteConfig.contact.whatsapp}</LtrIsolate>
-              </a>
-            </p>
-            <p>
-              {t("contact.location")}: {siteConfig.contact.location}
-            </p>
-          </address>
-          <ul className="mt-5 flex flex-wrap gap-4 text-sm">
-            <li>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.social.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t("social.instagram")}
-              >
-                Instagram
-              </a>
-            </li>
-            <li>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.social.linkedin}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t("social.linkedin")}
-              >
-                LinkedIn
-              </a>
-            </li>
-            <li>
-              <a
-                className={externalLinkClass}
-                href={siteConfig.social.telegram}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t("social.telegram")}
-              >
-                Telegram
-              </a>
-            </li>
-          </ul>
-        </section>
+    <footer
+      dir={isRtl ? "rtl" : "ltr"}
+      className="relative isolate overflow-hidden border-t border-stone-950/[0.08] bg-[#f3f1eb] text-stone-950"
+    >
+      <FooterBackground />
+      <FooterCallToAction
+        description={t("footer.description")}
+        contactLabel={t("footer.contact")}
+        isRtl={isRtl}
+      />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1900px] px-4 sm:px-10 lg:px-14 xl:px-20 min-[1600px]:px-24">
+        <div className="grid gap-12 py-14 md:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.8fr_1.2fr] lg:gap-10 lg:py-20 xl:gap-12">
+          <FooterBrand
+            homeLabel={t("homeLabel")}
+            legalItems={legalNavigation.map(({ id, href }) => ({
+              href,
+              label: t(`footer.${id}`),
+            }))}
+          />
+          <FooterLinkColumn
+            id="footer-navigation"
+            index="01"
+            heading={t("footer.navigation")}
+            isRtl={isRtl}
+            items={navigationItems.map(({ id, href }) => ({
+              href,
+              label: t(`navigation.${id}`),
+            }))}
+          />
+          <FooterLinkColumn
+            id="footer-categories"
+            index="02"
+            heading={t("footer.categories")}
+            isRtl={isRtl}
+            items={publicProductCategories.map(({ id, href }) => ({
+              href,
+              label: t(`navigation.${id}`),
+            }))}
+          />
+          <FooterContact
+            isRtl={isRtl}
+            labels={{
+              heading: t("footer.contact"),
+              whatsapp: t("contact.whatsapp"),
+              location: t("contact.location"),
+              instagram: t("social.instagram"),
+              linkedin: t("social.linkedin"),
+              telegram: t("social.telegram"),
+            }}
+          />
+        </div>
+
+        <FooterExportStrip rights={t("footer.rights")} />
       </div>
-      <div className="border-t border-white/15 px-6 py-5 text-center text-xs text-stone-400">
-        © {new Date().getFullYear()} {siteConfig.name}. {t("footer.rights")}
-      </div>
+
+      <span aria-hidden="true" className="pointer-events-none absolute start-4 top-4 z-30 h-9 w-9 border-s border-t border-stone-950/15 sm:start-6 sm:top-6" />
+      <span aria-hidden="true" className="pointer-events-none absolute end-4 top-4 z-30 h-9 w-9 border-e border-t border-stone-950/15 sm:end-6 sm:top-6" />
     </footer>
   );
 }

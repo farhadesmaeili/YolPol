@@ -21,12 +21,12 @@ export function ExportLoadCalculator({products, labels, locale}: {products: read
   const kg = (grams: number) => formatHumanNumber(locale, grams / 1000);
   const calculated = result.status === "calculated" ? result : null;
   const statusText = labels[calculationMessageKey(result)];
-  return <section className="mt-12 min-w-0 max-w-full border border-border bg-surface p-5 sm:p-8" aria-labelledby="load-calculator-heading">
-    <h2 id="load-calculator-heading" className="text-2xl font-semibold">{labels.heading}</h2>
+  return <section className="mt-12 min-w-0 max-w-full border border-stone-950/10 bg-white/40 p-5 shadow-[0_40px_100px_-70px_rgba(28,25,23,0.55)] backdrop-blur-sm sm:p-8" aria-labelledby="load-calculator-heading">
+    <span aria-hidden="true" dir="ltr" className="text-[9px] font-semibold tracking-[0.22em] text-emerald-800">04</span><h2 id="load-calculator-heading" className="mt-4 text-3xl font-semibold text-stone-950">{labels.heading}</h2>
     <div className="mt-6 min-w-0 max-w-full space-y-4">{lines.map((line, index) => {
       const option = products.find((product) => product.id === line.productId)!;
       const calculatedLine = calculated?.lines[index];
-      return <fieldset key={line.productId} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.75rem] gap-4 border border-border p-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_2.75rem]">
+      return <fieldset key={line.productId} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.75rem] gap-4 border border-stone-950/10 bg-[#f3f1eb]/70 p-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_2.75rem]">
         <legend className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2 font-semibold">{option.name}</legend>
         <label className="col-span-2 grid min-w-0 max-w-full gap-2 text-sm md:col-span-1">{labels.product}<select value={line.productId} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? {...item, productId: event.target.value} : item))} className="min-h-11 w-full min-w-0 max-w-full border border-border bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-focus">{[option, ...available].map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
         <label className="grid min-w-0 max-w-full gap-2 text-sm">{labels.pallets}<input type="number" min="1" step="1" inputMode="numeric" value={line.palletText} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? {...item, palletText: event.target.value} : item))} className="min-h-11 w-full min-w-0 max-w-full border border-border bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-focus" /></label>

@@ -6,6 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  allowedDevOrigins: ["192.168.1.55"],
 };
 
 export default withNextIntl(nextConfig);

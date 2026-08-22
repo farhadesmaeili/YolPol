@@ -27,7 +27,7 @@ export async function ProductCategoryRoute({locale, category}: {locale: Locale; 
     <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:px-10 sm:py-16">
       <nav aria-label={breadcrumbs("label")} className="mb-8 text-sm text-muted-foreground"><Link href="/">{breadcrumbs("home")}</Link><span aria-hidden="true"> / </span><Link href="/products">{breadcrumbs("products")}</Link><span aria-hidden="true"> / </span><span aria-current="page">{categories(key)}</span></nav>
       <ProductListHeader title={page("heading")} description={page("description")} />
-      {catalog.products.length === 0 ? <ProductEmptyState title={products("empty.title")} description={products("empty.description")} backLabel={products("empty.backHome")} /> : <ProductGrid products={catalog.products} categoryLabels={categoryLabels} viewLabel={products("viewDetails")} inquiryLabel={products("requestPrice")} />}
+      {catalog.products.length === 0 ? <ProductEmptyState title={products("empty.title")} description={products("empty.description")} backLabel={products("empty.backHome")} /> : <ProductGrid products={catalog.products} categoryLabels={categoryLabels} viewLabel={products("viewDetails")} inquiryLabel={products("requestPrice")} cardLabels={{product: products("card.product"), glassBottle: products("card.glassBottle"), inquiryPricing: products("card.inquiryPricing"), missingImage: products("card.missingImage")}} />}
       <JsonLdScript data={createBreadcrumbJsonLd({locale, items: [{name: breadcrumbs("home"), pathname: "/"}, {name: breadcrumbs("products"), pathname: "/products"}, {name: categories(key), pathname: `/products/${category}`} ]})} />
     </div>
   );

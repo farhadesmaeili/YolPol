@@ -63,12 +63,32 @@
     "listingFailure": "Ürün ambalaj bilgileri geçici olarak kullanılamıyor."
   },
   "Common": {"viewProducts": "Ürünleri görüntüle", "contactUs": "Bize ulaşın"},
-  "HomePage": {"eyebrow": "Çok dilli cam şişe kataloğu", "heading": "Zeytinyağı, gıda ve içecek uygulamaları için cam şişeler", "description": "YolPol'ün şeffaf ve zeytin yeşili cam şişe kataloğunu inceleyin. Ürün bilgileri dört dilde sunulur ve fiyatlar talep üzerine paylaşılır."},
+  "HomePage": {"eyebrow":"Toplu cam şişe tedariki","heading":"Uluslararası B2B pazarları için cam şişeler","description":"Zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili YolPol cam şişelerini toplu uluslararası talepler için inceleyin.","imageAlt":"Toplu sunum için hazırlanan şeffaf ve zeytin yeşili YolPol cam şişeleri","glassExport":"Cam / ihracat","exportPlanning":"İhracat planlama","referenceConfiguration":"Referans yapılandırma","capacityTitle":"26 palet planlama kapasitesi","capacityDescription":"Standart palet yapılandırması için doğrulanmış planlama sınırları.","pallets":"Palet","palletLayout":"Palet düzeni","maximumGrossWeight":"Azami brüt ağırlık","tradeMode":"Ticaret modeli","exportLabel":"İhracat","capacitySummary":"13'e 2 düzende 26 palet ve azami 26.000 kilogram brüt ağırlık içeren referans ihracat yapılandırması.","kilograms":"kg","planningLimit":"Doğrulanmış planlama sınırı","networkLabel":"Uluslararası B2B","technicalIndex":"Teknik indeks"},
   "Metadata": {"title": "YolPol | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğunu keşfedin."},
   "Products": {
     "metadata": {"title": "Zeytinyağı, Gıda ve İçecekler için Cam Şişeler | YolPol", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili cam şişe kataloğunu keşfedin. Ürün fiyatları talep üzerine sunulur."},
     "heading": "Zeytinyağı, Gıda ve İçecekler için Cam Şişeler",
     "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili cam şişe kataloğunu keşfedin. Ürün fiyatları talep üzerine sunulur.",
+    "catalog": {
+      "collectionLabel": "Koleksiyonlar",
+      "indexLabel": "Ürün dizini",
+      "categoryNavigationLabel": "Ürün kategorileri",
+      "productCountLabel": "cam ürün",
+      "productCountSummary": "Yayımlanmış {count} cam ürün",
+      "publishedLabel": "Katalog",
+      "publishedValue": "Yayımlanmış ürünler",
+      "destinationLabel": "Ticari kapsam",
+      "destinationValue": "IR → INTL",
+      "inquiryLabel": "Fiyatlandırma",
+      "inquiryValue": "Talep üzerine",
+      "bottomRail": "YolPol cam kataloğu"
+    },
+    "card": {
+      "product": "Ürün kataloğu",
+      "glassBottle": "Cam şişe",
+      "inquiryPricing": "Talep usulü fiyat",
+      "missingImage": "Ürün görseli bulunmuyor"
+    },
     "viewDetails": "Ürün detaylarını görüntüle",
     "requestPrice": "Fiyat isteyin",
     "empty": {"title": "Ürün bilgileri hazırlanıyor", "description": "Doğrulanmış ürün bilgileri teknik ve editoryal incelemenin ardından burada yayımlanacaktır.", "backHome": "Ana sayfaya dön"},
@@ -116,7 +136,7 @@
     }
   },
   "CategoryPages": {"oliveOil": {"metadata": {"title": "Zeytinyağı için Cam Şişeler | YolPol", "description": "Zeytinyağı uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Zeytinyağı için Cam Şişeler", "description": "Zeytinyağı uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "food": {"metadata": {"title": "Gıda için Cam Şişeler | YolPol", "description": "Gıda uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Gıda için Cam Şişeler", "description": "Gıda uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "beverage": {"metadata": {"title": "İçecekler için Cam Şişeler | YolPol", "description": "İçecek uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "İçecekler için Cam Şişeler", "description": "İçecek uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}},
-  "About": {"metadata": {"title": "YolPol Hakkında | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğu hakkında bilgi edinin."}, "eyebrow": "YolPol hakkında", "heading": "Doğrulanmış bilgilere dayalı çok dilli cam şişe kataloğu", "introduction": "YolPol cam şişe bilgilerini İngilizce, Türkçe, Farsça ve Arapça sunar.", "catalog": "Mevcut katalogda zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili şişeler bulunur.", "pricing": "Ürün fiyatları talep üzerine sunulur.", "location": "YolPol iletişim konumu Tahran, İran'dır.", "contactCta": "YolPol ile iletişime geçin"},
+  "About": {"metadata": {"title": "YolPol Hakkında | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğu hakkında bilgi edinin."}, "eyebrow": "YolPol hakkında", "heading": "Doğrulanmış bilgilere dayalı çok dilli cam şişe kataloğu", "introduction": "YolPol cam şişe bilgilerini İngilizce, Türkçe, Farsça ve Arapça sunar.", "catalog": "Mevcut katalogda zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili şişeler bulunur.", "pricing": "Ürün fiyatları talep üzerine sunulur.", "location": "YolPol iletişim konumu Tahran, İran'dır.", "contactCta": "YolPol ile iletişime geçin", "imageAlt": "Toplu katalog sunumu için düzenlenmiş şeffaf ve zeytin yeşili YolPol cam şişeleri"},
   "Contact": {"metadata": {"title": "YolPol ile İletişim", "description": "Cam şişe kataloğu hakkında YolPol'e e-posta, telefon, WhatsApp veya sosyal kanallardan ulaşın."}, "eyebrow": "İletişim", "heading": "YolPol ile İletişim", "introduction": "YolPol kataloğundaki ürünlerle ilgili talepleriniz için aşağıdaki doğrulanmış iletişim bilgilerini kullanın.", "email": "E-posta", "phone": "Telefon", "whatsapp": "WhatsApp", "location": "Konum", "social": "Sosyal kanallar", "instagramLabel": "YolPol'ü Instagram'da ziyaret edin", "linkedinLabel": "YolPol'ü LinkedIn'de ziyaret edin", "telegramLabel": "YolPol'ü Telegram'da ziyaret edin"},
   "PrivacyPage": {
     "metadata": {"title": "Gizlilik Politikası | YolPol", "description": "YolPol'ün web sitesi, iletişim, Talep ve güvenlik bilgilerini nasıl işlediğini öğrenin."},

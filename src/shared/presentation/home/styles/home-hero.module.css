@@ -1,0 +1,81 @@
+@keyframes imageLtr {
+  0%, 100% { transform: scale(1.012) translate3d(.35%, 0, 0); }
+  50% { transform: scale(1.028) translate3d(-.55%, -.25%, 0); }
+}
+
+@keyframes imageRtl {
+  0%, 100% { transform: scale(1.012) translate3d(-.35%, 0, 0); }
+  50% { transform: scale(1.028) translate3d(.55%, -.25%, 0); }
+}
+
+@keyframes portalFloat {
+  0%, 100% { transform: translate3d(-50%, -50%, 0); }
+  50% { transform: translate3d(-50%, calc(-50% - 8px), 0); }
+}
+
+@keyframes sweepLtr {
+  0%, 20% { opacity: 0; transform: translate3d(-140%, 0, 0) rotate(-13deg); }
+  50% { opacity: .65; }
+  86%, 100% { opacity: 0; transform: translate3d(720%, 0, 0) rotate(-13deg); }
+}
+
+@keyframes sweepRtl {
+  0%, 20% { opacity: 0; transform: translate3d(140%, 0, 0) rotate(13deg); }
+  50% { opacity: .65; }
+  86%, 100% { opacity: 0; transform: translate3d(-720%, 0, 0) rotate(13deg); }
+}
+
+@keyframes scan {
+  0% { opacity: 0; transform: translateY(0); }
+  48% { opacity: .4; }
+  100% { opacity: 0; transform: translateY(520px); }
+}
+
+@keyframes floatCard {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -8px, 0); }
+}
+
+@keyframes ambient {
+  0%, 100% { opacity: .42; transform: translate(-50%, -50%) scale(.96); }
+  50% { opacity: .76; transform: translate(-50%, -50%) scale(1.04); }
+}
+
+@keyframes route {
+  0% { opacity: 0; transform: translateX(-150%); }
+  20%, 80% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(240%); }
+}
+
+@keyframes scanner {
+  0%, 10% { opacity: 0; transform: translateX(-140%); }
+  52% { opacity: .8; }
+  100% { opacity: 0; transform: translateX(1500%); }
+}
+
+@keyframes palletPulse {
+  0%, 100% { background-color: rgb(6 78 59 / 7%); transform: translateY(0); }
+  50% { background-color: rgb(6 78 59 / 14%); transform: translateY(-1px); }
+}
+
+.imageLtr { animation: imageLtr 18s ease-in-out infinite; will-change: transform; }
+.imageRtl { animation: imageRtl 18s ease-in-out infinite; will-change: transform; }
+.portal { animation: portalFloat 9s ease-in-out infinite; will-change: transform; }
+.sweepLtr { animation: sweepLtr 9s ease-in-out infinite; }
+.sweepRtl { animation: sweepRtl 9s ease-in-out infinite; }
+.scan { animation: scan 10s 1.5s ease-in-out infinite; }
+.floatingCard { animation: floatCard 7s ease-in-out infinite; }
+.ambient { animation: ambient 8s ease-in-out infinite; }
+.route { animation: route 4.5s ease-in-out infinite; }
+.scanner { animation: scanner 5.8s cubic-bezier(.45, 0, .2, 1) infinite; }
+.pallet { animation: palletPulse 3.6s ease-in-out infinite; }
+.pallet:nth-child(3n + 2) { animation-delay: -1.2s; }
+.pallet:nth-child(3n) { animation-delay: -2.4s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .imageLtr, .imageRtl, .portal, .sweepLtr, .sweepRtl, .scan,
+  .floatingCard, .ambient, .route, .scanner, .pallet {
+    animation: none !important;
+    will-change: auto;
+  }
+}

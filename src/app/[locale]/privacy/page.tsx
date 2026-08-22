@@ -4,8 +4,8 @@ import {notFound} from "next/navigation";
 
 import {createPrivacyMetadata} from "@/app/[locale]/_site-metadata";
 import {isLocale} from "@/i18n/locale";
-import {Link} from "@/i18n/navigation";
 import {PrivacyPolicy} from "@/shared/presentation/legal/privacy-policy";
+import {PremiumBreadcrumbs, PremiumPageShell} from "@/shared/presentation/marketing/premium-page-shell";
 import {JsonLdScript} from "@/shared/presentation/seo/json-ld-script";
 import {createBreadcrumbJsonLd} from "@/shared/seo/breadcrumb-json-ld";
 
@@ -26,9 +26,9 @@ export default async function PrivacyPage({params}: Props) {
     getTranslations({locale, namespace: "PrivacyPage"}),
     getTranslations({locale, namespace: "Breadcrumbs"}),
   ]);
-  return <div className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-10 sm:py-16">
-    <nav aria-label={breadcrumbs("label")} className="text-sm text-muted-foreground"><Link href="/">{breadcrumbs("home")}</Link><span aria-hidden="true"> / </span><span aria-current="page">{privacy("heading")}</span></nav>
+  return <PremiumPageShell><div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 lg:px-14 xl:px-20">
+    <PremiumBreadcrumbs label={breadcrumbs("label")} home={breadcrumbs("home")} current={privacy("heading")} />
     <PrivacyPolicy locale={locale} />
     <JsonLdScript data={createBreadcrumbJsonLd({locale, items: [{name: breadcrumbs("home"), pathname: "/"}, {name: privacy("heading"), pathname: "/privacy"}]})} />
-  </div>;
+  </div></PremiumPageShell>;
 }
