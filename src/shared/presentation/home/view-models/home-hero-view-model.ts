@@ -1,0 +1,32 @@
+import type { Locale } from "@/shared/types/locale";
+
+export type HomeHeroViewModel = Readonly<{
+  locale: Locale;
+  isRtl: boolean;
+  arrow: "←" | "→";
+  eyebrow: string;
+  heading: string;
+  description: string;
+  imageAlt: string;
+  productCta: string;
+  contactCta: string;
+  glassExport: string;
+  exportPlanning: string;
+  referenceConfiguration: string;
+  capacityTitle: string;
+  capacityDescription: string;
+  palletsLabel: string;
+  palletLayout: string;
+  maximumGrossWeight: string;
+  tradeMode: string;
+  exportLabel: string;
+  capacitySummary: string;
+  kilograms: string;
+  planningLimit: string;
+  networkLabel: string;
+  technicalIndex: string;
+  palletCount: number;
+  formattedPalletCount: string;
+  layout: string;
+  grossWeightKilograms: number;
+}>;

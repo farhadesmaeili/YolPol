@@ -1,43 +1,64 @@
+import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { notFound } from "next/navigation";
 
-import { Link } from "@/i18n/navigation";
-import type { Locale } from "@/i18n/routing";
+import { getExportCapacityPolicy } from "@/composition/export-logistics/export-logistics";
+import { routing, type Locale } from "@/i18n/routing";
+import { formatHumanNumber } from "@/shared/presentation/bidi/bidi-isolate";
+import { HomeHero } from "@/shared/presentation/home/components/home-hero";
+import type { HomeHeroViewModel } from "@/shared/presentation/home/view-models/home-hero-view-model";
 
 type HomePageProps = {
-  params: Promise<{ locale: Locale }>;
+  params: Promise<{ locale: string }>;
 };
 
 export default async function HomePage({ params }: HomePageProps) {
   const { locale } = await params;
-  setRequestLocale(locale);
-  const translations = await getTranslations("HomePage");
-  const common = await getTranslations("Common");
+  if (!hasLocale(routing.locales, locale)) notFound();
 
-  return (
-    <section className="mx-auto flex min-h-[70vh] max-w-5xl flex-col justify-center px-6 py-20 sm:px-10">
-      <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-800">
-        {translations("eyebrow")}
-      </p>
-      <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
-        {translations("heading")}
-      </h1>
-      <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">
-        {translations("description")}
-      </p>
-      <div className="mt-8 flex flex-wrap gap-4">
-        <Link
-          href="/products"
-          className="inline-flex min-h-12 items-center bg-brand px-5 py-3 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-        >
-          {common("viewProducts")}
-        </Link>
-        <Link
-          href="/contact"
-          className="inline-flex min-h-12 items-center border border-brand px-5 py-3 text-sm font-semibold text-brand outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-        >
-          {common("contactUs")}
-        </Link>
-      </div>
-    </section>
-  );
+  setRequestLocale(locale);
+  const translations = await getTranslations({ locale, namespace: "HomePage" });
+  const common = await getTranslations({ locale, namespace: "Common" });
+  const capacity = getExportCapacityPolicy();
+
+  return <HomeHero model={createHomeHeroModel(locale, translations, common, capacity)} />;
+}
+
+function createHomeHeroModel(
+  locale: Locale,
+  t: Awaited<ReturnType<typeof getTranslations<"HomePage">>>,
+  common: Awaited<ReturnType<typeof getTranslations<"Common">>>,
+  capacity: ReturnType<typeof getExportCapacityPolicy>,
+): HomeHeroViewModel {
+  const isRtl = locale === "fa" || locale === "ar";
+  return {
+    locale,
+    isRtl,
+    arrow: isRtl ? "←" : "→",
+    eyebrow: t("eyebrow"),
+    heading: t("heading"),
+    description: t("description"),
+    imageAlt: t("imageAlt"),
+    productCta: common("viewProducts"),
+    contactCta: common("contactUs"),
+    glassExport: t("glassExport"),
+    exportPlanning: t("exportPlanning"),
+    referenceConfiguration: t("referenceConfiguration"),
+    capacityTitle: t("capacityTitle"),
+    capacityDescription: t("capacityDescription"),
+    palletsLabel: t("pallets"),
+    palletLayout: t("palletLayout"),
+    maximumGrossWeight: t("maximumGrossWeight"),
+    tradeMode: t("tradeMode"),
+    exportLabel: t("exportLabel"),
+    capacitySummary: t("capacitySummary"),
+    kilograms: t("kilograms"),
+    planningLimit: t("planningLimit"),
+    networkLabel: t("networkLabel"),
+    technicalIndex: t("technicalIndex"),
+    palletCount: capacity.maxPallets,
+    formattedPalletCount: formatHumanNumber(locale, capacity.maxPallets),
+    layout: `${formatHumanNumber(locale, 13)} × ${formatHumanNumber(locale, 2)}`,
+    grossWeightKilograms: capacity.maxGrossWeightKilograms,
+  };
 }

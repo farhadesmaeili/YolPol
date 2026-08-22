@@ -13,6 +13,7 @@ import {JsonLdScript} from "@/shared/presentation/seo/json-ld-script";
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {createProductDetailMetadata} from "@/features/products/presentation/seo/product-metadata";
 import {isLocale} from "@/i18n/locale";
+import {PremiumPageShell} from "@/shared/presentation/marketing/premium-page-shell";
 import type {ProductCategory} from "@/features/products/domain/types/product-types";
 
 type ProductPageProps = {params: Promise<{locale: string; slug: string}>};
@@ -71,7 +72,7 @@ export default async function ProductPage({params}: ProductPageProps) {
   });
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14">
+    <PremiumPageShell><div className="mx-auto w-full max-w-[1900px] px-4 py-8 sm:px-8 lg:px-14 xl:px-20">
       <ProductBreadcrumbs
         homeLabel={breadcrumbs("home")}
         productsLabel={breadcrumbs("products")}
@@ -148,7 +149,7 @@ export default async function ProductPage({params}: ProductPageProps) {
         })}
       />
       <JsonLdScript data={breadcrumbData} />
-    </div>
+    </div></PremiumPageShell>
   );
 }
 

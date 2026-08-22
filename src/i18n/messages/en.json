@@ -63,12 +63,32 @@
     "listingFailure": "Product packaging information is temporarily unavailable."
   },
   "Common": {"viewProducts": "View products", "contactUs": "Contact us"},
-  "HomePage": {"eyebrow": "Multilingual glass bottle catalog", "heading": "Glass bottles for olive oil, food and beverage applications", "description": "Explore YolPol's clear and olive-green glass bottle catalog. Product information is available in four languages and pricing is available by inquiry."},
+  "HomePage": {"eyebrow":"Bulk glass bottle supply","heading":"Glass bottles for international B2B markets","description":"Explore YolPol's clear and olive-green glass bottles for olive oil, food and beverage applications, presented for bulk international inquiries.","imageAlt":"Clear and olive-green YolPol glass bottles prepared for bulk presentation","glassExport":"Glass / export","exportPlanning":"Export planning","referenceConfiguration":"Reference configuration","capacityTitle":"26-pallet planning capacity","capacityDescription":"Verified planning limits for a standard pallet configuration.","pallets":"Pallets","palletLayout":"Pallet layout","maximumGrossWeight":"Maximum gross weight","tradeMode":"Trade mode","exportLabel":"Export","capacitySummary":"Reference export configuration with 26 pallets arranged in a 13 by 2 layout and a maximum gross weight of 26,000 kilograms.","kilograms":"kg","planningLimit":"Verified planning limit","networkLabel":"International B2B","technicalIndex":"Technical index"},
   "Metadata": {"title": "YolPol | Glass Bottle Catalog", "description": "Explore YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."},
   "Products": {
     "metadata": {"title": "Glass Bottles for Olive Oil, Food and Beverages | YolPol", "description": "Explore YolPol's catalog of clear and olive-green glass bottles for olive oil, food and beverage applications. Product prices are available by inquiry."},
     "heading": "Glass Bottles for Olive Oil, Food and Beverages",
     "description": "Explore YolPol's catalog of clear and olive-green glass bottles for olive oil, food and beverage applications. Product prices are available by inquiry.",
+    "catalog": {
+      "collectionLabel": "Collections",
+      "indexLabel": "Product index",
+      "categoryNavigationLabel": "Product categories",
+      "productCountLabel": "glass products",
+      "productCountSummary": "{count} published glass products",
+      "publishedLabel": "Catalog",
+      "publishedValue": "Published products",
+      "destinationLabel": "Business context",
+      "destinationValue": "IR → INTL",
+      "inquiryLabel": "Pricing",
+      "inquiryValue": "Inquiry",
+      "bottomRail": "YolPol glass catalog"
+    },
+    "card": {
+      "product": "Product catalog",
+      "glassBottle": "Glass bottle",
+      "inquiryPricing": "Inquiry pricing",
+      "missingImage": "Product image unavailable"
+    },
     "viewDetails": "View product details",
     "requestPrice": "Request price",
     "empty": {"title": "Product information is being prepared", "description": "Verified product information will be published here after technical and editorial review.", "backHome": "Return to home"},
@@ -116,7 +136,7 @@
     }
   },
   "CategoryPages": {"oliveOil": {"metadata": {"title": "Olive Oil Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for olive oil applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Olive Oil", "description": "Explore clear and olive-green glass bottles listed for olive oil applications. Product prices are available by inquiry."}, "food": {"metadata": {"title": "Food Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for food applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Food", "description": "Explore clear and olive-green glass bottles listed for food applications. Product prices are available by inquiry."}, "beverage": {"metadata": {"title": "Beverage Glass Bottles | YolPol", "description": "Explore clear and olive-green glass bottles for beverage applications. Product prices are available by inquiry."}, "heading": "Glass Bottles for Beverages", "description": "Explore clear and olive-green glass bottles listed for beverage applications. Product prices are available by inquiry."}},
-  "About": {"metadata": {"title": "About YolPol | Glass Bottle Catalog", "description": "Learn about YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."}, "eyebrow": "About YolPol", "heading": "A factual, multilingual glass bottle catalog", "introduction": "YolPol presents glass bottle information in English, Turkish, Persian and Arabic.", "catalog": "The current catalog includes clear and olive-green bottles for olive oil, food and beverage applications.", "pricing": "Product pricing is available by inquiry.", "location": "YolPol's contact location is Tehran, Iran.", "contactCta": "Contact YolPol"},
+  "About": {"metadata": {"title": "About YolPol | Glass Bottle Catalog", "description": "Learn about YolPol's multilingual catalog of glass bottles for olive oil, food and beverage applications."}, "eyebrow": "About YolPol", "heading": "A factual, multilingual glass bottle catalog", "introduction": "YolPol presents glass bottle information in English, Turkish, Persian and Arabic.", "catalog": "The current catalog includes clear and olive-green bottles for olive oil, food and beverage applications.", "pricing": "Product pricing is available by inquiry.", "location": "YolPol's contact location is Tehran, Iran.", "contactCta": "Contact YolPol", "imageAlt": "Clear and olive-green YolPol glass bottles arranged for bulk catalog presentation"},
   "Contact": {"metadata": {"title": "Contact YolPol", "description": "Contact YolPol by email, phone, WhatsApp or social channels about the glass bottle catalog."}, "eyebrow": "Contact", "heading": "Contact YolPol", "introduction": "Use the verified contact details below for inquiries about products in the YolPol catalog.", "email": "Email", "phone": "Phone", "whatsapp": "WhatsApp", "location": "Location", "social": "Social channels", "instagramLabel": "Visit YolPol on Instagram", "linkedinLabel": "Visit YolPol on LinkedIn", "telegramLabel": "Visit YolPol on Telegram"},
   "PrivacyPage": {
     "metadata": {"title": "Privacy Policy | YolPol", "description": "Learn how YolPol handles website, contact, Inquiry and security information."},

@@ -1,0 +1,7 @@
+import type {RefObject} from "react";
+
+export function MobileMenuTrigger({buttonRef, panelId, isOpen, openLabel, closeLabel, onToggle}: {buttonRef: RefObject<HTMLButtonElement | null>; panelId: string; isOpen: boolean; openLabel: string; closeLabel: string; onToggle: () => void}) {
+  return <button ref={buttonRef} type="button" aria-expanded={isOpen} aria-controls={panelId} aria-label={isOpen ? closeLabel : openLabel} onClick={onToggle} className="group pointer-events-auto relative z-[70] inline-flex size-12 min-h-12 min-w-12 shrink-0 touch-manipulation items-center justify-center overflow-hidden border border-stone-950/10 bg-[#f8f7f2] text-stone-950 outline-none transition-colors duration-300 hover:border-emerald-900/30 hover:bg-white focus-visible:ring-2 focus-visible:ring-emerald-800 focus-visible:ring-offset-2 motion-reduce:transition-none xl:hidden">
+    <span aria-hidden="true" className="pointer-events-none relative block size-5"><span className={`absolute left-1/2 top-[5px] h-px w-5 -translate-x-1/2 bg-current transition-transform duration-300 motion-reduce:transition-none ${isOpen ? "translate-y-[5px] rotate-45" : ""}`} /><span className={`absolute left-1/2 top-1/2 h-px w-5 -translate-x-1/2 bg-current transition-opacity duration-300 motion-reduce:transition-none ${isOpen ? "opacity-0" : ""}`} /><span className={`absolute bottom-[4px] left-1/2 h-px w-5 -translate-x-1/2 bg-current transition-transform duration-300 motion-reduce:transition-none ${isOpen ? "-translate-y-[5px] -rotate-45" : ""}`} /></span>
+  </button>;
+}
