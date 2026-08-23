@@ -12,6 +12,7 @@ import type {
 } from "@/features/products/presentation/view-models/product-view-model";
 import {supportedLocales, type Locale} from "@/shared/types/locale";
 import type {ProductCategory} from "@/features/products/domain/types/product-types";
+import {truckCapacityPolicy} from "@/features/export-logistics/domain/types/load-plan";
 
 export type PublishedProductRoute = Readonly<{locale: Locale; slug: string}>;
 
@@ -127,6 +128,6 @@ function createProductCatalog(repository: ProductRepository) {
   return {
     listProducts: new ListProducts(repository),
     getProductBySlug: new GetProductBySlug(repository),
-    presenter: new ProductPresenter(),
+    presenter: new ProductPresenter(truckCapacityPolicy.maxPallets),
   };
 }

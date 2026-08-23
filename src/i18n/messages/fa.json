@@ -156,7 +156,7 @@
   "InquiryConsent": {"privacyLink": "سیاست حفظ حریم خصوصی", "privacySuffix": "— لطفاً پیش از اشتراک اطلاعات آن را بخوانید."},
   "ProductDetails": {"categories": "دسته‌بندی‌ها", "sku": "کد محصول", "applications": "کاربردها"},
   "ProductSpecifications": {"heading": "مشخصات فنی", "capacity": "ظرفیت", "glassColor": "رنگ شیشه", "bottleShape": "شکل بطری", "neckFinish": "نوع دهانه", "weight": "وزن", "height": "ارتفاع", "diameter": "قطر", "milliliters": "میلی‌لیتر", "grams": "گرم", "millimeters": "میلی‌متر", "materials": {"glass": "شیشه"}, "glassColors": {"oliveGreen": "سبز زیتونی", "clear": "شفاف"}, "bottleShapes": {"round": "گرد", "square": "مربعی"}},
-  "ProductPackaging": {"heading": "اطلاعات بسته‌بندی", "unitsPerPackage": "تعداد در هر بسته", "packagesPerPallet": "تعداد بسته در هر پالت", "unitsPerPallet": "تعداد در هر پالت", "palletGrossWeight": "وزن ناخالص پالت", "kilograms": "کیلوگرم"},
+  "ProductPackaging": {"heading": "اطلاعات بسته‌بندی", "unitsPerPackage": "تعداد در هر بسته", "packagesPerPallet": "تعداد بسته در هر پالت", "unitsPerPallet": "تعداد در هر پالت", "unitsPerTruck": "تعداد در هر کامیون", "palletGrossWeight": "وزن ناخالص پالت", "kilograms": "کیلوگرم"},
   "ProductPricing": {"inquiry": "درخواست قیمت"},
   "ProductCategories": {"oliveOil": "بطری‌های روغن زیتون", "food": "بطری‌های مواد غذایی", "beverage": "بطری‌های نوشیدنی", "pharmaceutical": "بطری‌های دارویی"},
   "Breadcrumbs": {"label": "مسیر صفحه", "home": "خانه", "products": "محصولات"},

@@ -6,6 +6,7 @@ import {
   InvalidProductImageError,
   InvalidProductCategoryError,
   InvalidProductPackagingError,
+  InvalidProductPricingError,
   InvalidProductStatusTransitionError,
   InvalidProductTimestampError,
   InvalidTechnicalSpecificationError,
@@ -29,7 +30,10 @@ describe("Product lifecycle", () => {
           slug: "test-product",
           categories: ["beverage"],
           specifications: {},
-          pricing: {mode: "inquiry"},
+          pricing: {
+            mode: "inquiry",
+            internalUnitPrice: {amount: 100_000, currency: "IRR"},
+          },
           images: [],
           content: {
             en: {
@@ -180,11 +184,33 @@ describe("Product data invariants", () => {
     }
   });
 
-  it("allows omitted packaging and exposes inquiry-only pricing", () => {
+  it("allows omitted packaging and validates immutable internal IRR unit pricing", () => {
     const product = new ProductTestBuilder().with({packaging: undefined}).buildReconstituted();
     expect(product.packaging).toBeUndefined();
-    expect(product.pricing).toEqual({mode: "inquiry"});
+    expect(product.pricing).toEqual({
+      mode: "inquiry",
+      internalUnitPrice: {amount: 100_000, currency: "IRR"},
+    });
     expect(Object.isFrozen(product.pricing)).toBe(true);
+    expect(Object.isFrozen(product.pricing.internalUnitPrice)).toBe(true);
+
+    for (const amount of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        new ProductTestBuilder()
+          .with({pricing: {mode: "inquiry", internalUnitPrice: {amount, currency: "IRR"}}})
+          .buildReconstituted(),
+      ).toThrow(InvalidProductPricingError);
+    }
+    expect(() =>
+      new ProductTestBuilder()
+        .with({
+          pricing: {
+            mode: "inquiry",
+            internalUnitPrice: {amount: 100_000, currency: "USD" as "IRR"},
+          },
+        })
+        .buildReconstituted(),
+    ).toThrow(InvalidProductPricingError);
   });
 
   it("rejects duplicate image identifiers and sort orders", () => {
@@ -289,7 +315,7 @@ describe("Product data invariants", () => {
       slug: "test-product",
       categories: ["beverage"],
       specifications,
-      pricing: {mode: "inquiry"},
+      pricing: {mode: "inquiry", internalUnitPrice: {amount: 100_000, currency: "IRR"}},
       images,
       content: {
         en: {

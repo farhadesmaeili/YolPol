@@ -37,7 +37,12 @@ export type ProductPackagingInput = Readonly<{
 export type ProductPackaging = ProductPackagingInput &
   Readonly<{unitsPerPallet: number}>;
 
-export type ProductPricing = Readonly<{mode: "inquiry"}>;
+export type ProductPricing = Readonly<{
+  mode: "inquiry";
+  internalUnitPrice: Readonly<{amount: number; currency: "IRR"}>;
+}>;
+
+export type PublicProductPricing = Readonly<{mode: "inquiry"}>;
 
 export type ProductImage = Readonly<{
   id: string;

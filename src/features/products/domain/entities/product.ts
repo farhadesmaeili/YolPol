@@ -95,7 +95,10 @@ export class Product {
     this.sku = ProductSku.create(input.sku);
     this.slug = ProductSlug.create(input.slug);
     this.categories = freezeCategories(input.categories);
-    this.pricing = Object.freeze({...input.pricing});
+    this.pricing = Object.freeze({
+      mode: input.pricing.mode,
+      internalUnitPrice: Object.freeze({...input.pricing.internalUnitPrice}),
+    });
     this.currentStatus = input.status;
     this.productSpecifications = freezeSpecifications(input.specifications);
     this.productPackaging = freezePackaging(input.packaging);
@@ -251,15 +254,25 @@ function validatePackaging(packaging?: ProductPackagingInput): void {
     }
   }
   if (
-    !Number.isFinite(packaging.palletGrossWeightKg) ||
+    !Number.isSafeInteger(packaging.palletGrossWeightKg) ||
     packaging.palletGrossWeightKg <= 0
   ) {
     throw new InvalidProductPackagingError("palletGrossWeightKg");
   }
+  const unitsPerPallet = packaging.unitsPerPackage * packaging.packagesPerPallet;
+  if (!Number.isSafeInteger(unitsPerPallet)) {
+    throw new InvalidProductPackagingError("unitsPerPallet");
+  }
 }
 
 function validatePricing(pricing: ProductPricing): void {
-  if (pricing.mode !== "inquiry") {
+  const internalUnitPrice = pricing?.internalUnitPrice;
+  if (
+    pricing?.mode !== "inquiry" ||
+    internalUnitPrice?.currency !== "IRR" ||
+    !Number.isSafeInteger(internalUnitPrice.amount) ||
+    internalUnitPrice.amount <= 0
+  ) {
     throw new InvalidProductPricingError();
   }
 }

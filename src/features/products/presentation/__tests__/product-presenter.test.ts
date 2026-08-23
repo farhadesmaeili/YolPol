@@ -40,7 +40,7 @@ const productDto = (): ProductDto => ({
 
 describe("ProductPresenter", () => {
   it("maps application data into a grouped, presentation-ready view model", () => {
-    const result = new ProductPresenter().presentDetail({
+    const result = new ProductPresenter(26).presentDetail({
       status: "found",
       product: productDto(),
     });
@@ -54,7 +54,7 @@ describe("ProductPresenter", () => {
           glassColor: "clear",
           bottleShape: "round",
         },
-        packaging: {unitsPerPallet: 200},
+        packaging: {unitsPerPallet: 200, unitsPerTruck: 5200},
         pricing: {mode: "inquiry"},
         content: {
           locale: "en",
@@ -72,7 +72,7 @@ describe("ProductPresenter", () => {
 
   it("preserves images in deterministic sort order without mutating the DTO", () => {
     const dto = productDto();
-    const result = new ProductPresenter().presentList({products: [dto]});
+    const result = new ProductPresenter(26).presentList({products: [dto]});
     expect(result.products[0].images.map((image) => image.id)).toEqual([
       "first",
       "second",
@@ -83,7 +83,7 @@ describe("ProductPresenter", () => {
   it.each(["not_found", "locale_not_available"] as const)(
     "preserves the explicit %s query outcome",
     (status) => {
-      expect(new ProductPresenter().presentDetail({status})).toEqual({status});
+      expect(new ProductPresenter(26).presentDetail({status})).toEqual({status});
     },
   );
 });

@@ -156,7 +156,7 @@
   "InquiryConsent": {"privacyLink": "Gizlilik Politikası", "privacySuffix": "— bilgi paylaşmadan önce lütfen politikayı okuyun."},
   "ProductDetails": {"categories": "Kategoriler", "sku": "Stok kodu", "applications": "Kullanım alanları"},
   "ProductSpecifications": {"heading": "Teknik özellikler", "capacity": "Kapasite", "glassColor": "Cam rengi", "bottleShape": "Şişe şekli", "neckFinish": "Ağız tipi", "weight": "Ağırlık", "height": "Yükseklik", "diameter": "Çap", "milliliters": "ml", "grams": "g", "millimeters": "mm", "materials": {"glass": "Cam"}, "glassColors": {"oliveGreen": "Zeytin yeşili", "clear": "Şeffaf"}, "bottleShapes": {"round": "Yuvarlak", "square": "Kare"}},
-  "ProductPackaging": {"heading": "Ambalaj bilgileri", "unitsPerPackage": "Paket başına adet", "packagesPerPallet": "Palet başına paket", "unitsPerPallet": "Palet başına adet", "palletGrossWeight": "Brüt palet ağırlığı", "kilograms": "kg"},
+  "ProductPackaging": {"heading": "Ambalaj bilgileri", "unitsPerPackage": "Paket başına adet", "packagesPerPallet": "Palet başına paket", "unitsPerPallet": "Palet başına adet", "unitsPerTruck": "Kamyon başına adet", "palletGrossWeight": "Brüt palet ağırlığı", "kilograms": "kg"},
   "ProductPricing": {"inquiry": "Fiyat isteyin"},
   "ProductCategories": {"oliveOil": "Zeytinyağı şişeleri", "food": "Gıda şişeleri", "beverage": "İçecek şişeleri", "pharmaceutical": "İlaç şişeleri"},
   "Breadcrumbs": {"label": "İçerik yolu", "home": "Ana sayfa", "products": "Ürünler"},

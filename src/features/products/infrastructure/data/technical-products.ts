@@ -11,6 +11,7 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 250,
     glassColor: "olive-green",
     bottleShape: "round",
+    internalUnitPriceIrr: 180_000,
     packaging: {unitsPerPackage: 70, packagesPerPallet: 64, palletGrossWeightKg: 925},
   }),
   product({
@@ -20,6 +21,7 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 250,
     glassColor: "olive-green",
     bottleShape: "square",
+    internalUnitPriceIrr: 180_000,
     packaging: {unitsPerPackage: 56, packagesPerPallet: 81, palletGrossWeightKg: 960},
   }),
   product({
@@ -29,6 +31,8 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 250,
     glassColor: "clear",
     bottleShape: "round",
+    internalUnitPriceIrr: 180_000,
+    packaging: {unitsPerPackage: 70, packagesPerPallet: 64, palletGrossWeightKg: 925},
   }),
   product({
     id: "ylp-gb-250-cl-sq",
@@ -37,6 +41,8 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 250,
     glassColor: "clear",
     bottleShape: "square",
+    internalUnitPriceIrr: 180_000,
+    packaging: {unitsPerPackage: 56, packagesPerPallet: 81, palletGrossWeightKg: 960},
   }),
   product({
     id: "ylp-gb-500-og-rd",
@@ -45,6 +51,7 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 500,
     glassColor: "olive-green",
     bottleShape: "round",
+    internalUnitPriceIrr: 230_000,
     packaging: {unitsPerPackage: 36, packagesPerPallet: 63, palletGrossWeightKg: 790},
   }),
   product({
@@ -54,6 +61,7 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 500,
     glassColor: "olive-green",
     bottleShape: "square",
+    internalUnitPriceIrr: 230_000,
     packaging: {unitsPerPackage: 35, packagesPerPallet: 70, palletGrossWeightKg: 815},
   }),
   product({
@@ -63,6 +71,8 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 500,
     glassColor: "clear",
     bottleShape: "round",
+    internalUnitPriceIrr: 230_000,
+    packaging: {unitsPerPackage: 36, packagesPerPallet: 63, palletGrossWeightKg: 790},
   }),
   product({
     id: "ylp-gb-500-cl-sq",
@@ -71,6 +81,8 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 500,
     glassColor: "clear",
     bottleShape: "square",
+    internalUnitPriceIrr: 230_000,
+    packaging: {unitsPerPackage: 35, packagesPerPallet: 70, palletGrossWeightKg: 815},
   }),
   product({
     id: "ylp-gb-700-og-rd",
@@ -79,6 +91,7 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
     capacityMl: 700,
     glassColor: "olive-green",
     bottleShape: "round",
+    internalUnitPriceIrr: 350_000,
     packaging: {unitsPerPackage: 28, packagesPerPallet: 56, palletGrossWeightKg: 700},
   }),
 ];
@@ -86,7 +99,8 @@ export const technicalProducts: readonly StaticTechnicalProductRecord[] = [
 function product(
   input: Pick<StaticTechnicalProductRecord, "id" | "sku" | "slug"> &
     Required<Pick<StaticTechnicalProductRecord["specifications"], "capacityMl" | "glassColor" | "bottleShape">> &
-    Pick<StaticTechnicalProductRecord, "packaging">,
+    Pick<StaticTechnicalProductRecord, "packaging"> &
+    Readonly<{internalUnitPriceIrr: number}>,
 ): StaticTechnicalProductRecord {
   return {
     id: input.id,
@@ -100,7 +114,10 @@ function product(
       bottleShape: input.bottleShape,
     },
     packaging: input.packaging,
-    pricing: {mode: "inquiry"},
+    pricing: {
+      mode: "inquiry",
+      internalUnitPrice: {amount: input.internalUnitPriceIrr, currency: "IRR"},
+    },
     images: [
       {
         id: `${input.id}-primary`,

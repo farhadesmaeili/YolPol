@@ -24,7 +24,7 @@ export function toProductDto(product: Product, locale: Locale): ProductDto | nul
     seoDescription: content.seoDescription,
     specifications: {...product.specifications},
     packaging: product.packaging ? {...product.packaging} : undefined,
-    pricing: {...product.pricing},
+    pricing: {mode: product.pricing.mode},
     images: product.images.map((image) => ({
       id: image.id,
       source: image.source,

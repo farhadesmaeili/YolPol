@@ -10,7 +10,7 @@ const defaultInput = (): ReconstituteProductInput => ({
   categories: ["beverage"],
   status: "draft",
   specifications: {capacityMl: 500},
-  pricing: {mode: "inquiry"},
+  pricing: {mode: "inquiry", internalUnitPrice: {amount: 100_000, currency: "IRR"}},
   images: [
     {
       id: "image-1",
