@@ -132,7 +132,10 @@ function freezeTechnicalRecords(
         packaging: record.packaging
           ? Object.freeze({...record.packaging})
           : undefined,
-        pricing: Object.freeze({...record.pricing}),
+        pricing: Object.freeze({
+          mode: record.pricing.mode,
+          internalUnitPrice: Object.freeze({...record.pricing.internalUnitPrice}),
+        }),
         images: Object.freeze(record.images.map((image) => Object.freeze({...image}))),
       }),
     ),

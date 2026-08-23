@@ -115,6 +115,7 @@ export default async function ProductPage({params}: ProductPageProps) {
             unitsPerPackage: packaging("unitsPerPackage"),
             packagesPerPallet: packaging("packagesPerPallet"),
             unitsPerPallet: packaging("unitsPerPallet"),
+            unitsPerTruck: packaging("unitsPerTruck"),
             palletGrossWeight: packaging("palletGrossWeight"),
             kilograms: packaging("kilograms"),
           },

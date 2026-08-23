@@ -51,6 +51,7 @@ describe("GetProductBySlug", () => {
         pricing: {mode: "inquiry"},
       },
     });
+    expect(JSON.stringify(result)).not.toMatch(/internalUnitPrice|100000|IRR/u);
   });
 
   it("returns explicit missing and locale-unavailable results", async () => {

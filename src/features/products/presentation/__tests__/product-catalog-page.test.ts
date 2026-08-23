@@ -61,6 +61,29 @@ describe("Product catalog page composition", () => {
     expect(routeSource).not.toContain("padStart");
   });
 
+  it("projects exact derived truck capacity for all nine Products without pricing", async () => {
+    const catalog = await listProductCatalog("en");
+    expect(
+      catalog.products.map((product) => [
+        product.identity.id,
+        product.packaging?.unitsPerTruck,
+      ]),
+    ).toEqual([
+      ["ylp-gb-250-og-rd", 116_480],
+      ["ylp-gb-250-og-sq", 117_936],
+      ["ylp-gb-250-cl-rd", 116_480],
+      ["ylp-gb-250-cl-sq", 117_936],
+      ["ylp-gb-500-og-rd", 58_968],
+      ["ylp-gb-500-og-sq", 63_700],
+      ["ylp-gb-500-cl-rd", 58_968],
+      ["ylp-gb-500-cl-sq", 63_700],
+      ["ylp-gb-700-og-rd", 40_768],
+    ]);
+    expect(JSON.stringify(catalog)).not.toMatch(
+      /internalUnitPrice|180000|230000|350000|IRR|priceCurrency|offers/u,
+    );
+  });
+
   it("uses localized factual labels without a hardcoded locale switch or false status", () => {
     expect(routeSource).toContain('products("catalog.publishedValue")');
     expect(routeSource).toContain('products("catalog.inquiryValue")');

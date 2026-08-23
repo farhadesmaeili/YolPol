@@ -156,7 +156,7 @@
   "InquiryConsent": {"privacyLink": "سياسة الخصوصية", "privacySuffix": "— يرجى قراءتها قبل مشاركة المعلومات."},
   "ProductDetails": {"categories": "الفئات", "sku": "رمز المنتج", "applications": "الاستخدامات"},
   "ProductSpecifications": {"heading": "المواصفات الفنية", "capacity": "السعة", "glassColor": "لون الزجاج", "bottleShape": "شكل الزجاجة", "neckFinish": "نوع العنق", "weight": "الوزن", "height": "الارتفاع", "diameter": "القطر", "milliliters": "مل", "grams": "غ", "millimeters": "مم", "materials": {"glass": "زجاج"}, "glassColors": {"oliveGreen": "أخضر زيتوني", "clear": "شفاف"}, "bottleShapes": {"round": "دائري", "square": "مربع"}},
-  "ProductPackaging": {"heading": "معلومات التعبئة", "unitsPerPackage": "الوحدات في العبوة", "packagesPerPallet": "العبوات في المنصة", "unitsPerPallet": "الوحدات في المنصة", "palletGrossWeight": "الوزن الإجمالي للمنصة", "kilograms": "كغ"},
+  "ProductPackaging": {"heading": "معلومات التعبئة", "unitsPerPackage": "الوحدات في العبوة", "packagesPerPallet": "العبوات في المنصة", "unitsPerPallet": "الوحدات في المنصة", "unitsPerTruck": "الوحدات في الشاحنة", "palletGrossWeight": "الوزن الإجمالي للمنصة", "kilograms": "كغ"},
   "ProductPricing": {"inquiry": "اطلب السعر"},
   "ProductCategories": {"oliveOil": "زجاجات زيت الزيتون", "food": "زجاجات الأغذية", "beverage": "زجاجات المشروبات", "pharmaceutical": "زجاجات الأدوية"},
   "Breadcrumbs": {"label": "مسار التنقل", "home": "الرئيسية", "products": "المنتجات"},

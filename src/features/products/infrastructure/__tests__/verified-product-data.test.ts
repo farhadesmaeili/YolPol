@@ -20,6 +20,18 @@ const approvedProducts = [
   ["ylp-gb-700-og-rd", "YLP-GB-700-OG-RD", "700ml-olive-green-round-glass-bottle"],
 ] as const;
 
+const approvedCommercialData = [
+  ["ylp-gb-250-og-rd", 180_000, 70, 64, 4_480, 925, 116_480],
+  ["ylp-gb-250-og-sq", 180_000, 56, 81, 4_536, 960, 117_936],
+  ["ylp-gb-250-cl-rd", 180_000, 70, 64, 4_480, 925, 116_480],
+  ["ylp-gb-250-cl-sq", 180_000, 56, 81, 4_536, 960, 117_936],
+  ["ylp-gb-500-og-rd", 230_000, 36, 63, 2_268, 790, 58_968],
+  ["ylp-gb-500-og-sq", 230_000, 35, 70, 2_450, 815, 63_700],
+  ["ylp-gb-500-cl-rd", 230_000, 36, 63, 2_268, 790, 58_968],
+  ["ylp-gb-500-cl-sq", 230_000, 35, 70, 2_450, 815, 63_700],
+  ["ylp-gb-700-og-rd", 350_000, 28, 56, 1_568, 700, 40_768],
+] as const;
+
 describe("verified Product dataset", () => {
   it("contains exactly the nine approved identity, SKU, slug, and image mappings", () => {
     expect(technicalProducts.map(({id, sku, slug}) => [id, sku, slug])).toEqual(
@@ -58,46 +70,42 @@ describe("verified Product dataset", () => {
     expect(new Set(hashes).size).toBe(approvedProducts.length);
   });
 
-  it("publishes every Product in the three approved categories with inquiry pricing", () => {
-    for (const product of technicalProducts) {
+  it("publishes every Product with the exact approved internal price and packaging", async () => {
+    const products = await new StaticProductRepository().list();
+    expect(products).toHaveLength(9);
+    for (const [id, price, unitsPerPackage, packagesPerPallet, unitsPerPallet, weightKg, unitsPerTruck] of approvedCommercialData) {
+      const product = products.find((candidate) => candidate.id.value === id);
+      if (!product) throw new Error(`Missing approved Product ${id}`);
       expect(product.status).toBe("published");
       expect(product.categories).toEqual(["olive-oil", "food", "beverage"]);
       expect(product.categories).not.toContain("pharmaceutical");
-      expect(product.pricing).toEqual({mode: "inquiry"});
-      expect(JSON.stringify(product.pricing)).not.toMatch(/amount|currency|price/i);
+      expect(product.pricing).toEqual({
+        mode: "inquiry",
+        internalUnitPrice: {amount: price, currency: "IRR"},
+      });
+      expect(product.packaging).toEqual({
+        unitsPerPackage,
+        packagesPerPallet,
+        unitsPerPallet,
+        palletGrossWeightKg: weightKg,
+      });
+      expect(unitsPerPackage * packagesPerPallet).toBe(unitsPerPallet);
+      expect(unitsPerPallet * 26).toBe(unitsPerTruck);
+      expect(Number.isSafeInteger(weightKg * 1_000)).toBe(true);
     }
   });
 
-  it("contains five verified packaging profiles and omits packaging for clear bottles", () => {
-    expect(technicalProducts.filter(({packaging}) => packaging).map(({id}) => id)).toEqual([
-      "ylp-gb-250-og-rd",
-      "ylp-gb-250-og-sq",
-      "ylp-gb-500-og-rd",
-      "ylp-gb-500-og-sq",
-      "ylp-gb-700-og-rd",
-    ]);
-    expect(
-      technicalProducts
-        .filter(({specifications}) => specifications.glassColor === "clear")
-        .every(({packaging}) => packaging === undefined),
-    ).toBe(true);
-  });
-
-  it("derives the five approved units-per-pallet values", async () => {
-    const products = await new StaticProductRepository().list();
-    expect(
-      products.flatMap((product) =>
-        product.packaging
-          ? [[product.id.value, product.packaging.unitsPerPallet] as const]
-          : [],
-      ),
-    ).toEqual([
-      ["ylp-gb-250-og-rd", 4480],
-      ["ylp-gb-250-og-sq", 4536],
-      ["ylp-gb-500-og-rd", 2268],
-      ["ylp-gb-500-og-sq", 2450],
-      ["ylp-gb-700-og-rd", 1568],
-    ]);
+  it("maps every clear Product to its exact olive-green packaging counterpart", () => {
+    for (const [clearId, oliveId] of [
+      ["ylp-gb-250-cl-rd", "ylp-gb-250-og-rd"],
+      ["ylp-gb-250-cl-sq", "ylp-gb-250-og-sq"],
+      ["ylp-gb-500-cl-rd", "ylp-gb-500-og-rd"],
+      ["ylp-gb-500-cl-sq", "ylp-gb-500-og-sq"],
+    ] as const) {
+      expect(technicalProducts.find(({id}) => id === clearId)?.packaging).toEqual(
+        technicalProducts.find(({id}) => id === oliveId)?.packaging,
+      );
+    }
   });
 
   it("has one complete localized record and primary-image alt text per locale", () => {

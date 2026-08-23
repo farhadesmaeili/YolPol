@@ -13,7 +13,8 @@ export type ProductViewModel = Readonly<{
     seo: Readonly<{title: string; description: string}>;
   }>;
   specifications: ProductDto["specifications"];
-  packaging?: ProductDto["packaging"];
+  packaging?: NonNullable<ProductDto["packaging"]> &
+    Readonly<{unitsPerTruck: number}>;
   pricing: ProductDto["pricing"];
   images: readonly Readonly<{
     id: string;

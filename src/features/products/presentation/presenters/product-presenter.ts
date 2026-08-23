@@ -10,6 +10,12 @@ import type {
 } from "@/features/products/presentation/view-models/product-view-model";
 
 export class ProductPresenter {
+  constructor(private readonly truckPalletCapacity: number) {
+    if (!Number.isSafeInteger(truckPalletCapacity) || truckPalletCapacity <= 0) {
+      throw new TypeError("Truck pallet capacity must be a positive safe integer.");
+    }
+  }
+
   presentDetail(result: GetProductBySlugResult): ProductDetailPresentation {
     if (result.status !== "found") {
       return result;
@@ -36,7 +42,15 @@ export class ProductPresenter {
         seo: {title: product.seoTitle, description: product.seoDescription},
       },
       specifications: {...product.specifications},
-      packaging: product.packaging ? {...product.packaging} : undefined,
+      packaging: product.packaging
+        ? {
+            ...product.packaging,
+            unitsPerTruck: multiplySafely(
+              product.packaging.unitsPerPallet,
+              this.truckPalletCapacity,
+            ),
+          }
+        : undefined,
       pricing: {...product.pricing},
       images: product.images
         .map((image) => ({...image}))
@@ -44,4 +58,12 @@ export class ProductPresenter {
       timestamps: {createdAt: product.createdAt, updatedAt: product.updatedAt},
     };
   }
+}
+
+function multiplySafely(left: number, right: number): number {
+  const result = left * right;
+  if (!Number.isSafeInteger(result)) {
+    throw new RangeError("Product truck capacity exceeds safe integer limits.");
+  }
+  return result;
 }

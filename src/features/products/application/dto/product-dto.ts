@@ -1,7 +1,7 @@
 import type {
   ProductCategory,
   ProductPackaging,
-  ProductPricing,
+  PublicProductPricing,
   ProductSpecifications,
   ProductStatus,
 } from "@/features/products/domain/types/product-types";
@@ -30,7 +30,7 @@ export type ProductDto = Readonly<{
   seoDescription: string;
   specifications: ProductSpecifications;
   packaging?: ProductPackaging;
-  pricing: ProductPricing;
+  pricing: PublicProductPricing;
   images: readonly ProductImageDto[];
   createdAt: string;
   updatedAt: string;

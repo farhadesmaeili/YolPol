@@ -7,6 +7,7 @@ export type ProductPackagingLabels = Readonly<{
   unitsPerPackage: string;
   packagesPerPallet: string;
   unitsPerPallet: string;
+  unitsPerTruck: string;
   palletGrossWeight: string;
   kilograms: string;
 }>;
@@ -24,6 +25,7 @@ export function ProductPackaging({
     [labels.unitsPerPackage, formatHumanNumber(locale, packaging.unitsPerPackage)],
     [labels.packagesPerPallet, formatHumanNumber(locale, packaging.packagesPerPallet)],
     [labels.unitsPerPallet, formatHumanNumber(locale, packaging.unitsPerPallet)],
+    [labels.unitsPerTruck, formatHumanNumber(locale, packaging.unitsPerTruck)],
     [
       labels.palletGrossWeight,
       <NumberUnit key="weight" locale={locale} value={packaging.palletGrossWeightKg} unit={labels.kilograms} />,

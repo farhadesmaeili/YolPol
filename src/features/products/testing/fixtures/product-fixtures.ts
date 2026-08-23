@@ -15,7 +15,7 @@ export function createTechnicalProductRecords(): StaticTechnicalProductRecord[] 
       categories: ["food", "beverage"],
       status: "published",
       specifications: {capacityMl: 330, glassColor: "clear", bottleShape: "round", weightGrams: 210},
-      pricing: {mode: "inquiry"},
+      pricing: {mode: "inquiry", internalUnitPrice: {amount: 100_000, currency: "IRR"}},
       images: [
         {
           id: "beverage-image",
@@ -34,7 +34,7 @@ export function createTechnicalProductRecords(): StaticTechnicalProductRecord[] 
       categories: ["pharmaceutical"],
       status: "draft",
       specifications: {},
-      pricing: {mode: "inquiry"},
+      pricing: {mode: "inquiry", internalUnitPrice: {amount: 100_000, currency: "IRR"}},
       images: [],
       createdAt: createdAtIso,
       updatedAt: updatedAtIso,
@@ -46,7 +46,7 @@ export function createTechnicalProductRecords(): StaticTechnicalProductRecord[] 
       categories: ["beverage"],
       status: "archived",
       specifications: {},
-      pricing: {mode: "inquiry"},
+      pricing: {mode: "inquiry", internalUnitPrice: {amount: 100_000, currency: "IRR"}},
       images: [],
       createdAt: createdAtIso,
       updatedAt: updatedAtIso,

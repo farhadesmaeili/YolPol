@@ -156,7 +156,7 @@
   "InquiryConsent": {"privacyLink": "Privacy Policy", "privacySuffix": "— please read it before sharing information."},
   "ProductDetails": {"categories": "Categories", "sku": "SKU", "applications": "Applications"},
   "ProductSpecifications": {"heading": "Technical specifications", "capacity": "Capacity", "glassColor": "Glass color", "bottleShape": "Bottle shape", "neckFinish": "Neck finish", "weight": "Weight", "height": "Height", "diameter": "Diameter", "milliliters": "ml", "grams": "g", "millimeters": "mm", "materials": {"glass": "Glass"}, "glassColors": {"oliveGreen": "Olive green", "clear": "Clear"}, "bottleShapes": {"round": "Round", "square": "Square"}},
-  "ProductPackaging": {"heading": "Packaging", "unitsPerPackage": "Units per package", "packagesPerPallet": "Packages per pallet", "unitsPerPallet": "Units per pallet", "palletGrossWeight": "Gross pallet weight", "kilograms": "kg"},
+  "ProductPackaging": {"heading": "Packaging", "unitsPerPackage": "Units per package", "packagesPerPallet": "Packages per pallet", "unitsPerPallet": "Units per pallet", "unitsPerTruck": "Units per truck", "palletGrossWeight": "Gross pallet weight", "kilograms": "kg"},
   "ProductPricing": {"inquiry": "Request price"},
   "ProductCategories": {"oliveOil": "Olive oil bottles", "food": "Food bottles", "beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
   "Breadcrumbs": {"label": "Breadcrumb", "home": "Home", "products": "Products"},
