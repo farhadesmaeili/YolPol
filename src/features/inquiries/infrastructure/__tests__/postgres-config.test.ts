@@ -5,7 +5,7 @@ import {InvalidDatabaseConfigurationError, parsePostgresConfig} from "@/features
 describe("PostgreSQL configuration", () => {
   it("creates conservative pool settings without changing the URL", () => {
     const url = "postgresql://app:secret@postgres:5432/yolpol";
-    expect(parsePostgresConfig(url)).toEqual({connectionString: url, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000});
+    expect(parsePostgresConfig(url)).toEqual({connectionString: url, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000, statement_timeout:15_000, query_timeout:20_000});
   });
 
   it.each([undefined, "", "not-a-url", "https://user:secret@example.test/db", "postgresql://host/db", "postgresql://user@host/db", "postgresql://user:secret@host"])("rejects missing or malformed configuration safely", (value) => {

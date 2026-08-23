@@ -22,10 +22,11 @@ function PolicyList({items}: {items: Readonly<Record<string, string>>}) {
 
 export function PrivacyPolicy({locale}: {locale: Locale}) {
   const t = messages[locale].PrivacyPage;
+  const activeInquiry = messages[locale].ActiveInquiryPrivacy;
+  const inventory = messages[locale].InquiryPrivacyInventory;
   return <article className="mt-10 max-w-4xl pb-20">
     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">{t.eyebrow}</p>
     <h1 className="mt-5 text-[clamp(2.6rem,6vw,5.5rem)] font-semibold leading-[1] tracking-[-0.045em] text-stone-950">{t.heading}</h1>
-    <p className="mt-6 text-lg leading-8 text-muted-foreground">{t.introduction}</p>
     <p className="mt-4 text-sm text-muted-foreground">{t.lastUpdated}: <LtrIsolate><time dateTime={privacyPolicy.lastUpdated}>{privacyPolicy.lastUpdated}</time></LtrIsolate></p>
 
     <div className="mt-12 space-y-12 leading-8 text-stone-600">
@@ -38,26 +39,19 @@ export function PrivacyPolicy({locale}: {locale: Locale}) {
         </dl>
       </PolicySection>
 
-      <PolicySection heading={t.information.heading}>
-        <p>{t.information.introduction}</p>
-        <h3 className="text-lg font-semibold text-foreground">{t.information.providedHeading}</h3><PolicyList items={t.information.provided} />
-        <h3 className="text-lg font-semibold text-foreground">{t.information.securityHeading}</h3><p>{t.information.securityText}</p>
-        <h3 className="text-lg font-semibold text-foreground">{t.information.preferenceHeading}</h3><p>{t.information.preferenceText}</p>
+      <PolicySection heading={activeInquiry.heading}><Paragraphs items={activeInquiry.paragraphs} /></PolicySection>
+      <PolicySection heading={inventory.heading}>
+        <h3 className="text-lg font-semibold text-foreground">{inventory.customerHeading}</h3><PolicyList items={inventory.customer} />
+        <h3 className="text-lg font-semibold text-foreground">{inventory.productHeading}</h3><PolicyList items={inventory.product} />
+        <h3 className="text-lg font-semibold text-foreground">{inventory.evidenceHeading}</h3><PolicyList items={inventory.evidence} />
       </PolicySection>
-
-      <PolicySection heading={t.inquiryLimitation.heading}><Paragraphs items={t.inquiryLimitation.paragraphs} /></PolicySection>
       <PolicySection heading={t.purposes.heading}><PolicyList items={t.purposes.items} /></PolicySection>
-      <PolicySection heading={t.retention.heading}><Paragraphs items={t.retention.paragraphs} /></PolicySection>
-      <PolicySection heading={t.securityMetadata.heading}><Paragraphs items={t.securityMetadata.paragraphs} /></PolicySection>
-      <PolicySection heading={t.disclosure.heading}><Paragraphs items={t.disclosure.paragraphs} /></PolicySection>
-      <PolicySection heading={t.international.heading}><p>{t.international.text}</p></PolicySection>
       <PolicySection heading={t.cookies.heading}><Paragraphs items={t.cookies.paragraphs} /></PolicySection>
       <PolicySection heading={t.analytics.heading}><Paragraphs items={t.analytics.paragraphs} /></PolicySection>
       <PolicySection heading={t.searchVisibility.heading}><p>{t.searchVisibility.text}</p></PolicySection>
       <PolicySection heading={t.choices.heading}><p>{t.choices.textBeforeEmail} <a href={siteConfig.contact.emailHref} className="font-semibold text-brand underline underline-offset-4"><LtrIsolate>{siteConfig.contact.email}</LtrIsolate></a> {t.choices.textAfterEmail}</p><PolicyList items={t.choices.items} /></PolicySection>
       <PolicySection heading={t.children.heading}><p>{t.children.text}</p></PolicySection>
       <PolicySection heading={t.externalLinks.heading}><p>{t.externalLinks.text}</p></PolicySection>
-      <PolicySection heading={t.changes.heading}><p>{t.changes.text}</p><PolicyList items={t.changes.items} /></PolicySection>
     </div>
   </article>;
 }

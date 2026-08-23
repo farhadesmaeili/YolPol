@@ -4,11 +4,13 @@
 
 The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved operator, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.
 
-The current site may use next-intl's essential `NEXT_LOCALE` preference cookie. No analytics tracker or Inquiry submission endpoint is active. Secure Inquiry persistence, limited security metadata, providers, and international processing are described conditionally and require future implementation plus a policy review before activation.
+The current site may use next-intl's essential `NEXT_LOCALE` preference cookie. No analytics tracker is active. The Inquiry endpoint transmits consented requests to the configured PostgreSQL database; it does not collect separate security metadata or deliver Email, Telegram, or n8n notifications.
+
+The public Inquiry transport enforces a streaming 32 KiB body maximum and a constant-memory single-process global request budget. The limiter is intentionally not distributed and resets with the application process. Retention is an explicit internal operation invoked by `pnpm retention:inquiries`; production must schedule it, and it never runs during rendering or submission.
 
 ## Customer Inquiry presentation boundary
 
-The localized Inquiry route obtains narrow published Product options through composition and keeps interactive draft state in a focused Client Component. It produces application-compatible customer-owned values but performs no submission or persistence. Canonical contact and technical values use shared LTR isolation; localized human numbers use presentation-owned `Intl.NumberFormat`. Query preselection contains only a validated Product ID and does not alter the clean canonical URL.
+The localized Inquiry route obtains narrow published Product options through composition and keeps interactive draft state in a focused Client Component. It submits application-compatible customer-owned values through the narrow Inquiry API route, which resolves trusted Product facts and executes the existing use case through composition. Canonical contact and technical values use shared LTR isolation; localized human numbers use presentation-owned `Intl.NumberFormat`. Query preselection contains only a validated Product ID and does not alter the clean canonical URL.
 
 ## Export Logistics boundary
 

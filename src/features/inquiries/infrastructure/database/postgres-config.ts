@@ -12,7 +12,7 @@ export function parsePostgresConfig(value: string | undefined): PoolConfig {
   if (!(["postgres:", "postgresql:"] as const).includes(url.protocol as never) || !url.hostname || !url.username || !url.password || url.pathname.length < 2) {
     throw new InvalidDatabaseConfigurationError("DATABASE_URL must include a PostgreSQL host, database, user, and password.");
   }
-  return Object.freeze({connectionString: value, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000});
+  return Object.freeze({connectionString: value, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000, statement_timeout: 15_000, query_timeout: 20_000});
 }
 
 export function readPostgresConfig(environment: NodeJS.ProcessEnv = process.env): PoolConfig {
