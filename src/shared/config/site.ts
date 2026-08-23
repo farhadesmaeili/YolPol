@@ -23,7 +23,7 @@ export const legalNavigation = [{id: "privacy", href: "/privacy"}] as const;
 export const privacyPolicy = {
   operator: "YolPol",
   publicLocation: "Iran – Tehran",
-  lastUpdated: "2026-08-16",
+  lastUpdated: "2026-08-22",
   inquiryRetentionMonths: 24,
   securityRetentionDays: 30,
 } as const;

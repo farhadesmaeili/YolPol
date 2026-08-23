@@ -6,9 +6,9 @@ The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata,
 
 ## Customer Inquiry presentation
 
-Localized inquiry preparation, Product preselection, bidi-safe contact rendering, Privacy Policy consent linkage, metadata, navigation, and sitemap integration are implemented. Secure persistence, abuse controls, and durable notification delivery remain deferred.
+Localized Inquiry submission, Product preselection, consent linkage, server validation, trusted Product resolution, and transactional PostgreSQL persistence are implemented. Distributed abuse controls and durable notification delivery remain deferred.
 
-The PostgreSQL persistence foundation is implemented behind the inactive submission workflow. Public activation, abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
+The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
 
 ## Export Logistics foundation
 

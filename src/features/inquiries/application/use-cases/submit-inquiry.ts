@@ -6,6 +6,8 @@ import {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
+import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
+import {normalizeInquiryQuantity, normalizeInquiryUnit} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 
 function isRecord(value: unknown): value is Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) return false; const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; }
 function validCatalogProduct(value: unknown, requestedId: string): value is Awaited<ReturnType<InquiryProductCatalog["findById"]>> & object {
@@ -21,7 +23,10 @@ export class SubmitInquiry {
     const productIds = input.items.map(({productId}) => productId);
     if (new Set(productIds).size !== productIds.length) return {status: "validation_failed", field: "items.productId"};
     const trustedItems = [];
-    for (const requested of input.items) {
+    for (const [index, requested] of input.items.entries()) {
+      try { normalizeInquiryProductId(requested.productId); } catch { return {status:"validation_failed",field:`items.${index}.productId`}; }
+      try { normalizeInquiryQuantity(requested.quantity); } catch { return {status:"validation_failed",field:`items.${index}.quantity`}; }
+      try { normalizeInquiryUnit(requested.unit); } catch { return {status:"validation_failed",field:`items.${index}.unit`}; }
       let product: Awaited<ReturnType<InquiryProductCatalog["findById"]>>;
       try { product = await this.catalog.findById(requested.productId); }
       catch { return {status: "dependency_failed", dependency: "catalog"}; }

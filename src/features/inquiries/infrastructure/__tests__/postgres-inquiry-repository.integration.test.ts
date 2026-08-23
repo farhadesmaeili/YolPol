@@ -2,7 +2,7 @@ import {resolve} from "node:path";
 import {drizzle} from "drizzle-orm/node-postgres";
 import {migrate} from "drizzle-orm/node-postgres/migrator";
 import type {Pool} from "pg";
-import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from "vitest";
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 
 import {DuplicateInquiryIdError} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {InquiryItemInput} from "@/features/inquiries/domain/types/inquiry-types";
@@ -13,6 +13,9 @@ import {inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persist
 import {InquiryTestBuilder} from "@/features/inquiries/testing/builders/inquiry-test-builder";
 import {inquiryFixture} from "@/features/inquiries/testing/fixtures/inquiry-fixtures";
 import {safeIntegrationPoolConfig} from "@/features/inquiries/testing/integration/postgres-test-database";
+import {createInquiryRequestHandler} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
+import {createInquirySubmission} from "@/composition/inquiries/inquiry-submission";
+import {deleteExpiredInquiries, inquiryRetentionCutoff} from "../../../../../tooling/retention/delete-expired-inquiries.mjs";
 
 let pool: Pool;
 let repository: PostgresInquiryRepository;
@@ -38,11 +41,48 @@ beforeEach(async () => {
   await pool.query("truncate table inquiry_items, inquiries");
 });
 
-afterEach(async () => { await pool.query("truncate table inquiry_items, inquiries"); });
+afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table inquiry_items, inquiries"); });
 
 afterAll(async () => { if (pool) await pool.end(); });
 
 describe("PostgresInquiryRepository", () => {
+  it("executes the real POST composition through trusted Product resolution and PostgreSQL", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const handler=createInquiryRequestHandler(()=>createInquirySubmission(repository));
+    const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"+98 912 345 6789",preferredMethod:"email"},location:{country:"Iran"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v1"},source:{locale:"en",path:"/en/inquiry"},items:[{productId:"ylp-gb-250-og-rd",quantity:12,unit:"pieces"},{productId:"ylp-gb-250-cl-rd",quantity:3,unit:"pallets"}]};
+    const response=await handler(new Request("http://localhost/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json",Origin:"http://localhost:3000",Host:"localhost:3000"},body:JSON.stringify(payload)}));
+    expect(response.status).toBe(201);
+    const roots=await pool.query<{id:string}>("select id from inquiries"); expect(roots.rowCount).toBe(1);
+    const rows=await pool.query<{position:number;product_id:string;sku:string;slug:string;product_name:string}>("select position,product_id,sku,slug,product_name from inquiry_items order by position");
+    expect(rows.rows).toEqual([
+      {position:0,product_id:"ylp-gb-250-og-rd",sku:"YLP-GB-250-OG-RD",slug:"250ml-olive-green-round-glass-bottle",product_name:"250ml Olive Green Round Glass Bottle"},
+      {position:1,product_id:"ylp-gb-250-cl-rd",sku:"YLP-GB-250-CL-RD",slug:"250ml-clear-round-glass-bottle",product_name:"250ml Clear Round Glass Bottle"},
+    ]);
+  });
+
+  it.each([
+    {items:[]},
+    {items:[{productId:"unknown-product",quantity:1,unit:"pieces"}]},
+    {items:[{productId:"ylp-gb-250-og-rd",quantity:1,unit:"pieces",sku:"BROWSER-SKU"}]},
+  ])("creates no rows for an invalid full-path request",async change=>{
+    const handler=createInquiryRequestHandler(()=>createInquirySubmission(repository));
+    const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"+98 912 345 6789",preferredMethod:"email"},location:{country:"Iran"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v1"},source:{locale:"en",path:"/en/inquiry"},...change};
+    const response=await handler(new Request("https://yolpol.com/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}));
+    expect(response.status).toBe(422); expect((await pool.query("select id from inquiries")).rowCount).toBe(0); expect((await pool.query("select inquiry_id from inquiry_items")).rowCount).toBe(0);
+  });
+
+  it("deletes only records strictly older than the 24-month cutoff and cascades children",async()=>{
+    const cutoff=inquiryRetentionCutoff(new Date("2026-08-23T12:00:00.000Z"));
+    const make=(id:string,createdAt:Date)=>new InquiryTestBuilder().with({id,createdAt,privacy:{...inquiryFixture.privacy,acceptedAt:createdAt}}).buildNew();
+    await repository.save(make("expired-inquiry",new Date(cutoff.getTime()-1)));
+    await repository.save(make("boundary-inquiry",cutoff));
+    await repository.save(make("new-inquiry",new Date(cutoff.getTime()+1)));
+    await pool.query("create temporary table retention_sentinel (value text not null)"); await pool.query("insert into retention_sentinel values ('keep')");
+    expect(await deleteExpiredInquiries(pool,cutoff)).toBe(1);
+    expect((await pool.query("select id from inquiries order by id")).rows).toEqual([{id:"boundary-inquiry"},{id:"new-inquiry"}]);
+    expect((await pool.query("select inquiry_id from inquiry_items where inquiry_id='expired-inquiry'")).rowCount).toBe(0);
+    expect((await pool.query("select value from retention_sentinel")).rows).toEqual([{value:"keep"}]);
+  });
   it("applies committed migrations and exposes the expected tables", async () => {
     const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('inquiries','inquiry_items') order by table_name");
     expect(result.rows.map(({table_name}) => table_name)).toEqual(["inquiries", "inquiry_items"]);

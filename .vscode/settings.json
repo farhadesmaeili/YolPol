@@ -1,0 +1,15 @@
+{
+  "sqltools.connections": [
+    {
+      "ssh": "Disabled",
+      "previewLimit": 50,
+      "server": "localhost",
+      "port": 5435,
+      "driver": "PostgreSQL",
+      "name": "yolpol",
+      "database": "yolpol",
+      "username": "yolpol",
+      "password": "change-me-for-local-development"
+    }
+  ]
+}

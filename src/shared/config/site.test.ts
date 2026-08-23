@@ -30,7 +30,7 @@ describe("site configuration", () => {
   });
 
   it("owns stable approved Privacy facts and a footer-only route", () => {
-    expect(privacyPolicy).toEqual({operator: "YolPol", publicLocation: "Iran – Tehran", lastUpdated: "2026-08-16", inquiryRetentionMonths: 24, securityRetentionDays: 30});
+    expect(privacyPolicy).toEqual({operator: "YolPol", publicLocation: "Iran – Tehran", lastUpdated: "2026-08-22", inquiryRetentionMonths: 24, securityRetentionDays: 30});
     expect(legalNavigation).toEqual([{id: "privacy", href: "/privacy"}]);
     expect(primaryNavigation.map(({href}) => href)).not.toContain("/privacy");
   });

@@ -11,6 +11,6 @@ export type InquiryFormLabels = Readonly<{
   productSelection: Readonly<{emptyTitle: string; emptyDescription: string; selectProduct: string; productPlaceholder: string; addProduct: string; addAnotherProduct: string; allProductsAdded: string}>;
   destination: string; destinationCountry: string; destinationCity: string; message: string;
   privacyPrefix: string; privacyLink: string; privacySuffix: string;
-  review: string; prepared: string; invalid: string; submissionUnavailable: string; emailAction: string; whatsappAction: string;
+  submit: string; submitting: string; succeeded: string; reference: string; invalid: string; productUnavailable: string; serviceFailure: string; retry: string; rateLimited: string; timeout: string;
   errors: Readonly<{invalidField: string; quantityRequired: string; quantityInvalid: string; quantityTooLarge: string; unitRequired: string; productsRequired: string; privacyRequired: string; destinationDependency: string}>;
 }>;

@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "retention:inquiries": "node tooling/retention/delete-expired-inquiries.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
