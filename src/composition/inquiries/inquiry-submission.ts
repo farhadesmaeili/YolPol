@@ -4,7 +4,7 @@ import {randomUUID} from "node:crypto";
 
 import {findProductDtoById} from "@/composition/products/product-catalog";
 import {getInquiryRepository} from "@/composition/inquiries/inquiry-persistence";
-import type {InquiryNotificationDispatcher, InquiryProductCatalog, InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
+import type {InquiryProductCatalog, InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import {SubmitInquiry} from "@/features/inquiries/application/use-cases/submit-inquiry";
 import {supportedLocales} from "@/shared/types/locale";
 
@@ -24,12 +24,10 @@ export const inquiryProductCatalog: InquiryProductCatalog = {
   },
 };
 
-const notificationsDeferred: InquiryNotificationDispatcher = {async dispatch() { return {status: "failed"}; }};
-
 export function getInquirySubmission(): SubmitInquiry {
   return createInquirySubmission(getInquiryRepository());
 }
 
 export function createInquirySubmission(repository: InquiryRepository): SubmitInquiry {
-  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()}, notificationsDeferred);
+  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()});
 }

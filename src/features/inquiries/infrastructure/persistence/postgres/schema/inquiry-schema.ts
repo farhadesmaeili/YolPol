@@ -1,5 +1,5 @@
 import {sql} from "drizzle-orm";
-import {boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
+import {boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
 
 export const inquiries = pgTable("inquiries", {
   id: varchar("id", {length: 128}).primaryKey(),
@@ -58,4 +58,20 @@ export const inquiryItems = pgTable("inquiry_items", {
   check("inquiry_items_unit_check", sql`${table.unit} in ('pieces','packages','pallets','truckloads')`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems};
+export const inquiryOutbox = pgTable("inquiry_outbox", {
+  id: varchar("id", {length: 160}).primaryKey(),
+  eventType: varchar("event_type", {length: 64}).notNull(),
+  aggregateId: varchar("aggregate_id", {length: 128}).notNull().references(() => inquiries.id, {onDelete: "cascade"}),
+  payload: jsonb("payload").$type<Readonly<{inquiryId: string; occurredAt: string}>>().notNull(),
+  occurredAt: timestamp("occurred_at", {withTimezone: true, mode: "date"}).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", {withTimezone: true, mode: "date"}).notNull(),
+  lockedUntil: timestamp("locked_until", {withTimezone: true, mode: "date"}),
+  processedAt: timestamp("processed_at", {withTimezone: true, mode: "date"}),
+}, (table) => [
+  check("inquiry_outbox_event_type_check", sql`${table.eventType} = 'InquiryCreated'`),
+  check("inquiry_outbox_attempts_check", sql`${table.attempts} >= 0`),
+  index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
+]);
+
+export const inquiryPostgresSchema = {inquiries, inquiryItems, inquiryOutbox};

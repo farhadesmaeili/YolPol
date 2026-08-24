@@ -39,10 +39,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   const identity = await pool.query<{current_database: string; current_user: string}>("select current_database(), current_user");
   expect(identity.rows[0]).toEqual({current_database: "yolpol_integration", current_user: "yolpol_test"});
-  await pool.query("truncate table inquiry_items, inquiries");
+  await pool.query("truncate table inquiry_outbox, inquiry_items, inquiries");
 });
 
-afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table inquiry_items, inquiries"); });
+afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table inquiry_outbox, inquiry_items, inquiries"); });
 
 afterAll(async () => { if (pool) await pool.end(); });
 
@@ -119,6 +119,9 @@ describe("PostgresInquiryRepository", () => {
     const response=await handler(new Request("http://localhost/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json",Origin:"http://localhost:3000",Host:"localhost:3000"},body:JSON.stringify(payload)}));
     expect(response.status).toBe(201);
     const roots=await pool.query<{id:string}>("select id from inquiries"); expect(roots.rowCount).toBe(1);
+    const events=await pool.query<{event_type:string;aggregate_id:string;payload:{inquiryId:string;occurredAt:string};attempts:number;processed_at:Date|null}>("select event_type,aggregate_id,payload,attempts,processed_at from inquiry_outbox");
+    expect(events.rows).toEqual([{event_type:"InquiryCreated",aggregate_id:roots.rows[0]?.id,payload:{inquiryId:roots.rows[0]?.id,occurredAt:expect.any(String)},attempts:0,processed_at:null}]);
+    expect(JSON.stringify(events.rows[0]?.payload)).not.toMatch(/price|secret|credential|token|api.?key/i);
     const rows=await pool.query<{position:number;product_id:string;sku:string;slug:string;product_name:string;quantity:number;unit:string}>("select position,product_id,sku,slug,product_name,quantity,unit from inquiry_items order by position");
     expect(rows.rows).toEqual([
       {position:0,product_id:"ylp-gb-250-og-rd",sku:"YLP-GB-250-OG-RD",slug:"250ml-olive-green-round-glass-bottle",product_name:"250ml Olive Green Round Glass Bottle",quantity:27,unit:"pallets"},
@@ -134,7 +137,7 @@ describe("PostgresInquiryRepository", () => {
     const handler=createInquiryRequestHandler(()=>createInquirySubmission(repository));
     const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"+98 912 345 6789",preferredMethod:"email"},location:{country:"Iran"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v1"},source:{locale:"en",path:"/en/inquiry"},...change};
     const response=await handler(new Request("https://yolpol.com/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}));
-    expect(response.status).toBe(422); expect((await pool.query("select id from inquiries")).rowCount).toBe(0); expect((await pool.query("select inquiry_id from inquiry_items")).rowCount).toBe(0);
+    expect(response.status).toBe(422); expect((await pool.query("select id from inquiries")).rowCount).toBe(0); expect((await pool.query("select inquiry_id from inquiry_items")).rowCount).toBe(0); expect((await pool.query("select id from inquiry_outbox")).rowCount).toBe(0);
   });
 
   it("deletes only records strictly older than the 24-month cutoff and cascades children",async()=>{
@@ -151,10 +154,10 @@ describe("PostgresInquiryRepository", () => {
   });
   it("applies committed migrations and exposes the expected tables", async () => {
     await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
-    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('inquiries','inquiry_items') order by table_name");
-    expect(result.rows.map(({table_name}) => table_name)).toEqual(["inquiries", "inquiry_items"]);
+    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('inquiries','inquiry_items','inquiry_outbox') order by table_name");
+    expect(result.rows.map(({table_name}) => table_name)).toEqual(["inquiries", "inquiry_items", "inquiry_outbox"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("2");
+    expect(migrations.rows[0]?.count).toBe("3");
   });
 
   it("saves and reconstitutes a complete Inquiry with exact instants", async () => {
@@ -212,7 +215,7 @@ describe("PostgresInquiryRepository", () => {
     const inquiry = new InquiryTestBuilder().with({id: "duplicate-inquiry"}).buildNew();
     await repository.save(inquiry);
     await expect(repository.save(inquiry)).rejects.toBeInstanceOf(DuplicateInquiryIdError);
-    await pool.query("truncate table inquiry_items, inquiries");
+    await pool.query("truncate table inquiry_outbox, inquiry_items, inquiries");
     const results = await Promise.allSettled([repository.save(inquiry), repository.save(inquiry)]);
     expect(results.filter(({status}) => status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected" && result.reason instanceof DuplicateInquiryIdError)).toHaveLength(1);
