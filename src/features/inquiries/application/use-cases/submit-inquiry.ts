@@ -7,13 +7,14 @@ import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
-import {normalizeInquiryQuantity, normalizeInquiryUnit} from "@/features/inquiries/domain/validation/inquiry-input-validation";
+import {normalizeInquiryQuantity} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 
 function isRecord(value: unknown): value is Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) return false; const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; }
-function validCatalogProduct(value: unknown, requestedId: string): value is Awaited<ReturnType<InquiryProductCatalog["findById"]>> & object {
+function validCatalogProduct(value: unknown, requestedId: string): value is NonNullable<Awaited<ReturnType<InquiryProductCatalog["findById"]>>> & {packaging: {unitsPerPallet: number; grossPalletWeightGrams: number}} {
   if (!isRecord(value) || value.id !== requestedId || typeof value.id !== "string" || typeof value.sku !== "string" || !value.sku.trim() || typeof value.slug !== "string" || !value.slug.trim()) return false;
   if (!(["draft", "published", "archived"] as const).includes(value.status as never)) return false;
-  return isRecord(value.localizedNames);
+  if (!isRecord(value.localizedNames) || !isRecord(value.packaging)) return false;
+  return Number.isSafeInteger(value.packaging.unitsPerPallet) && (value.packaging.unitsPerPallet as number) > 0 && Number.isSafeInteger(value.packaging.grossPalletWeightGrams) && (value.packaging.grossPalletWeightGrams as number) > 0;
 }
 
 export class SubmitInquiry {
@@ -25,8 +26,7 @@ export class SubmitInquiry {
     const trustedItems = [];
     for (const [index, requested] of input.items.entries()) {
       try { normalizeInquiryProductId(requested.productId); } catch { return {status:"validation_failed",field:`items.${index}.productId`}; }
-      try { normalizeInquiryQuantity(requested.quantity); } catch { return {status:"validation_failed",field:`items.${index}.quantity`}; }
-      try { normalizeInquiryUnit(requested.unit); } catch { return {status:"validation_failed",field:`items.${index}.unit`}; }
+      try { normalizeInquiryQuantity(requested.palletCount); } catch { return {status:"validation_failed",field:`items.${index}.palletCount`}; }
       let product: Awaited<ReturnType<InquiryProductCatalog["findById"]>>;
       try { product = await this.catalog.findById(requested.productId); }
       catch { return {status: "dependency_failed", dependency: "catalog"}; }
@@ -35,7 +35,10 @@ export class SubmitInquiry {
       if (product.status !== "published") return {status: "product_unavailable", productId: requested.productId};
       const productName = product.localizedNames[input.source.locale];
       if (productName === undefined) return {status: "locale_not_available", productId: requested.productId};
-      try { trustedItems.push({...createInquiryProductSnapshot({productId: product.id, sku: product.sku, slug: product.slug, productName}), quantity: requested.quantity, unit: requested.unit}); }
+      const unitsRequested = requested.palletCount * product.packaging.unitsPerPallet;
+      const grossWeightGrams = requested.palletCount * product.packaging.grossPalletWeightGrams;
+      if (!Number.isSafeInteger(unitsRequested) || !Number.isSafeInteger(grossWeightGrams)) return {status: "validation_failed", field: `items.${index}.palletCount`};
+      try { trustedItems.push({...createInquiryProductSnapshot({productId: product.id, sku: product.sku, slug: product.slug, productName}), quantity: requested.palletCount, unit: "pallets" as const}); }
       catch (error) { if (error instanceof InquiryValidationError) return {status: "dependency_failed", dependency: "catalog"}; throw error; }
     }
     let inquiry: Inquiry;

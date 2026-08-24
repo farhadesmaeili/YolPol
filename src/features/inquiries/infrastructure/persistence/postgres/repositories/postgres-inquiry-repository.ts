@@ -27,8 +27,8 @@ export class PostgresInquiryRepository implements InquiryRepository {
       await this.database.transaction(async (transaction) => {
         await transaction.insert(inquiries).values({
           id: record.id, status: record.status, fullName: record.fullName, company: record.company,
-          email: record.email, phone: record.phone, telegramUsername: record.telegramUsername,
-          preferredContactMethod: record.preferredContactMethod, country: record.country, city: record.city,
+          email: record.email, phone: record.phone, whatsappPhone: record.whatsappPhone, telegramUsername: record.telegramUsername,
+          preferredContactMethods: [...record.preferredContactMethods], country: record.country, city: record.city,
           destinationCountry: record.destinationCountry, destinationCity: record.destinationCity, message: record.message,
           sourceLocale: record.sourceLocale, sourcePath: record.sourcePath,
           privacyAccepted: record.privacyAccepted, privacyAcceptedAt: new Date(record.privacyAcceptedAt),
@@ -49,8 +49,8 @@ export class PostgresInquiryRepository implements InquiryRepository {
       const items = await this.database.select().from(inquiryItems).where(eq(inquiryItems.inquiryId, id)).orderBy(asc(inquiryItems.position));
       const record: InquiryRecord = {
         id: root.id, status: root.status as InquiryRecord["status"], fullName: root.fullName, company: root.company,
-        email: root.email, phone: root.phone, telegramUsername: root.telegramUsername,
-        preferredContactMethod: root.preferredContactMethod as InquiryRecord["preferredContactMethod"],
+        email: root.email, phone: root.phone, whatsappPhone: root.whatsappPhone, telegramUsername: root.telegramUsername,
+        preferredContactMethods: root.preferredContactMethods as InquiryRecord["preferredContactMethods"],
         country: root.country, city: root.city, destinationCountry: root.destinationCountry, destinationCity: root.destinationCity,
         message: root.message, sourceLocale: root.sourceLocale as InquiryRecord["sourceLocale"], sourcePath: root.sourcePath,
         privacyAccepted: root.privacyAccepted, privacyAcceptedAt: root.privacyAcceptedAt.toISOString(),
