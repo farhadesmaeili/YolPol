@@ -58,6 +58,34 @@ export const inquiryItems = pgTable("inquiry_items", {
   check("inquiry_items_unit_check", sql`${table.unit} in ('pieces','packages','pallets','truckloads')`),
 ]);
 
+export const conversations = pgTable("conversations", {
+  id: varchar("id", {length: 128}).primaryKey(),
+  inquiryId: varchar("inquiry_id", {length: 128}).notNull().references(() => inquiries.id, {onDelete: "cascade"}),
+  channel: varchar("channel", {length: 20}).notNull(),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [
+  uniqueIndex("conversations_inquiry_id_uidx").on(table.inquiryId),
+  check("conversations_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("conversations_channel_check", sql`${table.channel} in ('WEBSITE','TELEGRAM','EMAIL','WHATSAPP')`),
+]);
+
+export const conversationMessages = pgTable("conversation_messages", {
+  id: varchar("id", {length: 160}).primaryKey(),
+  conversationId: varchar("conversation_id", {length: 128}).notNull().references(() => conversations.id, {onDelete: "cascade"}),
+  position: integer("position").notNull(),
+  senderType: varchar("sender_type", {length: 20}).notNull(),
+  channel: varchar("channel", {length: 20}).notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [
+  uniqueIndex("conversation_messages_position_uidx").on(table.conversationId, table.position),
+  check("conversation_messages_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,160}$'`),
+  check("conversation_messages_position_check", sql`${table.position} >= 0`),
+  check("conversation_messages_sender_type_check", sql`${table.senderType} in ('CUSTOMER','INTERNAL_USER','AI_AGENT','SYSTEM')`),
+  check("conversation_messages_channel_check", sql`${table.channel} in ('WEBSITE','TELEGRAM','EMAIL','WHATSAPP')`),
+  check("conversation_messages_body_length_check", sql`char_length(${table.body}) between 1 and 10000`),
+]);
+
 export const inquiryOutbox = pgTable("inquiry_outbox", {
   id: varchar("id", {length: 160}).primaryKey(),
   eventType: varchar("event_type", {length: 64}).notNull(),
@@ -74,4 +102,4 @@ export const inquiryOutbox = pgTable("inquiry_outbox", {
   index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems, inquiryOutbox};
+export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationMessages, inquiryOutbox};

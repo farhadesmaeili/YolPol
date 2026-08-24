@@ -1,9 +1,10 @@
 import type {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
+import type {Conversation} from "@/features/inquiries/domain/entities/conversation";
 import type {InquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import type {Locale} from "@/shared/types/locale";
 
 export class DuplicateInquiryIdError extends Error { readonly name = "DuplicateInquiryIdError"; }
-export interface InquiryRepository { save(inquiry: Inquiry, event?: InquiryCreated): Promise<void>; findById(id: string): Promise<Inquiry | null>; }
+export interface InquiryRepository { save(inquiry: Inquiry, event?: InquiryCreated, conversation?: Conversation): Promise<void>; findById(id: string): Promise<Inquiry | null>; }
 export interface InquiryIdGenerator { generate(): string; }
 export interface Clock { now(): Date; }
 export type CatalogProduct = Readonly<{id: string; sku: string; slug: string; status: "draft" | "published" | "archived"; localizedNames: Readonly<Partial<Record<Locale, string>>>; packaging?: Readonly<{unitsPerPallet: number; grossPalletWeightGrams: number}>}>;

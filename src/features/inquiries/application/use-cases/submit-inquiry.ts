@@ -3,6 +3,7 @@ import {toAcceptedInquiryDto} from "@/features/inquiries/application/mappers/inq
 import {DuplicateInquiryIdError, type Clock, type InquiryIdGenerator, type InquiryProductCatalog, type InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {SubmitInquiryResult} from "@/features/inquiries/application/results/submit-inquiry-result";
 import {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
+import {Conversation} from "@/features/inquiries/domain/entities/conversation";
 import {createInquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
@@ -55,7 +56,9 @@ export class SubmitInquiry {
       if (error instanceof InquiryValidationError) return {status: "validation_failed", field: error.field};
       throw error;
     }
-    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt)); }
+    const conversation = Conversation.start({id: inquiry.id.value, inquiryId: inquiry.id.value, channel: "WEBSITE", createdAt: inquiry.createdAt});
+    if (inquiry.message) conversation.addMessage({id: `${inquiry.id.value}-initial`, senderType: "CUSTOMER", channel: "WEBSITE", body: inquiry.message, createdAt: inquiry.createdAt});
+    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation); }
     catch (error) { return error instanceof DuplicateInquiryIdError ? {status: "duplicate_inquiry"} : {status: "persistence_failed"}; }
     return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry)};
   }
