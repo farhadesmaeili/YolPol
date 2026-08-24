@@ -14,7 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "retention:inquiries": "node tooling/retention/delete-expired-inquiries.mjs"
+    "retention:inquiries": "node tooling/retention/delete-expired-inquiries.mjs",
+    "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

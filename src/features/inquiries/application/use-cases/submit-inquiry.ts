@@ -1,8 +1,9 @@
 import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
 import {toAcceptedInquiryDto} from "@/features/inquiries/application/mappers/inquiry-dto-mapper";
-import {DuplicateInquiryIdError, type Clock, type InquiryIdGenerator, type InquiryNotificationDispatcher, type InquiryProductCatalog, type InquiryRepository, type NotificationChannel} from "@/features/inquiries/application/ports/inquiry-ports";
+import {DuplicateInquiryIdError, type Clock, type InquiryIdGenerator, type InquiryProductCatalog, type InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {SubmitInquiryResult} from "@/features/inquiries/application/results/submit-inquiry-result";
 import {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
+import {createInquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
@@ -18,7 +19,7 @@ function validCatalogProduct(value: unknown, requestedId: string): value is NonN
 }
 
 export class SubmitInquiry {
-  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock, private readonly notifications: InquiryNotificationDispatcher) {}
+  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock) {}
   async execute(input: SubmitInquiryInput): Promise<SubmitInquiryResult> {
     if (!Array.isArray(input.items) || input.items.length === 0) return {status: "validation_failed", field: "items"};
     const productIds = input.items.map(({productId}) => productId);
@@ -54,14 +55,8 @@ export class SubmitInquiry {
       if (error instanceof InquiryValidationError) return {status: "validation_failed", field: error.field};
       throw error;
     }
-    try { await this.repository.save(inquiry); }
+    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt)); }
     catch (error) { return error instanceof DuplicateInquiryIdError ? {status: "duplicate_inquiry"} : {status: "persistence_failed"}; }
-    const failedChannels: NotificationChannel[] = [];
-    for (const channel of ["email", "telegram"] as const) {
-      try { const result: unknown = await this.notifications.dispatch(inquiry, channel); if (!isRecord(result) || result.status !== "requested") failedChannels.push(channel); }
-      catch { failedChannels.push(channel); }
-    }
-    const dto = toAcceptedInquiryDto(inquiry);
-    return failedChannels.length ? {status: "accepted_with_notification_failures", inquiry: dto, failedChannels: Object.freeze(failedChannels)} : {status: "accepted", inquiry: dto};
+    return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry)};
   }
 }

@@ -4,10 +4,11 @@ import type {Pool} from "pg";
 
 import {DuplicateInquiryIdError, type InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
+import type {InquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {toInquiry, toInquiryRecord} from "@/features/inquiries/infrastructure/mappers/inquiry-record-mapper";
 import type {InquiryRecord} from "@/features/inquiries/infrastructure/records/inquiry-record";
-import {inquiries, inquiryItems, inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
+import {inquiries, inquiryItems, inquiryOutbox, inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 
 type InquiryDatabase = NodePgDatabase<typeof inquiryPostgresSchema>;
 
@@ -21,7 +22,7 @@ export class PostgresInquiryRepository implements InquiryRepository {
   private readonly database: InquiryDatabase;
   constructor(pool: Pool) { this.database = drizzle(pool, {schema: inquiryPostgresSchema}); }
 
-  async save(inquiry: Inquiry): Promise<void> {
+  async save(inquiry: Inquiry, event?: InquiryCreated): Promise<void> {
     const record = toInquiryRecord(inquiry);
     try {
       await this.database.transaction(async (transaction) => {
@@ -35,6 +36,16 @@ export class PostgresInquiryRepository implements InquiryRepository {
           privacyPolicyVersion: record.privacyPolicyVersion, createdAt: new Date(record.createdAt), updatedAt: new Date(record.updatedAt),
         });
         await transaction.insert(inquiryItems).values(record.items.map((item, position) => ({inquiryId: record.id, position, ...item})));
+        if (event) {
+          await transaction.insert(inquiryOutbox).values({
+            id: event.eventId,
+            eventType: event.type,
+            aggregateId: event.inquiryId,
+            payload: {inquiryId: event.inquiryId, occurredAt: event.occurredAt.toISOString()},
+            occurredAt: event.occurredAt,
+            availableAt: event.occurredAt,
+          });
+        }
       });
     } catch (error) {
       if (hasPostgresCode(error, "23505")) throw new DuplicateInquiryIdError();
