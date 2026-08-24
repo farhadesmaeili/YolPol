@@ -19,6 +19,7 @@ export const inquiryProductCatalog: InquiryProductCatalog = {
       slug: found.result.product.slug,
       status: found.result.product.status,
       localizedNames: Object.fromEntries(localized.flatMap(({locale, result}) => result.status === "found" ? [[locale, result.product.name]] : [])),
+      packaging: found.result.product.packaging ? {unitsPerPallet: found.result.product.packaging.unitsPerPallet, grossPalletWeightGrams: found.result.product.packaging.palletGrossWeightKg * 1_000} : undefined,
     };
   },
 };

@@ -1,7 +1,8 @@
 import {resolve} from "node:path";
+import {readFile} from "node:fs/promises";
 import {drizzle} from "drizzle-orm/node-postgres";
 import {migrate} from "drizzle-orm/node-postgres/migrator";
-import type {Pool} from "pg";
+import {Pool} from "pg";
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 
 import {DuplicateInquiryIdError} from "@/features/inquiries/application/ports/inquiry-ports";
@@ -46,17 +47,82 @@ afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table inq
 afterAll(async () => { if (pool) await pool.end(); });
 
 describe("PostgresInquiryRepository", () => {
+  it("upgrades every historical contact preference without changing legacy item semantics", async () => {
+    const splitMigration = (sql: string) => sql.split("--> statement-breakpoint").map((statement) => statement.trim()).filter(Boolean);
+    const baseline = await readFile(resolve("drizzle/0000_hot_lorna_dane.sql"), "utf8");
+    const upgrade = await readFile(resolve("drizzle/0001_fast_wild_child.sql"), "utf8");
+    const sourceUrl = new URL(process.env.INTEGRATION_DATABASE_URL!);
+    const upgradeDatabase = "yolpol_migration_upgrade";
+    const upgradeUrl = new URL(sourceUrl);
+    upgradeUrl.pathname = `/${upgradeDatabase}`;
+    const upgradePool = new Pool({connectionString: upgradeUrl.toString(), max: 1});
+    await pool.query(`drop database if exists ${upgradeDatabase} with (force)`);
+    await pool.query(`create database ${upgradeDatabase}`);
+    try {
+      for (const statement of splitMigration(baseline)) await upgradePool.query(statement);
+      const insert = "insert into inquiries (id,status,full_name,email,phone,telegram_username,preferred_contact_method,country,source_locale,source_path,privacy_accepted,privacy_accepted_at,privacy_policy_version,created_at,updated_at) values ($1,'received','Legacy Customer','legacy@example.test',$2,$3,$4,'Legacy Country','en','/en/inquiry',true,'2026-01-01','legacy-v1','2026-01-01','2026-01-01')";
+      const historicalContacts = [
+        ["legacy-email", "+989121234567", null, "email"],
+        ["legacy-whatsapp-iran", "+989121234567", null, "whatsapp"],
+        ["legacy-whatsapp-iran-spaced", "+98 912 123 4567", null, "whatsapp"],
+        ["legacy-whatsapp-turkey", "+90 (532) 123 45 67", null, "whatsapp"],
+        ["legacy-whatsapp-iraq", "+964 770 123 4567", null, "whatsapp"],
+        ["legacy-whatsapp-double-hyphen", "+1--234567", null, "whatsapp"],
+        ["legacy-whatsapp-leading-hyphen", "+-1234567", null, "whatsapp"],
+        ["legacy-whatsapp-leading-space", "+ 1234567", null, "whatsapp"],
+        ["legacy-whatsapp-double-plus", "++1234567", null, "whatsapp"],
+        ["legacy-whatsapp-open-parens", "+12((34567", null, "whatsapp"],
+        ["legacy-whatsapp-close-parens", "+12))34567", null, "whatsapp"],
+        ["legacy-whatsapp-separated-space", "+12- -34567", null, "whatsapp"],
+        ["legacy-whatsapp-alpha", "+123abc4567", null, "whatsapp"],
+        ["legacy-whatsapp-no-plus", "123456789", null, "whatsapp"],
+        ["legacy-telegram-valid", "+905321234567", "valid_user", "telegram"],
+        ["legacy-telegram-old", "+905321234567", "legacy.name", "telegram"],
+        ["legacy-phone", "legacy phone", null, "phone"],
+      ] as const;
+      for (const contact of historicalContacts) await upgradePool.query(insert, [...contact]);
+      for (const [position, unit] of (["pieces", "packages", "pallets", "truckloads"] as const).entries()) {
+        await upgradePool.query("insert into inquiry_items (inquiry_id,position,product_id,sku,slug,product_name,quantity,unit) values ('legacy-email',$1,$2,$3,$4,$5,$6,$7)", [position, `legacy-product-${position}`, `LEGACY-${position}`, `legacy-product-${position}`, `Legacy Product ${position}`, position + 1, unit]);
+      }
+      for (const statement of splitMigration(upgrade)) await upgradePool.query(statement);
+
+      const migrated = await upgradePool.query<{id:string;preferred_contact_methods:string[];whatsapp_phone:string|null;telegram_username:string|null}>("select id,preferred_contact_methods,whatsapp_phone,telegram_username from inquiries order by id");
+      expect(migrated.rowCount).toBe(historicalContacts.length);
+      const byId = new Map(migrated.rows.map((row) => [row.id, row]));
+      expect(byId.get("legacy-email")?.preferred_contact_methods).toEqual(["email"]);
+      expect(byId.get("legacy-phone")?.preferred_contact_methods).toEqual(["phone"]);
+      expect(byId.get("legacy-telegram-valid")).toMatchObject({preferred_contact_methods:["telegram"], telegram_username:"@valid_user"});
+      expect(byId.get("legacy-telegram-old")).toMatchObject({preferred_contact_methods:["telegram"], telegram_username:"@legacy.name"});
+      expect(byId.get("legacy-whatsapp-iran")?.whatsapp_phone).toBe("+989121234567");
+      expect(byId.get("legacy-whatsapp-iran-spaced")?.whatsapp_phone).toBe("+989121234567");
+      expect(byId.get("legacy-whatsapp-turkey")?.whatsapp_phone).toBe("+905321234567");
+      expect(byId.get("legacy-whatsapp-iraq")?.whatsapp_phone).toBe("+9647701234567");
+      for (const id of historicalContacts.map(([id]) => id).filter((id) => id.startsWith("legacy-whatsapp-") && !["legacy-whatsapp-iran", "legacy-whatsapp-iran-spaced", "legacy-whatsapp-turkey", "legacy-whatsapp-iraq"].includes(id))) {
+        expect(byId.get(id)).toMatchObject({preferred_contact_methods:["whatsapp"], whatsapp_phone:null});
+      }
+      const items = await upgradePool.query<{position:number;unit:string}>("select position,unit from inquiry_items where inquiry_id='legacy-email' order by position");
+      expect(items.rows).toEqual([{position:0,unit:"pieces"},{position:1,unit:"packages"},{position:2,unit:"pallets"},{position:3,unit:"truckloads"}]);
+      const foreignKey = await upgradePool.query<{foreign_table:string}>("select ccu.table_name as foreign_table from information_schema.table_constraints tc join information_schema.constraint_column_usage ccu on ccu.constraint_name=tc.constraint_name and ccu.constraint_schema=tc.constraint_schema where tc.constraint_schema='public' and tc.constraint_name='inquiry_items_inquiry_id_inquiries_id_fk'");
+      expect(foreignKey.rows).toEqual([{foreign_table:"inquiries"}]);
+      const priceColumns = await upgradePool.query("select column_name from information_schema.columns where table_schema='public' and table_name in ('inquiries','inquiry_items') and column_name like '%price%'");
+      expect(priceColumns.rowCount).toBe(0);
+    } finally {
+      await upgradePool.end();
+      await pool.query(`drop database if exists ${upgradeDatabase} with (force)`);
+    }
+  });
+
   it("executes the real POST composition through trusted Product resolution and PostgreSQL", async () => {
     vi.stubEnv("NODE_ENV", "development");
     const handler=createInquiryRequestHandler(()=>createInquirySubmission(repository));
-    const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"+98 912 345 6789",preferredMethod:"email"},location:{country:"Iran"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v1"},source:{locale:"en",path:"/en/inquiry"},items:[{productId:"ylp-gb-250-og-rd",quantity:12,unit:"pieces"},{productId:"ylp-gb-250-cl-rd",quantity:3,unit:"pallets"}]};
+    const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"989123456789",preferredMethods:["email","whatsapp","telegram"],whatsappPhone:"989123456780",telegramUsername:"@integration_customer"},location:{country:"TR"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v2"},source:{locale:"en",path:"/en/inquiry"},items:[{productId:"ylp-gb-250-og-rd",palletCount:27},{productId:"ylp-gb-250-cl-rd",palletCount:25}]};
     const response=await handler(new Request("http://localhost/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json",Origin:"http://localhost:3000",Host:"localhost:3000"},body:JSON.stringify(payload)}));
     expect(response.status).toBe(201);
     const roots=await pool.query<{id:string}>("select id from inquiries"); expect(roots.rowCount).toBe(1);
-    const rows=await pool.query<{position:number;product_id:string;sku:string;slug:string;product_name:string}>("select position,product_id,sku,slug,product_name from inquiry_items order by position");
+    const rows=await pool.query<{position:number;product_id:string;sku:string;slug:string;product_name:string;quantity:number;unit:string}>("select position,product_id,sku,slug,product_name,quantity,unit from inquiry_items order by position");
     expect(rows.rows).toEqual([
-      {position:0,product_id:"ylp-gb-250-og-rd",sku:"YLP-GB-250-OG-RD",slug:"250ml-olive-green-round-glass-bottle",product_name:"250ml Olive Green Round Glass Bottle"},
-      {position:1,product_id:"ylp-gb-250-cl-rd",sku:"YLP-GB-250-CL-RD",slug:"250ml-clear-round-glass-bottle",product_name:"250ml Clear Round Glass Bottle"},
+      {position:0,product_id:"ylp-gb-250-og-rd",sku:"YLP-GB-250-OG-RD",slug:"250ml-olive-green-round-glass-bottle",product_name:"250ml Olive Green Round Glass Bottle",quantity:27,unit:"pallets"},
+      {position:1,product_id:"ylp-gb-250-cl-rd",sku:"YLP-GB-250-CL-RD",slug:"250ml-clear-round-glass-bottle",product_name:"250ml Clear Round Glass Bottle",quantity:25,unit:"pallets"},
     ]);
   });
 
@@ -84,10 +150,11 @@ describe("PostgresInquiryRepository", () => {
     expect((await pool.query("select value from retention_sentinel")).rows).toEqual([{value:"keep"}]);
   });
   it("applies committed migrations and exposes the expected tables", async () => {
+    await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
     const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('inquiries','inquiry_items') order by table_name");
     expect(result.rows.map(({table_name}) => table_name)).toEqual(["inquiries", "inquiry_items"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("1");
+    expect(migrations.rows[0]?.count).toBe("2");
   });
 
   it("saves and reconstitutes a complete Inquiry with exact instants", async () => {
@@ -101,15 +168,15 @@ describe("PostgresInquiryRepository", () => {
     expect(restored?.updatedAt.toISOString()).toBe("2026-01-03T04:05:06.789Z");
   });
 
-  it("preserves multiple-item order and every canonical requested unit", async () => {
+  it("preserves legacy persisted units while new submissions remain pallet-only", async () => {
     const items = (["pieces", "packages", "pallets", "truckloads"] as const).map((unit, index) => item(index + 1, unit));
-    const inquiry = new InquiryTestBuilder().with({id: "ordered-inquiry", items}).buildNew();
+    const inquiry = new InquiryTestBuilder().with({id: "ordered-inquiry", items}).buildReconstituted();
     await repository.save(inquiry);
     expect((await repository.findById(inquiry.id.value))?.items).toEqual(inquiry.items);
   });
 
   it("restores optional fields from null without inventing values", async () => {
-    const inquiry = new InquiryTestBuilder().with({id: "optional-inquiry", contact: {...inquiryFixture.contact, company: undefined, telegramUsername: undefined}, location: {country: "Iran"}, destination: undefined, message: undefined}).buildNew();
+    const inquiry = new InquiryTestBuilder().with({id: "optional-inquiry", contact: {...inquiryFixture.contact, company: undefined, preferredMethods:["email"], telegramUsername: undefined}, location: {country: "TR"}, destination: undefined, message: undefined}).buildNew();
     await repository.save(inquiry);
     const restored = await repository.findById(inquiry.id.value);
     expect(restored?.contact.company).toBeUndefined();
@@ -123,7 +190,7 @@ describe("PostgresInquiryRepository", () => {
     ["en", "English Customer", "London"], ["tr", "Türk Müşteri", "İstanbul"],
     ["fa", "مشتری فارسی", "تهران"], ["ar", "عميل عربي", "دبي"],
   ] as const)("round trips %s Unicode values", async (locale, fullName, city) => {
-    const inquiry = new InquiryTestBuilder().with({id: `unicode-${locale}`, contact: {...inquiryFixture.contact, fullName}, location: {country: fullName, city}, source: {locale, path: `/${locale}/inquiry`}}).buildNew();
+    const inquiry = new InquiryTestBuilder().with({id: `unicode-${locale}`, contact: {...inquiryFixture.contact, fullName}, location: {country:"TR", city}, source: {locale, path: `/${locale}/inquiry`}}).buildNew();
     await repository.save(inquiry);
     expect((await repository.findById(inquiry.id.value))?.contact.fullName).toBe(fullName);
     expect((await repository.findById(inquiry.id.value))?.location.city).toBe(city);
@@ -154,7 +221,7 @@ describe("PostgresInquiryRepository", () => {
   it("rolls back the parent when a child constraint fails", async () => {
     await pool.query("alter table inquiry_items add constraint integration_reject_product check (product_id <> 'rollback-product')");
     try {
-      const inquiry = new InquiryTestBuilder().with({id: "rollback-inquiry", items: [{...item(1, "pieces"), productId: "rollback-product"}]}).buildNew();
+      const inquiry = new InquiryTestBuilder().with({id: "rollback-inquiry", items: [{...item(1, "pallets"), productId: "rollback-product"}]}).buildNew();
       await expect(repository.save(inquiry)).rejects.toBeInstanceOf(InquiryPersistenceError);
       expect((await pool.query("select id from inquiries where id = 'rollback-inquiry'")).rowCount).toBe(0);
     } finally {

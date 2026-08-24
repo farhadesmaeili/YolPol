@@ -2,7 +2,7 @@ import type {LogisticsPageModel} from "@/features/export-logistics/presentation/
 import {Link} from "@/i18n/navigation";
 import {formatHumanNumber} from "@/shared/presentation/bidi/bidi-isolate";
 import {HomeExportTruckDiagram} from "@/shared/presentation/home/components/home-export-truck-diagram";
-import {PremiumBreadcrumbs, PremiumPageShell, premiumPrimaryLinkClass} from "@/shared/presentation/marketing/premium-page-shell";
+import {PremiumBreadcrumbs, PremiumPageShell} from "@/shared/presentation/marketing/premium-page-shell";
 
 import {ExportLoadCalculator} from "./export-load-calculator";
 
@@ -16,7 +16,7 @@ export function ExportLogisticsPagePresentation({locale, model, labels, capacity
     <section className="grid gap-px border-b border-stone-950/10 bg-stone-950/10 md:grid-cols-2"><InfoBlock index="01" heading={labels.capacityHeading} text={labels.capacityText} /><InfoBlock index="02" heading={labels.methodHeading} text={labels.methodText} /></section>
     {model.status === "ready" ? <><ExportLoadCalculator products={model.eligible} labels={labels.calculator} locale={locale} />{model.unavailable.length ? <section className="mt-8 border-s-2 border-amber-700/40 bg-white/25 p-6"><h2 className="text-2xl font-semibold">{labels.unavailableHeading}</h2><p className="mt-3 text-stone-600">{labels.unavailableText}</p><ul className="mt-5 list-disc space-y-2 ps-6">{model.unavailable.map((product) => <li key={product.id}>{product.name} <span dir="ltr">({product.sku})</span></li>)}</ul></section> : null}</> : <p role="alert" className="mt-10 border border-stone-950/10 bg-white/50 p-6">{labels.listingFailure}</p>}
     <section className="grid gap-8 border-b border-stone-950/10 py-14 lg:grid-cols-[0.7fr_1.3fr]"><div><span aria-hidden="true" dir="ltr" className="text-[9px] font-semibold tracking-[0.22em] text-emerald-800">03</span><h2 className="mt-5 text-3xl font-semibold">{labels.workflowHeading}</h2></div><ol className="grid gap-px bg-stone-950/10 sm:grid-cols-2">{labels.workflowSteps.map((step, index) => <li key={step} className="bg-[#f3f1eb] p-5 text-sm leading-7 text-stone-700"><span aria-hidden="true" dir="ltr" className="me-3 text-emerald-800">0{index + 1}</span>{step}</li>)}</ol></section>
-    <section className="my-12 bg-emerald-950 p-7 text-white sm:p-10"><h2 className="text-2xl font-semibold">{labels.limitationsHeading}</h2><p className="mt-4 max-w-4xl leading-8 text-white/70">{labels.limitationsText}</p><Link href="/contact" className={`${premiumPrimaryLinkClass} mt-7 border border-white/20 bg-white text-emerald-950 hover:bg-stone-100`}>{labels.contactCta}</Link></section>
+    <section className="my-12 bg-emerald-950 p-7 text-white sm:p-10"><h2 className="text-2xl font-semibold">{labels.limitationsHeading}</h2><p className="mt-4 max-w-4xl leading-8 text-white/70">{labels.limitationsText}</p><Link href="/contact" className="mt-7 inline-flex min-h-12 items-center border border-emerald-500 bg-emerald-700 px-6 font-semibold text-white outline-none transition-colors hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950 motion-reduce:transition-none">{labels.contactCta}</Link></section>
   </div></PremiumPageShell>;
 }
 
