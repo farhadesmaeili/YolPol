@@ -33,7 +33,7 @@ export function PrivacyPolicy({locale}: {locale: Locale}) {
       <PolicySection heading={t.controller.heading}>
         <p>{t.controller.text}</p>
         <dl className="grid gap-3 border border-emerald-950/10 bg-white/40 p-6 shadow-[0_28px_80px_-60px_rgba(28,25,23,0.45)] sm:grid-cols-[10rem_1fr] sm:p-8">
-          <dt className="font-medium text-foreground">{t.controller.operatorLabel}</dt><dd>{privacyPolicy.operator}</dd>
+          <dt className="font-medium text-foreground">{t.controller.publicNameLabel}</dt><dd>{privacyPolicy.publicName}</dd>
           <dt className="font-medium text-foreground">{t.controller.locationLabel}</dt><dd><LtrIsolate>{privacyPolicy.publicLocation}</LtrIsolate></dd>
           <dt className="font-medium text-foreground">{t.controller.emailLabel}</dt><dd><a href={siteConfig.contact.emailHref} className="font-semibold text-brand underline underline-offset-4"><LtrIsolate>{siteConfig.contact.email}</LtrIsolate></a></dd>
         </dl>

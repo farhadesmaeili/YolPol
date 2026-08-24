@@ -18,9 +18,9 @@ export function FooterBrand({ homeLabel, legalItems }: { homeLabel: string; lega
           <Image src={siteConfig.logoPath} alt="" width={48} height={48} className="size-11 object-contain transition-transform duration-700 group-hover:scale-105 motion-reduce:transition-none" />
         </div>
         <div aria-hidden="true" className="min-w-0">
-          <p dir="ltr" className="truncate text-2xl font-semibold tracking-[-0.045em]">{siteConfig.name}</p>
+          <p dir="ltr" className="truncate text-2xl font-semibold tracking-[-0.045em]">{siteConfig.identity.brandName}</p>
           <div dir="ltr" className="mt-2 flex items-center gap-2 text-[8px] font-semibold uppercase tracking-[0.28em] text-stone-400">
-            <span>IR</span><span className="h-px w-5 bg-stone-950/20" /><span>B2B</span><span className="h-px w-5 bg-stone-950/20" /><span>INTL</span>
+            <span>{siteConfig.brandDescriptor[0]}</span><span className="h-px w-5 bg-stone-950/20" /><span>{siteConfig.brandDescriptor[1]}</span><span className="h-px w-5 bg-stone-950/20" /><span>{siteConfig.brandDescriptor[2]}</span>
           </div>
         </div>
       </Link>

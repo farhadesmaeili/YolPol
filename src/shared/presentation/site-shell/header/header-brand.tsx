@@ -38,7 +38,7 @@ export function HeaderBrand({ homeLabel }: { homeLabel: string }) {
       <div className="flex min-w-0 flex-col">
         <div dir="ltr" className="flex items-center gap-2.5">
           <span className="truncate text-[23px] font-semibold leading-none tracking-[-0.045em] text-stone-950">
-            {siteConfig.name}
+            {siteConfig.identity.brandName}
           </span>
           <span aria-hidden="true" className="relative hidden size-2 sm:flex">
             <span className="absolute size-full animate-ping rounded-full bg-emerald-700 opacity-20 motion-reduce:animate-none" />
@@ -46,7 +46,7 @@ export function HeaderBrand({ homeLabel }: { homeLabel: string }) {
           </span>
         </div>
         <div aria-hidden="true" dir="ltr" className="mt-1.5 hidden items-center gap-2 text-[8px] font-semibold uppercase tracking-[0.26em] text-stone-400 sm:flex">
-          <span>IR</span><span className="h-px w-5 bg-stone-950/15" /><span>B2B</span><span className="h-px w-5 bg-stone-950/15" /><span>INTL</span>
+          <span>{siteConfig.brandDescriptor[0]}</span><span className="h-px w-5 bg-stone-950/15" /><span>{siteConfig.brandDescriptor[1]}</span><span className="h-px w-5 bg-stone-950/15" /><span>{siteConfig.brandDescriptor[2]}</span>
         </div>
       </div>
     </Link>

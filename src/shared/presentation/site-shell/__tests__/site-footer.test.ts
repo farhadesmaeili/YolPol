@@ -79,8 +79,8 @@ describe("SiteFooter", () => {
 
   it("uses centralized contact links, bidi isolation, and safe external links", () => {
     expect(completeFooterSource).toContain("siteConfig.contact.emailHref");
-    expect(completeFooterSource).toContain("siteConfig.contact.phoneHref");
-    expect(completeFooterSource).toContain("siteConfig.contact.whatsappHref");
+    expect(completeFooterSource).toContain("siteConfig.contact.phone.href");
+    expect(completeFooterSource).toContain("siteConfig.contact.whatsapp.href");
     expect(completeFooterSource.match(/<LtrIsolate/g)).toHaveLength(3);
     expect(completeFooterSource).toContain('rel="noopener noreferrer"');
     expect(footerSource).toContain('instagram: t("social.instagram")');
