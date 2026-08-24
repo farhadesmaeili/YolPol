@@ -5,7 +5,7 @@ import {siteConfig} from "@/shared/config/site";
 import {LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
 import {PremiumBreadcrumbs, PremiumPageShell, premiumPrimaryLinkClass} from "@/shared/presentation/marketing/premium-page-shell";
 
-type ContactModel = Readonly<{isRtl: boolean; breadcrumbLabel: string; homeLabel: string; eyebrow: string; heading: string; introduction: string; email: string; phone: string; whatsapp: string; location: string; social: string; instagramLabel: string; linkedinLabel: string; telegramLabel: string; inquiryCta: string}>;
+type ContactModel = Readonly<{isRtl: boolean; breadcrumbLabel: string; homeLabel: string; eyebrow: string; heading: string; introduction: string; email: string; phone: string; whatsapp: string; location: string; contactLocation: string; social: string; instagramLabel: string; linkedinLabel: string; telegramLabel: string; inquiryCta: string}>;
 
 export function ContactPagePresentation({model}: {model: ContactModel}) {
   return <PremiumPageShell><div className="mx-auto w-full max-w-[1500px] px-4 py-8 sm:px-8 lg:px-14 xl:px-20">
@@ -14,9 +14,9 @@ export function ContactPagePresentation({model}: {model: ContactModel}) {
       <header className="lg:sticky lg:top-36 lg:self-start"><p className={model.isRtl ? "text-sm font-semibold text-emerald-900" : "text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-900"}>{model.eyebrow}</p><h1 className={`mt-6 text-[clamp(3rem,6vw,6.4rem)] font-semibold leading-[0.94] text-stone-950 ${model.isRtl ? "" : "tracking-[-0.06em]"}`}>{model.heading}</h1><p className="mt-7 max-w-xl text-lg leading-9 text-stone-600">{model.introduction}</p><Link href="/inquiry" className={`${premiumPrimaryLinkClass} mt-8`}>{model.inquiryCta}</Link></header>
       <div className="border-t border-stone-950/10">
         <ContactRow index="01" label={model.email}><a className="break-all font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.emailHref}><LtrIsolate>{siteConfig.contact.email}</LtrIsolate></a></ContactRow>
-        <ContactRow index="02" label={model.phone}><a className="font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.phoneHref}><LtrIsolate>{siteConfig.contact.phone}</LtrIsolate></a></ContactRow>
-        <ContactRow index="03" label={model.whatsapp}><a className="font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.whatsappHref} target="_blank" rel="noopener noreferrer"><LtrIsolate>{siteConfig.contact.whatsapp}</LtrIsolate></a></ContactRow>
-        <ContactRow index="04" label={model.location}><address className="not-italic text-stone-700">{siteConfig.contact.location}</address></ContactRow>
+        <ContactRow index="02" label={model.phone}><a className="font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.phone.href}><LtrIsolate>{siteConfig.contact.phone.display}</LtrIsolate></a></ContactRow>
+        <ContactRow index="03" label={model.whatsapp}><a className="font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.whatsapp.href} target="_blank" rel="noopener noreferrer"><LtrIsolate>{siteConfig.contact.whatsapp.display}</LtrIsolate></a></ContactRow>
+        <ContactRow index="04" label={model.location}><address className="not-italic text-stone-700">{model.contactLocation}</address></ContactRow>
         <ContactRow index="05" label={model.social}><div className="flex flex-wrap gap-x-6 gap-y-3"><SocialLink href={siteConfig.social.instagram} label={model.instagramLabel}>Instagram</SocialLink><SocialLink href={siteConfig.social.linkedin} label={model.linkedinLabel}>LinkedIn</SocialLink><SocialLink href={siteConfig.social.telegram} label={model.telegramLabel}>Telegram</SocialLink></div></ContactRow>
       </div>
     </div>

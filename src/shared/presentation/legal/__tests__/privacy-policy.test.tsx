@@ -19,7 +19,7 @@ describe("localized Privacy Policy",()=>{
     expect(html).toContain(messages.ActiveInquiryPrivacy.heading);
     expect(html).toContain(messages.InquiryPrivacyInventory.heading);
     for(const section of [messages.InquiryPrivacyInventory.customer,messages.InquiryPrivacyInventory.product,messages.InquiryPrivacyInventory.evidence]) for(const disclosure of Object.values(section)) expect(html).toContain(htmlText(disclosure));
-    expect(html).toContain(privacyPolicy.operator); expect(html).toContain(privacyPolicy.publicLocation);
+    expect(html).toContain(privacyPolicy.publicName); expect(html).toContain(privacyPolicy.publicLocation);
     expect(html).toContain(`href="${siteConfig.contact.emailHref}"`); expect(html).toContain(`<time dateTime="${privacyPolicy.lastUpdated}"`);
   });
   it("states storage, enforced retention policy, absent metadata, cookies, and analytics accurately",()=>{

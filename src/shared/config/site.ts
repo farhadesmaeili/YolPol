@@ -20,14 +20,6 @@ export type PrimaryNavigationId = (typeof primaryNavigation)[number]["id"];
 
 export const legalNavigation = [{id: "privacy", href: "/privacy"}] as const;
 
-export const privacyPolicy = {
-  operator: "YolPol",
-  publicLocation: "Iran – Tehran",
-  lastUpdated: "2026-08-22",
-  inquiryRetentionMonths: 24,
-  securityRetentionDays: 30,
-} as const;
-
 function requireUrl(value: string, protocols: readonly string[]): string {
   const url = new URL(value);
   if (!protocols.includes(url.protocol)) {
@@ -36,22 +28,49 @@ function requireUrl(value: string, protocols: readonly string[]): string {
   return value;
 }
 
+const brandName = "YolPol";
+const publicEmail = "yolpol@gmail.com";
+const publicPhone = "+98 912 394 5674";
+const publicWhatsapp = "+98 912 394 5674";
+
 export const siteConfig = {
-  name: "YolPol",
   url: "https://yolpol.com",
   logoPath: "/images/brand/yolpol-logo.svg",
+  brandDescriptor: ["IR", "B2B", "INTL"],
+  identity: {
+    brandName,
+    publicName: brandName,
+    publicLocation: "Iran – Tehran",
+  },
   contact: {
-    email: "yolpol@gmail.com",
-    emailHref: requireUrl("mailto:yolpol@gmail.com", ["mailto:"]),
-    phone: "+98 912 394 5674",
-    phoneHref: requireUrl("tel:+989123945674", ["tel:"]),
-    whatsapp: "+98 912 394 5674",
-    whatsappHref: requireUrl("https://wa.me/989123945674", ["https:"]),
-    location: "Tehran, Iran",
+    email: publicEmail,
+    emailHref: requireUrl(`mailto:${publicEmail}`, ["mailto:"]),
+    phone: {
+      display: publicPhone,
+      href: requireUrl("tel:+989123945674", ["tel:"]),
+    },
+    whatsapp: {
+      display: publicWhatsapp,
+      href: requireUrl("https://wa.me/989123945674", ["https:"]),
+    },
+    location: {
+      en: "Tehran, Iran",
+      tr: "Tahran, İran",
+      fa: "تهران، ایران",
+      ar: "طهران، إيران",
+    },
   },
   social: {
     instagram: requireUrl("https://www.instagram.com/yolpol/", ["https:"]),
     linkedin: requireUrl("https://www.linkedin.com/company/yolpol/", ["https:"]),
     telegram: requireUrl("https://t.me/yolpol", ["https:"]),
   },
+} as const;
+
+export const privacyPolicy = {
+  publicName: siteConfig.identity.publicName,
+  publicLocation: siteConfig.identity.publicLocation,
+  lastUpdated: "2026-08-22",
+  inquiryRetentionMonths: 24,
+  securityRetentionDays: 30,
 } as const;

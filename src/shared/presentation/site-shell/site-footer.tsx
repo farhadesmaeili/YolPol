@@ -64,6 +64,7 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
           />
           <FooterContact
             isRtl={isRtl}
+            locale={locale}
             labels={{
               heading: t("footer.contact"),
               whatsapp: t("contact.whatsapp"),

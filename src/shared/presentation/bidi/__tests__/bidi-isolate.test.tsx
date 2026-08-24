@@ -22,6 +22,6 @@ describe("bidi presentation primitives", () => {
     expect(formatHumanNumber(locale, Number.NEGATIVE_INFINITY)).toBe("—");
   });
   it("keeps a formatted number and unit in one isolated group", () => expect(renderToStaticMarkup(<NumberUnit locale="fa" value={925} unit="kg" />)).toContain("unicode-bidi:isolate"));
-  it("preserves canonical contact and technical values", () => { expect(siteConfig.contact.phoneHref).toBe("tel:+989123945674"); expect(siteConfig.contact.whatsappHref).toBe("https://wa.me/989123945674"); expect(renderToStaticMarkup(<LtrIsolate>YLP-GB-250-01</LtrIsolate>)).toContain("YLP-GB-250-01"); });
+  it("preserves canonical contact and technical values", () => { expect(siteConfig.contact.phone.href).toBe("tel:+989123945674"); expect(siteConfig.contact.whatsapp.href).toBe("https://wa.me/989123945674"); expect(renderToStaticMarkup(<LtrIsolate>YLP-GB-250-01</LtrIsolate>)).toContain("YLP-GB-250-01"); });
   it("contains no embedded bidi control characters in messages or contact configuration", () => expect(JSON.stringify({enMessages,trMessages,faMessages,arMessages,siteConfig})).not.toMatch(/[\u202a-\u202e\u2066-\u2069]/u));
 });

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Link, usePathname } from "@/i18n/navigation";
+import {siteConfig} from "@/shared/config/site";
 import {
   getContainedFocusIndex,
   resolveActiveNavigationHref,
@@ -236,8 +237,8 @@ export function SiteNavigation({ items, locale, locales, labels }: SiteNavigatio
                 {renderLocaleLinks()}
               </div>
               <div aria-hidden="true" dir="ltr" className="mt-8 flex items-center justify-between gap-4 border-t border-stone-950/[0.08] pt-5 text-[8px] font-semibold uppercase tracking-[0.22em] text-stone-400">
-                <span>YOLPOL</span>
-                <div className="flex items-center gap-2"><span>IR</span><span className="h-px w-5 bg-stone-950/15" /><span>B2B</span><span className="h-px w-5 bg-stone-950/15" /><span>INTL</span></div>
+                <span className="uppercase">{siteConfig.identity.brandName}</span>
+                <div className="flex items-center gap-2"><span>{siteConfig.brandDescriptor[0]}</span><span className="h-px w-5 bg-stone-950/15" /><span>{siteConfig.brandDescriptor[1]}</span><span className="h-px w-5 bg-stone-950/15" /><span>{siteConfig.brandDescriptor[2]}</span></div>
               </div>
             </div>
           </nav>

@@ -2,7 +2,7 @@
 
 ## Privacy content boundary
 
-The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved operator, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.
+The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved public brand identity, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.
 
 The current site may use next-intl's essential `NEXT_LOCALE` preference cookie. No analytics tracker is active. The Inquiry endpoint transmits consented requests to the configured PostgreSQL database; it does not collect separate security metadata or deliver Email, Telegram, or n8n notifications.
 

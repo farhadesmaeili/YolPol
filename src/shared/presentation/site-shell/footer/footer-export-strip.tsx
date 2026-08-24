@@ -20,7 +20,7 @@ export function FooterExportStrip({ rights }: { rights: string }) {
       </div>
 
       <div className="relative flex flex-col gap-4 py-7 text-start sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-stone-500">© {new Date().getFullYear()} {siteConfig.name}. {rights}</p>
+        <p className="text-xs text-stone-500">© {new Date().getFullYear()} {siteConfig.identity.publicName}. {rights}</p>
         <div aria-hidden="true" dir="ltr" className="flex max-w-full flex-wrap items-center gap-3 text-[8px] font-semibold uppercase tracking-[0.25em] text-stone-400">
           <span>IR</span><span className="h-px w-6 bg-stone-950/15" /><span>B2B</span><span className="h-px w-6 bg-stone-950/15" /><span>GLASS</span><span className="h-px w-6 bg-stone-950/15" /><span>EXPORT</span>
         </div>

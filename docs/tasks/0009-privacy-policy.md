@@ -4,7 +4,7 @@
 - Date: 2026-08-16
 - Stable public-policy update date: `2026-08-16`
 
-Adds localized `/en/privacy`, `/tr/privacy`, `/fa/privacy`, and `/ar/privacy` pages for the approved public operator `YolPol`, public location `Iran – Tehran`, and privacy contact `yolpol@gmail.com`. The policy is technical disclosure, not a claim of company registration, jurisdiction-specific compliance, certification, or absolute security.
+Adds localized `/en/privacy`, `/tr/privacy`, `/fa/privacy`, and `/ar/privacy` pages for the approved public name `YolPol`, public location `Iran – Tehran`, and privacy contact `yolpol@gmail.com`. The policy is technical disclosure, not a claim of company registration, jurisdiction-specific compliance, certification, or absolute security.
 
 The existing Inquiry form still prepares a draft only in browser memory. It has no submission endpoint and does not persist or transmit personal information. Its mandatory unchecked consent now links to the active locale's Privacy Policy. Direct Email and WhatsApp contact continues to use centralized static destinations without inserting form values into URLs.
 

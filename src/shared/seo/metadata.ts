@@ -51,7 +51,7 @@ export function createLocalizedMetadata({
     },
     openGraph: {
       type: "website",
-      siteName: siteConfig.name,
+      siteName: siteConfig.identity.publicName,
       locale,
       url: canonical,
       title,
