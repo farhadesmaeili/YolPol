@@ -8,6 +8,7 @@ import {createInquiryCreated} from "@/features/inquiries/domain/events/inquiry-c
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
+import type {CreateConversationAccess} from "@/features/inquiries/application/use-cases/create-conversation-access";
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import {normalizeInquiryQuantity} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 
@@ -20,7 +21,7 @@ function validCatalogProduct(value: unknown, requestedId: string): value is NonN
 }
 
 export class SubmitInquiry {
-  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock) {}
+  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock, private readonly createAccess: CreateConversationAccess) {}
   async execute(input: SubmitInquiryInput): Promise<SubmitInquiryResult> {
     if (!Array.isArray(input.items) || input.items.length === 0) return {status: "validation_failed", field: "items"};
     const productIds = input.items.map(({productId}) => productId);
@@ -58,8 +59,10 @@ export class SubmitInquiry {
     }
     const conversation = Conversation.start({id: inquiry.id.value, inquiryId: inquiry.id.value, channel: "WEBSITE", createdAt: inquiry.createdAt});
     if (inquiry.message) conversation.addMessage({id: `${inquiry.id.value}-initial`, senderType: "CUSTOMER", channel: "WEBSITE", body: inquiry.message, createdAt: inquiry.createdAt});
-    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation); }
+    const access = this.createAccess.execute({conversationId: conversation.id.value, createdAt: inquiry.createdAt});
+    if (access.status === "dependency_failed") return {status: "dependency_failed", dependency: "access_token"};
+    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation, access.credential); }
     catch (error) { return error instanceof DuplicateInquiryIdError ? {status: "duplicate_inquiry"} : {status: "persistence_failed"}; }
-    return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry)};
+    return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry), conversationAccessToken: access.token};
   }
 }

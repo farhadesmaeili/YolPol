@@ -3,14 +3,15 @@ import {describe, expect, it, vi} from "vitest";
 import {loadCustomerMessageHistory, sendCustomerMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
 
 const signal = new AbortController().signal;
+const accessToken = `ypc_${"A".repeat(43)}`;
 const json = (value: unknown, status: number) => new Response(JSON.stringify(value), {status, headers: {"Content-Type": "application/json"}});
 
 describe("Customer message client", () => {
   it("posts only the public message contract and accepts the exact success response", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({status: "created", messageId: "message_1"}, 201));
 
-    await expect(sendCustomerMessage({inquiryId: "inquiry_1", message: "Please send an update."}, signal, fetcher)).resolves.toEqual({status: "created", messageId: "message_1"});
-    expect(fetcher).toHaveBeenCalledWith("/api/inquiries/inquiry_1/messages", {
+    await expect(sendCustomerMessage({accessToken, message: "Please send an update."}, signal, fetcher)).resolves.toEqual({status: "created", messageId: "message_1"});
+    expect(fetcher).toHaveBeenCalledWith(`/api/conversations/${accessToken}/messages`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({message: "Please send an update."}),
@@ -24,14 +25,14 @@ describe("Customer message client", () => {
     [json({status: "error", code: "service_unavailable", detail: "database secret"}, 503), {status: "unavailable"}],
   ] as const)("maps API failures to safe presentation results", async (response, expected) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response);
-    const result = await sendCustomerMessage({inquiryId: "inquiry_1", message: "Hello"}, signal, fetcher);
+    const result = await sendCustomerMessage({accessToken, message: "Hello"}, signal, fetcher);
     expect(result).toEqual(expected);
     expect(JSON.stringify(result)).not.toMatch(/internal|database|field|code/u);
   });
 
   it("maps network failures without leaking the thrown error", async () => {
     const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("private network detail"));
-    const result = await sendCustomerMessage({inquiryId: "inquiry_1", message: "Hello"}, signal, fetcher);
+    const result = await sendCustomerMessage({accessToken, message: "Hello"}, signal, fetcher);
     expect(result).toEqual({status: "network_error"});
     expect(JSON.stringify(result)).not.toContain("private network detail");
   });
@@ -42,12 +43,12 @@ describe("Customer message client", () => {
     new Response("created", {status: 201, headers: {"Content-Type": "text/plain"}}),
   ])("rejects malformed success responses", async (response) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response);
-    await expect(sendCustomerMessage({inquiryId: "inquiry_1", message: "Hello"}, signal, fetcher)).resolves.toEqual({status: "unavailable"});
+    await expect(sendCustomerMessage({accessToken, message: "Hello"}, signal, fetcher)).resolves.toEqual({status: "unavailable"});
   });
 
   it("does not request an unsafe inquiry path", async () => {
     const fetcher = vi.fn<typeof fetch>();
-    await expect(sendCustomerMessage({inquiryId: "../private", message: "Hello"}, signal, fetcher)).resolves.toEqual({status: "unavailable"});
+    await expect(sendCustomerMessage({accessToken: "../private", message: "Hello"}, signal, fetcher)).resolves.toEqual({status: "unavailable"});
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
@@ -60,16 +61,16 @@ describe("Customer message history client", () => {
 
   it("loads and maps the exact ordered history contract", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(history, 200));
-    await expect(loadCustomerMessageHistory("inquiry_1", signal, fetcher)).resolves.toEqual({status: "loaded", messages: [
+    await expect(loadCustomerMessageHistory(accessToken, signal, fetcher)).resolves.toEqual({status: "loaded", messages: [
       {id: "message_1", body: "Customer update", sender: "customer"},
       {id: "message_2", body: "Support response", sender: "support"},
     ]});
-    expect(fetcher).toHaveBeenCalledWith("/api/inquiries/inquiry_1/messages", {method: "GET", headers: {Accept: "application/json"}, signal});
+    expect(fetcher).toHaveBeenCalledWith(`/api/conversations/${accessToken}/messages`, {method: "GET", headers: {Accept: "application/json"}, signal});
   });
 
   it("accepts an empty Conversation history", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({messages: []}, 200));
-    await expect(loadCustomerMessageHistory("inquiry_1", signal, fetcher)).resolves.toEqual({status: "loaded", messages: []});
+    await expect(loadCustomerMessageHistory(accessToken, signal, fetcher)).resolves.toEqual({status: "loaded", messages: []});
   });
 
   it.each([
@@ -79,14 +80,14 @@ describe("Customer message history client", () => {
     [json({...history, conversationId: "hidden"}, 200), {status: "unavailable"}],
     [json({messages: [{...history.messages[0], internalMetadata: "hidden"}]}, 200), {status: "unavailable"}],
   ] as const)("maps unsafe or failed history responses safely", async (response, expected) => {
-    const result = await loadCustomerMessageHistory("inquiry_1", signal, vi.fn<typeof fetch>().mockResolvedValue(response));
+    const result = await loadCustomerMessageHistory(accessToken, signal, vi.fn<typeof fetch>().mockResolvedValue(response));
     expect(result).toEqual(expected);
     expect(JSON.stringify(result)).not.toMatch(/database|secret|conversationId|internalMetadata/u);
   });
 
   it("maps network errors and rejects an unsafe Inquiry path", async () => {
     const failingFetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("private network detail"));
-    await expect(loadCustomerMessageHistory("inquiry_1", signal, failingFetcher)).resolves.toEqual({status: "network_error"});
+    await expect(loadCustomerMessageHistory(accessToken, signal, failingFetcher)).resolves.toEqual({status: "network_error"});
     const unusedFetcher = vi.fn<typeof fetch>();
     await expect(loadCustomerMessageHistory("../private", signal, unusedFetcher)).resolves.toEqual({status: "unavailable"});
     expect(unusedFetcher).not.toHaveBeenCalled();

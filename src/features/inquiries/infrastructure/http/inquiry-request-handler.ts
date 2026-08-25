@@ -81,7 +81,7 @@ export function createInquiryRequestHandler(getSubmission: () => InquirySubmissi
     switch (result.status) {
       case "accepted":
       case "accepted_with_notification_failures":
-        return json({status: "created", inquiryId: result.inquiry.inquiryId}, 201);
+        return json({status: "created", inquiryId: result.inquiry.inquiryId, conversationAccessToken: result.conversationAccessToken}, 201);
       case "validation_failed": return failure("validation_failed", 422, result.field);
       case "product_not_found":
       case "product_unavailable":

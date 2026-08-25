@@ -10,6 +10,8 @@ import type {InquiryItemInput} from "@/features/inquiries/domain/types/inquiry-t
 import {createPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
+import {PostgresConversationAccessRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-access-repository";
+import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
 import {inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 import {InquiryTestBuilder} from "@/features/inquiries/testing/builders/inquiry-test-builder";
 import {inquiryFixture} from "@/features/inquiries/testing/fixtures/inquiry-fixtures";
@@ -39,10 +41,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   const identity = await pool.query<{current_database: string; current_user: string}>("select current_database(), current_user");
   expect(identity.rows[0]).toEqual({current_database: "yolpol_integration", current_user: "yolpol_test"});
-  await pool.query("truncate table conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
+  await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
 });
 
-afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries"); });
+afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries"); });
 
 afterAll(async () => { if (pool) await pool.end(); });
 
@@ -118,9 +120,16 @@ describe("PostgresInquiryRepository", () => {
     const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"989123456789",preferredMethods:["email","whatsapp","telegram"],whatsappPhone:"989123456780",telegramUsername:"@integration_customer"},location:{country:"TR"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v2"},source:{locale:"en",path:"/en/inquiry"},items:[{productId:"ylp-gb-250-og-rd",palletCount:27},{productId:"ylp-gb-250-cl-rd",palletCount:25}]};
     const response=await handler(new Request("http://localhost/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json",Origin:"http://localhost:3000",Host:"localhost:3000"},body:JSON.stringify(payload)}));
     expect(response.status).toBe(201);
+    const responseBody=await response.json() as {status:string;inquiryId:string;conversationAccessToken:string};
+    expect(responseBody).toMatchObject({status:"created",inquiryId:expect.any(String),conversationAccessToken:expect.stringMatching(/^ypc_[A-Za-z0-9_-]{43}$/u)});
     const roots=await pool.query<{id:string}>("select id from inquiries"); expect(roots.rowCount).toBe(1);
     const conversations=await pool.query<{id:string;inquiry_id:string;channel:string}>("select id,inquiry_id,channel from conversations");
     expect(conversations.rows).toEqual([{id:roots.rows[0]?.id,inquiry_id:roots.rows[0]?.id,channel:"WEBSITE"}]);
+    const accessRows=await pool.query<{conversation_id:string;token_lookup:string;token_hash:string}>("select conversation_id,token_lookup,token_hash from conversation_access");
+    expect(accessRows.rows).toEqual([{conversation_id:roots.rows[0]?.id,token_lookup:expect.stringMatching(/^[a-f0-9]{64}$/u),token_hash:expect.stringMatching(/^[a-f0-9]{64}$/u)}]);
+    expect(JSON.stringify(accessRows.rows)).not.toContain(responseBody.conversationAccessToken);
+    const presented=new NodeConversationAccessTokenService().inspect(responseBody.conversationAccessToken)!;
+    expect((await new PostgresConversationAccessRepository(pool).findByLookup(presented.lookup))?.inquiryId).toBe(roots.rows[0]?.id);
     expect((await pool.query("select id from conversation_messages")).rowCount).toBe(0);
     const events=await pool.query<{event_type:string;aggregate_id:string;payload:{inquiryId:string;occurredAt:string};attempts:number;processed_at:Date|null}>("select event_type,aggregate_id,payload,attempts,processed_at from inquiry_outbox");
     expect(events.rows).toEqual([{event_type:"InquiryCreated",aggregate_id:roots.rows[0]?.id,payload:{inquiryId:roots.rows[0]?.id,occurredAt:expect.any(String)},attempts:0,processed_at:null}]);
@@ -140,7 +149,7 @@ describe("PostgresInquiryRepository", () => {
     const handler=createInquiryRequestHandler(()=>createInquirySubmission(repository));
     const payload={contact:{fullName:"Integration Customer",email:"integration@example.test",phone:"+98 912 345 6789",preferredMethod:"email"},location:{country:"Iran"},privacy:{accepted:true,policyVersion:"inquiry-contact-consent-v1"},source:{locale:"en",path:"/en/inquiry"},...change};
     const response=await handler(new Request("https://yolpol.com/api/inquiries",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}));
-    expect(response.status).toBe(422); expect((await pool.query("select id from inquiries")).rowCount).toBe(0); expect((await pool.query("select inquiry_id from inquiry_items")).rowCount).toBe(0); expect((await pool.query("select id from conversations")).rowCount).toBe(0); expect((await pool.query("select id from conversation_messages")).rowCount).toBe(0); expect((await pool.query("select id from inquiry_outbox")).rowCount).toBe(0);
+    expect(response.status).toBe(422); expect((await pool.query("select id from inquiries")).rowCount).toBe(0); expect((await pool.query("select inquiry_id from inquiry_items")).rowCount).toBe(0); expect((await pool.query("select id from conversations")).rowCount).toBe(0); expect((await pool.query("select conversation_id from conversation_access")).rowCount).toBe(0); expect((await pool.query("select id from conversation_messages")).rowCount).toBe(0); expect((await pool.query("select id from inquiry_outbox")).rowCount).toBe(0);
   });
 
   it("deletes only records strictly older than the 24-month cutoff and cascades children",async()=>{
@@ -157,10 +166,10 @@ describe("PostgresInquiryRepository", () => {
   });
   it("applies committed migrations and exposes the expected tables", async () => {
     await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
-    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_messages','conversations','inquiries','inquiry_items','inquiry_outbox') order by table_name");
-    expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_messages", "conversations", "inquiries", "inquiry_items", "inquiry_outbox"]);
+    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_items','inquiry_outbox') order by table_name");
+    expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_items", "inquiry_outbox"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("4");
+    expect(migrations.rows[0]?.count).toBe("5");
   });
 
   it("saves and reconstitutes a complete Inquiry with exact instants", async () => {
@@ -218,7 +227,7 @@ describe("PostgresInquiryRepository", () => {
     const inquiry = new InquiryTestBuilder().with({id: "duplicate-inquiry"}).buildNew();
     await repository.save(inquiry);
     await expect(repository.save(inquiry)).rejects.toBeInstanceOf(DuplicateInquiryIdError);
-    await pool.query("truncate table conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
+    await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
     const results = await Promise.allSettled([repository.save(inquiry), repository.save(inquiry)]);
     expect(results.filter(({status}) => status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected" && result.reason instanceof DuplicateInquiryIdError)).toHaveLength(1);

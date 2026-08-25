@@ -1,7 +1,7 @@
 import {conversationChannels, messageSenderTypes} from "@/features/inquiries/domain/types/conversation-types";
 import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
-export type SendCustomerMessageInput = Readonly<{inquiryId: string; message: string}>;
+export type SendCustomerMessageInput = Readonly<{accessToken: string; message: string}>;
 export type SendCustomerMessageResult =
   | Readonly<{status: "created"; messageId: string}>
   | Readonly<{status: "validation_error"}>
@@ -14,7 +14,7 @@ export type LoadCustomerMessageHistoryResult =
   | Readonly<{status: "network_error"}>
   | Readonly<{status: "unavailable"}>;
 
-const opaqueIdPattern = /^[A-Za-z0-9_-]{1,128}$/u;
+const conversationAccessTokenPattern = /^ypc_[A-Za-z0-9_-]{43}$/u;
 const messageIdPattern = /^[A-Za-z0-9_-]{1,160}$/u;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -27,7 +27,7 @@ function isExactCreatedResponse(value: unknown): value is Readonly<{status: "cre
   return Object.keys(record).sort().join(",") === "messageId,status"
     && record.status === "created"
     && typeof record.messageId === "string"
-    && opaqueIdPattern.test(record.messageId);
+    && messageIdPattern.test(record.messageId);
 }
 
 function parseHistoryMessage(value: unknown): CustomerChatMessage | null {
@@ -80,10 +80,10 @@ export async function sendCustomerMessage(
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<SendCustomerMessageResult> {
-  if (!opaqueIdPattern.test(input.inquiryId)) return {status: "unavailable"};
+  if (!conversationAccessTokenPattern.test(input.accessToken)) return {status: "unavailable"};
 
   try {
-    const response = await fetcher(`/api/inquiries/${encodeURIComponent(input.inquiryId)}/messages`, {
+    const response = await fetcher(`/api/conversations/${encodeURIComponent(input.accessToken)}/messages`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({message: input.message}),
@@ -96,14 +96,14 @@ export async function sendCustomerMessage(
 }
 
 export async function loadCustomerMessageHistory(
-  inquiryId: string,
+  accessToken: string,
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<LoadCustomerMessageHistoryResult> {
-  if (!opaqueIdPattern.test(inquiryId)) return {status: "unavailable"};
+  if (!conversationAccessTokenPattern.test(accessToken)) return {status: "unavailable"};
 
   try {
-    const response = await fetcher(`/api/inquiries/${encodeURIComponent(inquiryId)}/messages`, {
+    const response = await fetcher(`/api/conversations/${encodeURIComponent(accessToken)}/messages`, {
       method: "GET",
       headers: {Accept: "application/json"},
       signal,

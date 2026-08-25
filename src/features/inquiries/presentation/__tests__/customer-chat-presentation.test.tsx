@@ -13,7 +13,8 @@ const labels: CustomerChatLabels = enMessages.CustomerChat;
 
 describe("Customer chat presentation", () => {
   it("renders an accessible responsive chat foundation without exposing the inquiry path", () => {
-    const html = renderToStaticMarkup(<CustomerChat inquiryId="inquiry_private_1" labels={labels} />);
+    const accessToken = `ypc_${"A".repeat(43)}`;
+    const html = renderToStaticMarkup(<CustomerChat accessToken={accessToken} labels={labels} />);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
@@ -21,7 +22,7 @@ describe("Customer chat presentation", () => {
     expect(html).toContain('required=""');
     expect(html).toContain(labels.loadingHistory);
     expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).not.toContain("inquiry_private_1");
+    expect(html).not.toContain(accessToken);
   });
 
   it("renders loaded customer and support history at logical ends", () => {
