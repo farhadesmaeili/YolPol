@@ -18,8 +18,10 @@ export type CustomerChatLabels = Readonly<{
   send: string;
   sending: string;
   loading: string;
+  loadingHistory: string;
   sent: string;
   errorTitle: string;
+  historyErrorTitle: string;
   errors: Readonly<{
     required: string;
     tooLong: string;
@@ -27,5 +29,6 @@ export type CustomerChatLabels = Readonly<{
     rateLimited: string;
     network: string;
     service: string;
+    history: string;
   }>;
 }>;

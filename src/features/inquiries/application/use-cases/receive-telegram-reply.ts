@@ -1,6 +1,6 @@
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
 import type {CommunicationRecipientRepository} from "@/features/inquiries/application/ports/communication-ports";
-import type {ConversationMessageRepository} from "@/features/inquiries/application/ports/conversation-ports";
+import type {ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import type {Clock} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {ReceiveTelegramReplyResult} from "@/features/inquiries/application/results/receive-telegram-reply-result";
 import {Message} from "@/features/inquiries/domain/entities/message";
@@ -13,7 +13,7 @@ const telegramUpdateIdPattern = /^(?:0|[1-9][0-9]{0,19})$/u;
 export class ReceiveTelegramReply {
   constructor(
     private readonly recipients: CommunicationRecipientRepository,
-    private readonly messages: ConversationMessageRepository,
+    private readonly messages: ConversationMessageWriter,
     private readonly clock: Clock,
   ) {}
 

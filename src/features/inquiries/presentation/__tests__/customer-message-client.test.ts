@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from "vitest";
 
-import {sendCustomerMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
+import {loadCustomerMessageHistory, sendCustomerMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
 
 const signal = new AbortController().signal;
 const json = (value: unknown, status: number) => new Response(JSON.stringify(value), {status, headers: {"Content-Type": "application/json"}});
@@ -49,5 +49,46 @@ describe("Customer message client", () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(sendCustomerMessage({inquiryId: "../private", message: "Hello"}, signal, fetcher)).resolves.toEqual({status: "unavailable"});
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("Customer message history client", () => {
+  const history = {messages: [
+    {id: "message_1", senderType: "CUSTOMER", channel: "WEBSITE", body: "Customer update", createdAt: "2026-08-25T08:00:00.000Z"},
+    {id: "message_2", senderType: "INTERNAL_USER", channel: "TELEGRAM", body: "Support response", createdAt: "2026-08-25T08:05:00.000Z"},
+  ]};
+
+  it("loads and maps the exact ordered history contract", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(history, 200));
+    await expect(loadCustomerMessageHistory("inquiry_1", signal, fetcher)).resolves.toEqual({status: "loaded", messages: [
+      {id: "message_1", body: "Customer update", sender: "customer"},
+      {id: "message_2", body: "Support response", sender: "support"},
+    ]});
+    expect(fetcher).toHaveBeenCalledWith("/api/inquiries/inquiry_1/messages", {method: "GET", headers: {Accept: "application/json"}, signal});
+  });
+
+  it("accepts an empty Conversation history", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({messages: []}, 200));
+    await expect(loadCustomerMessageHistory("inquiry_1", signal, fetcher)).resolves.toEqual({status: "loaded", messages: []});
+  });
+
+  it.each([
+    [json({status: "error", code: "conversation_not_found"}, 404), {status: "unavailable"}],
+    [json({status: "error", code: "rate_limited"}, 429), {status: "rate_limited"}],
+    [json({status: "error", code: "service_unavailable", detail: "database secret"}, 503), {status: "unavailable"}],
+    [json({...history, conversationId: "hidden"}, 200), {status: "unavailable"}],
+    [json({messages: [{...history.messages[0], internalMetadata: "hidden"}]}, 200), {status: "unavailable"}],
+  ] as const)("maps unsafe or failed history responses safely", async (response, expected) => {
+    const result = await loadCustomerMessageHistory("inquiry_1", signal, vi.fn<typeof fetch>().mockResolvedValue(response));
+    expect(result).toEqual(expected);
+    expect(JSON.stringify(result)).not.toMatch(/database|secret|conversationId|internalMetadata/u);
+  });
+
+  it("maps network errors and rejects an unsafe Inquiry path", async () => {
+    const failingFetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("private network detail"));
+    await expect(loadCustomerMessageHistory("inquiry_1", signal, failingFetcher)).resolves.toEqual({status: "network_error"});
+    const unusedFetcher = vi.fn<typeof fetch>();
+    await expect(loadCustomerMessageHistory("../private", signal, unusedFetcher)).resolves.toEqual({status: "unavailable"});
+    expect(unusedFetcher).not.toHaveBeenCalled();
   });
 });

@@ -14,12 +14,30 @@ describe("Customer chat presentation state", () => {
     const drafted = customerChatReducer(createInitialCustomerChatState(), {type: "draft_changed", value: "Please update me"});
     const sending = customerChatReducer(drafted, {type: "submission_started"});
     const failed = customerChatReducer(sending, {type: "submission_failed", failure: "network"});
-    expect(failed).toMatchObject({draft: "Please update me", status: "idle", failure: "network", sentAnnouncement: false});
+    expect(failed).toMatchObject({draft: "Please update me", status: "idle", historyStatus: "loading", failure: "network", sentAnnouncement: false});
+  });
+
+  it("loads ordered history and preserves a concurrently acknowledged message", () => {
+    const local = customerChatReducer(createInitialCustomerChatState(), {type: "submission_succeeded", message: {id: "message_3", body: "Latest", sender: "customer"}});
+    const loaded = customerChatReducer(local, {type: "history_succeeded", messages: [
+      {id: "message_1", body: "First", sender: "customer"},
+      {id: "message_2", body: "Second", sender: "support"},
+    ]});
+    expect(loaded).toMatchObject({historyStatus: "loaded", historyFailure: null, messages: [
+      {id: "message_1", body: "First", sender: "customer"},
+      {id: "message_2", body: "Second", sender: "support"},
+      {id: "message_3", body: "Latest", sender: "customer"},
+    ]});
+  });
+
+  it("keeps sending available when history loading fails", () => {
+    const failed = customerChatReducer(createInitialCustomerChatState(), {type: "history_failed", failure: "service"});
+    expect(failed).toMatchObject({status: "idle", historyStatus: "failed", historyFailure: "service", failure: null});
   });
 
   it("adds an acknowledged message and clears only the sent draft", () => {
     const drafted = customerChatReducer(createInitialCustomerChatState(), {type: "draft_changed", value: "Please update me"});
     const sent = customerChatReducer(drafted, {type: "submission_succeeded", message: {id: "message_1", body: "Please update me", sender: "customer"}});
-    expect(sent).toEqual({draft: "", messages: [{id: "message_1", body: "Please update me", sender: "customer"}], status: "idle", failure: null, sentAnnouncement: true});
+    expect(sent).toEqual({draft: "", messages: [{id: "message_1", body: "Please update me", sender: "customer"}], status: "idle", historyStatus: "loading", historyFailure: null, failure: null, sentAnnouncement: true});
   });
 });

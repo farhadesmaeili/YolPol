@@ -6,6 +6,7 @@ import {inquiryDevelopmentOrigin} from "@/shared/config/inquiry-development";
 const rateLimitConfig = parseInquiryRateLimitConfig();
 const rateLimiter = new InquiryRateLimiter(rateLimitConfig);
 const customerMessageRateLimiter = new InquiryRateLimiter(rateLimitConfig);
+const customerMessageHistoryRateLimiter = new InquiryRateLimiter(rateLimitConfig);
 const approvedDevelopmentOrigins = new Set([inquiryDevelopmentOrigin.origin]);
 
 export function getInquiryHttpOptions() {
@@ -14,4 +15,8 @@ export function getInquiryHttpOptions() {
 
 export function getCustomerMessageHttpOptions() {
   return Object.freeze({rateLimiter: customerMessageRateLimiter, approvedDevelopmentOrigins});
+}
+
+export function getCustomerMessageHistoryHttpOptions() {
+  return Object.freeze({rateLimiter: customerMessageHistoryRateLimiter, approvedDevelopmentOrigins});
 }
