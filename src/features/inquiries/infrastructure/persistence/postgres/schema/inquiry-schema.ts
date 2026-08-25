@@ -86,6 +86,27 @@ export const conversationMessages = pgTable("conversation_messages", {
   check("conversation_messages_body_length_check", sql`char_length(${table.body}) between 1 and 10000`),
 ]);
 
+export const communicationRecipients = pgTable("communication_recipients", {
+  id: varchar("id", {length: 128}).primaryKey(),
+  channel: varchar("channel", {length: 20}).notNull(),
+  kind: varchar("kind", {length: 20}).notNull(),
+  externalId: varchar("external_id", {length: 160}).notNull(),
+  displayName: varchar("display_name", {length: 120}).notNull(),
+  authorized: boolean("authorized").notNull().default(false),
+  notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [
+  uniqueIndex("communication_recipients_channel_external_uidx").on(table.channel, table.externalId),
+  check("communication_recipients_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("communication_recipients_channel_check", sql`${table.channel} in ('TELEGRAM','EMAIL','WHATSAPP')`),
+  check("communication_recipients_kind_check", sql`${table.kind} in ('TEAM_GROUP','TEAM_MEMBER')`),
+  check("communication_recipients_external_id_length_check", sql`char_length(${table.externalId}) between 1 and 160`),
+  check("communication_recipients_display_name_length_check", sql`char_length(${table.displayName}) between 1 and 120`),
+  check("communication_recipients_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt}`),
+  index("communication_recipients_notifications_idx").on(table.channel, table.authorized, table.notificationsEnabled),
+]);
+
 export const inquiryOutbox = pgTable("inquiry_outbox", {
   id: varchar("id", {length: 160}).primaryKey(),
   eventType: varchar("event_type", {length: 64}).notNull(),
@@ -102,4 +123,4 @@ export const inquiryOutbox = pgTable("inquiry_outbox", {
   index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationMessages, inquiryOutbox};
+export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationMessages, communicationRecipients, inquiryOutbox};
