@@ -8,10 +8,13 @@ export type WorkflowWriteResult = "changed" | "conflict" | "member_inactive";
 export type InquiryStatusSnapshot = Readonly<{status: InquiryStatus; updatedAt: Date}>;
 export type InquiryAssignmentSnapshot = Readonly<{teamMemberId: string | null; changedAt: Date | null}>;
 
-export interface InquiryWorkflowRepository {
+export interface InquiryWorkflowHistoryReader {
+  readHistory(inquiryId: string): Promise<readonly StoredInquiryWorkflowEvent[]>;
+}
+
+export interface InquiryWorkflowRepository extends InquiryWorkflowHistoryReader {
   findAssignment(inquiryId: string): Promise<InquiryAssignment>;
   findTeamMember(id: string): Promise<TeamMember | null>;
   changeStatus(inquiry: Inquiry, expected: InquiryStatusSnapshot, event: InquiryWorkflowEvent): Promise<WorkflowWriteResult>;
   changeAssignment(assignment: InquiryAssignment, expected: InquiryAssignmentSnapshot, event: InquiryWorkflowEvent): Promise<WorkflowWriteResult>;
-  readHistory(inquiryId: string): Promise<readonly StoredInquiryWorkflowEvent[]>;
 }
