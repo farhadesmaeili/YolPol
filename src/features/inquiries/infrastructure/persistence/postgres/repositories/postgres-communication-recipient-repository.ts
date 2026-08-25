@@ -31,4 +31,24 @@ export class PostgresCommunicationRecipientRepository implements CommunicationRe
       throw new InquiryPersistenceError();
     }
   }
+
+  async findAuthorizedTeamMember(channel: CommunicationChannel, externalId: string): Promise<CommunicationRecipient | null> {
+    try {
+      const [row] = await this.database.select({
+        id: communicationRecipients.id,
+        channel: communicationRecipients.channel,
+        kind: communicationRecipients.kind,
+        externalId: communicationRecipients.externalId,
+        displayName: communicationRecipients.displayName,
+      }).from(communicationRecipients).where(and(
+        eq(communicationRecipients.channel, channel),
+        eq(communicationRecipients.kind, "TEAM_MEMBER"),
+        eq(communicationRecipients.externalId, externalId),
+        eq(communicationRecipients.authorized, true),
+      )).limit(1);
+      return row ? Object.freeze({...row, channel: row.channel as CommunicationChannel, kind: row.kind as CommunicationRecipientKind}) : null;
+    } catch {
+      throw new InquiryPersistenceError();
+    }
+  }
 }

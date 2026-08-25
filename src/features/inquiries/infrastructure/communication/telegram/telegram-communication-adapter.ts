@@ -3,6 +3,7 @@ import {formatInquiryCreatedNotification} from "@/features/inquiries/application
 import type {CommunicationRecipientRepository, TelegramMessageTransport, TelegramReplyAdapter} from "@/features/inquiries/application/ports/communication-ports";
 import type {TelegramNotificationProvider} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {Inquiry} from "@/features/inquiries/domain/entities/inquiry";
+import {parseTelegramUpdate} from "@/features/inquiries/infrastructure/communication/telegram/telegram-update-parser";
 
 export class TelegramCommunicationAdapter implements TelegramNotificationProvider, TelegramReplyAdapter {
   constructor(
@@ -21,8 +22,6 @@ export class TelegramCommunicationAdapter implements TelegramNotificationProvide
   }
 
   toExternalChannelReply(input: unknown): ExternalChannelReply | null {
-    // Parsing is intentionally deferred until a verified Telegram update contract is introduced.
-    void input;
-    return null;
+    return parseTelegramUpdate(input);
   }
 }
