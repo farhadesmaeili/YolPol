@@ -50,6 +50,13 @@
       "when": 1787662225470,
       "tag": "0006_hesitant_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787682764730,
+      "tag": "0007_staff_authentication",
+      "breakpoints": true
     }
   ]
 }

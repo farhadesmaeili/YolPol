@@ -6,7 +6,10 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required for Drizzle commands
 
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema.ts",
+  schema: [
+    "./src/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema.ts",
+    "./src/features/staff-authentication/infrastructure/persistence/postgres/schema/staff-authentication-schema.ts",
+  ],
   out: "./drizzle",
   dbCredentials: {url: databaseUrl},
   strict: true,

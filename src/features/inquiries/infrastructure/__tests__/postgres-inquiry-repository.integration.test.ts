@@ -176,7 +176,7 @@ describe("PostgresInquiryRepository", () => {
     const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events') order by table_name");
     expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("7");
+    expect(migrations.rows[0]?.count).toBe("8");
   });
 
   it("persists status and assignment changes with ordered immutable workflow history", async () => {
