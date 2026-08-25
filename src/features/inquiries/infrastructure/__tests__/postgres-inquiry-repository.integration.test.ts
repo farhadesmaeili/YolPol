@@ -36,6 +36,11 @@ const item = (position: number, unit: InquiryItemInput["unit"]): InquiryItemInpu
   unit,
 });
 
+async function cleanInquiryIntegrationTables() {
+  // Staff Auth tables are explicit because their FK chain references Inquiry Team Members.
+  await pool.query("truncate table staff_sessions, staff_accounts, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+}
+
 beforeAll(async () => {
   pool = createPostgresPool(safeIntegrationPoolConfig(process.env.INTEGRATION_DATABASE_URL));
   await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
@@ -46,10 +51,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   const identity = await pool.query<{current_database: string; current_user: string}>("select current_database(), current_user");
   expect(identity.rows[0]).toEqual({current_database: "yolpol_integration", current_user: "yolpol_test"});
-  await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await cleanInquiryIntegrationTables();
 });
 
-afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries"); });
+afterEach(async () => { vi.unstubAllEnvs(); await cleanInquiryIntegrationTables(); });
 
 afterAll(async () => { if (pool) await pool.end(); });
 
@@ -358,7 +363,7 @@ describe("PostgresInquiryRepository", () => {
     const inquiry = new InquiryTestBuilder().with({id: "duplicate-inquiry"}).buildNew();
     await repository.save(inquiry);
     await expect(repository.save(inquiry)).rejects.toBeInstanceOf(DuplicateInquiryIdError);
-    await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+    await cleanInquiryIntegrationTables();
     const results = await Promise.allSettled([repository.save(inquiry), repository.save(inquiry)]);
     expect(results.filter(({status}) => status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected" && result.reason instanceof DuplicateInquiryIdError)).toHaveLength(1);
