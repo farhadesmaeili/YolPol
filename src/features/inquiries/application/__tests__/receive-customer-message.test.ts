@@ -1,12 +1,12 @@
 import {describe, expect, it, vi} from "vitest";
 
-import type {ConversationMessageRepository} from "@/features/inquiries/application/ports/conversation-ports";
+import type {ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import {ReceiveCustomerMessage} from "@/features/inquiries/application/use-cases/receive-customer-message";
 
 const input = {inquiryId: "inquiry-1", message: " Please send an update. "};
 
 function create(result: "created" | "duplicate" | "conversation_not_found" = "created") {
-  const appendForInquiry = vi.fn<ConversationMessageRepository["appendForInquiry"]>().mockResolvedValue(result);
+  const appendForInquiry = vi.fn<ConversationMessageWriter["appendForInquiry"]>().mockResolvedValue(result);
   const useCase = new ReceiveCustomerMessage(
     {appendForInquiry},
     {generate: () => "website_message_1"},
@@ -44,7 +44,7 @@ describe("ReceiveCustomerMessage", () => {
   });
 
   it("maps ID, clock, duplicate, and persistence failures safely", async () => {
-    const messages: ConversationMessageRepository = {appendForInquiry: vi.fn().mockRejectedValue(new Error("database secret"))};
+    const messages: ConversationMessageWriter = {appendForInquiry: vi.fn().mockRejectedValue(new Error("database secret"))};
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "message-1"}, {now: () => new Date()}).execute(input)).resolves.toEqual({status: "persistence_failed"});
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "invalid/id"}, {now: () => new Date()}).execute(input)).resolves.toEqual({status: "dependency_failed"});
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "message-1"}, {now: () => new Date("invalid")}).execute(input)).resolves.toEqual({status: "dependency_failed"});

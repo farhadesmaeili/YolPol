@@ -1,5 +1,5 @@
 import type {ReceiveCustomerMessageInput} from "@/features/inquiries/application/dto/customer-message-dto";
-import type {ConversationMessageIdGenerator, ConversationMessageRepository} from "@/features/inquiries/application/ports/conversation-ports";
+import type {ConversationMessageIdGenerator, ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import type {Clock} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {ReceiveCustomerMessageResult} from "@/features/inquiries/application/results/receive-customer-message-result";
 import {Message} from "@/features/inquiries/domain/entities/message";
@@ -10,7 +10,7 @@ import {normalizeMessageBody} from "@/features/inquiries/domain/validation/messa
 
 export class ReceiveCustomerMessage {
   constructor(
-    private readonly messages: ConversationMessageRepository,
+    private readonly messages: ConversationMessageWriter,
     private readonly idGenerator: ConversationMessageIdGenerator,
     private readonly clock: Clock,
   ) {}

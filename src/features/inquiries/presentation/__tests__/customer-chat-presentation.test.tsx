@@ -14,16 +14,17 @@ const labels: CustomerChatLabels = enMessages.CustomerChat;
 describe("Customer chat presentation", () => {
   it("renders an accessible responsive chat foundation without exposing the inquiry path", () => {
     const html = renderToStaticMarkup(<CustomerChat inquiryId="inquiry_private_1" labels={labels} />);
-    expect(html).toContain('aria-busy="false"');
+    expect(html).toContain('aria-busy="true"');
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('name="message"');
     expect(html).toContain('required=""');
+    expect(html).toContain(labels.loadingHistory);
     expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
     expect(html).not.toContain("inquiry_private_1");
   });
 
-  it("renders customer and support messages at logical ends", () => {
+  it("renders loaded customer and support history at logical ends", () => {
     const html = renderToStaticMarkup(<MessageList messages={[{id: "1", body: "Customer message", sender: "customer"}, {id: "2", body: "Support reply", sender: "support"}]} label="Messages" empty="Empty" customerAuthor="You" supportAuthor="YolPol" />);
     expect(html).toContain("justify-end");
     expect(html).toContain("justify-start");

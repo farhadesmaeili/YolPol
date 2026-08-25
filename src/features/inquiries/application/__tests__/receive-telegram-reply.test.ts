@@ -2,7 +2,7 @@ import {describe, expect, it, vi} from "vitest";
 
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
 import type {CommunicationRecipientRepository} from "@/features/inquiries/application/ports/communication-ports";
-import type {ConversationMessageRepository} from "@/features/inquiries/application/ports/conversation-ports";
+import type {ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import {ReceiveTelegramReply} from "@/features/inquiries/application/use-cases/receive-telegram-reply";
 
 const reply: ExternalChannelReply = {
@@ -26,7 +26,7 @@ function recipientRepository(authorized = true): CommunicationRecipientRepositor
 
 describe("ReceiveTelegramReply", () => {
   it("stores an authorized Telegram reply as an internal conversation message", async () => {
-    const appendForInquiry = vi.fn<ConversationMessageRepository["appendForInquiry"]>().mockResolvedValue("created");
+    const appendForInquiry = vi.fn<ConversationMessageWriter["appendForInquiry"]>().mockResolvedValue("created");
     const useCase = new ReceiveTelegramReply(recipientRepository(), {appendForInquiry}, {now: () => new Date("2026-08-25T01:02:03.000Z")});
 
     await expect(useCase.execute(reply)).resolves.toEqual({status: "created"});
@@ -41,7 +41,7 @@ describe("ReceiveTelegramReply", () => {
   });
 
   it("rejects an unauthorized sender before conversation persistence", async () => {
-    const appendForInquiry = vi.fn<ConversationMessageRepository["appendForInquiry"]>();
+    const appendForInquiry = vi.fn<ConversationMessageWriter["appendForInquiry"]>();
     const useCase = new ReceiveTelegramReply(recipientRepository(false), {appendForInquiry}, {now: () => new Date()});
     await expect(useCase.execute(reply)).resolves.toEqual({status: "unauthorized"});
     expect(appendForInquiry).not.toHaveBeenCalled();
@@ -53,7 +53,7 @@ describe("ReceiveTelegramReply", () => {
   });
 
   it("rejects invalid provider identifiers and message values", async () => {
-    const appendForInquiry = vi.fn<ConversationMessageRepository["appendForInquiry"]>();
+    const appendForInquiry = vi.fn<ConversationMessageWriter["appendForInquiry"]>();
     const useCase = new ReceiveTelegramReply(recipientRepository(), {appendForInquiry}, {now: () => new Date()});
     await expect(useCase.execute({...reply, externalUpdateId: "1:2"})).resolves.toEqual({status: "invalid_reply"});
     await expect(useCase.execute({...reply, inquiryId: "invalid/id"})).resolves.toEqual({status: "invalid_reply"});
