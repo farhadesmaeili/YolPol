@@ -7,6 +7,8 @@ const rateLimitConfig = parseInquiryRateLimitConfig();
 const rateLimiter = new InquiryRateLimiter(rateLimitConfig);
 const customerMessageRateLimiter = new InquiryRateLimiter(rateLimitConfig);
 const customerMessageHistoryRateLimiter = new InquiryRateLimiter(rateLimitConfig);
+const customerConversationMessageRateLimiter = new InquiryRateLimiter(rateLimitConfig);
+const customerConversationHistoryRateLimiter = new InquiryRateLimiter(rateLimitConfig);
 const approvedDevelopmentOrigins = new Set([inquiryDevelopmentOrigin.origin]);
 
 export function getInquiryHttpOptions() {
@@ -19,4 +21,12 @@ export function getCustomerMessageHttpOptions() {
 
 export function getCustomerMessageHistoryHttpOptions() {
   return Object.freeze({rateLimiter: customerMessageHistoryRateLimiter, approvedDevelopmentOrigins});
+}
+
+export function getCustomerConversationMessageHttpOptions() {
+  return Object.freeze({rateLimiter: customerConversationMessageRateLimiter, approvedDevelopmentOrigins});
+}
+
+export function getCustomerConversationHistoryHttpOptions() {
+  return Object.freeze({rateLimiter: customerConversationHistoryRateLimiter, approvedDevelopmentOrigins});
 }

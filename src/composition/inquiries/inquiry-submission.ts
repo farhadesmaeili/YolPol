@@ -6,6 +6,8 @@ import {findProductDtoById} from "@/composition/products/product-catalog";
 import {getInquiryRepository} from "@/composition/inquiries/inquiry-persistence";
 import type {InquiryProductCatalog, InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import {SubmitInquiry} from "@/features/inquiries/application/use-cases/submit-inquiry";
+import {CreateConversationAccess} from "@/features/inquiries/application/use-cases/create-conversation-access";
+import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
 import {supportedLocales} from "@/shared/types/locale";
 
 export const inquiryProductCatalog: InquiryProductCatalog = {
@@ -29,5 +31,5 @@ export function getInquirySubmission(): SubmitInquiry {
 }
 
 export function createInquirySubmission(repository: InquiryRepository): SubmitInquiry {
-  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()});
+  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()}, new CreateConversationAccess(new NodeConversationAccessTokenService()));
 }

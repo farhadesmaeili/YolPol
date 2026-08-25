@@ -69,6 +69,19 @@ export const conversations = pgTable("conversations", {
   check("conversations_channel_check", sql`${table.channel} in ('WEBSITE','TELEGRAM','EMAIL','WHATSAPP')`),
 ]);
 
+export const conversationAccess = pgTable("conversation_access", {
+  conversationId: varchar("conversation_id", {length: 128}).primaryKey().references(() => conversations.id, {onDelete: "cascade"}),
+  tokenLookup: varchar("token_lookup", {length: 64}).notNull(),
+  tokenHash: varchar("token_hash", {length: 64}).notNull(),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+  expiresAt: timestamp("expires_at", {withTimezone: true, mode: "date"}),
+}, (table) => [
+  uniqueIndex("conversation_access_token_lookup_uidx").on(table.tokenLookup),
+  check("conversation_access_token_lookup_format_check", sql`${table.tokenLookup} ~ '^[a-f0-9]{64}$'`),
+  check("conversation_access_token_hash_format_check", sql`${table.tokenHash} ~ '^[a-f0-9]{64}$'`),
+  check("conversation_access_expiration_check", sql`${table.expiresAt} is null or ${table.expiresAt} > ${table.createdAt}`),
+]);
+
 export const conversationMessages = pgTable("conversation_messages", {
   id: varchar("id", {length: 160}).primaryKey(),
   conversationId: varchar("conversation_id", {length: 128}).notNull().references(() => conversations.id, {onDelete: "cascade"}),
@@ -123,4 +136,4 @@ export const inquiryOutbox = pgTable("inquiry_outbox", {
   index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationMessages, communicationRecipients, inquiryOutbox};
+export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationAccess, conversationMessages, communicationRecipients, inquiryOutbox};

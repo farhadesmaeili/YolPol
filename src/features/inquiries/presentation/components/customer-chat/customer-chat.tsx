@@ -30,7 +30,7 @@ function historyFailureMessage(failure: CustomerChatHistoryFailure, labels: Cust
   }
 }
 
-export function CustomerChat({inquiryId, labels}: {inquiryId: string; labels: CustomerChatLabels}) {
+export function CustomerChat({accessToken, labels}: {accessToken: string; labels: CustomerChatLabels}) {
   const headingId = useId();
   const errorId = useId();
   const historyErrorId = useId();
@@ -45,7 +45,7 @@ export function CustomerChat({inquiryId, labels}: {inquiryId: string; labels: Cu
     const controller = new AbortController();
     activeHistoryController.current = controller;
     dispatch({type: "history_started"});
-    void loadCustomerMessageHistory(inquiryId, controller.signal).then((result) => {
+    void loadCustomerMessageHistory(accessToken, controller.signal).then((result) => {
       if (!mounted.current || activeHistoryController.current !== controller) return;
       activeHistoryController.current = null;
       if (result.status === "loaded") dispatch({type: "history_succeeded", messages: result.messages});
@@ -59,7 +59,7 @@ export function CustomerChat({inquiryId, labels}: {inquiryId: string; labels: Cu
       activeSubmissionController.current = null;
       submissionInFlight.current = false;
     };
-  }, [inquiryId]);
+  }, [accessToken]);
 
   const submit = async () => {
     if (submissionInFlight.current) return;
@@ -74,7 +74,7 @@ export function CustomerChat({inquiryId, labels}: {inquiryId: string; labels: Cu
     submissionInFlight.current = true;
     activeSubmissionController.current = controller;
     dispatch({type: "submission_started"});
-    const result = await sendCustomerMessage({inquiryId, message}, controller.signal);
+    const result = await sendCustomerMessage({accessToken, message}, controller.signal);
     const isActiveSubmission = activeSubmissionController.current === controller;
     if (isActiveSubmission) {
       activeSubmissionController.current = null;
