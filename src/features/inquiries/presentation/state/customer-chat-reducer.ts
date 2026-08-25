@@ -23,7 +23,8 @@ export type CustomerChatAction =
   | Readonly<{type: "history_failed"; failure: CustomerChatHistoryFailure}>
   | Readonly<{type: "submission_started"}>
   | Readonly<{type: "submission_failed"; failure: CustomerChatFailure}>
-  | Readonly<{type: "submission_succeeded"; message: CustomerChatMessage}>;
+  | Readonly<{type: "submission_succeeded"; message: CustomerChatMessage}>
+  | Readonly<{type: "realtime_message_received"; message: CustomerChatMessage}>;
 
 export function createInitialCustomerChatState(): CustomerChatState {
   return Object.freeze({draft: "", messages: Object.freeze([]), status: "idle", historyStatus: "loading", historyFailure: null, failure: null, sentAnnouncement: false});
@@ -62,5 +63,8 @@ export function customerChatReducer(state: CustomerChatState, action: CustomerCh
         failure: null,
         sentAnnouncement: true,
       });
+    case "realtime_message_received":
+      if (state.messages.some(({id}) => id === action.message.id)) return state;
+      return Object.freeze({...state, messages: Object.freeze([...state.messages, Object.freeze(action.message)])});
   }
 }
