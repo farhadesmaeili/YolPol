@@ -43,6 +43,13 @@
       "when": 1787629463650,
       "tag": "0005_customer_conversation_access",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787662225470,
+      "tag": "0006_hesitant_cyclops",
+      "breakpoints": true
     }
   ]
 }
