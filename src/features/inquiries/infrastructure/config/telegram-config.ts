@@ -8,6 +8,8 @@ export type TelegramConfig = Readonly<{
   webhookSecret: string;
 }>;
 
+export type TelegramWebhookConfig = Readonly<{webhookSecret: string}>;
+
 type TelegramEnvironment = Readonly<Record<string, string | undefined>>;
 
 function required(environment: TelegramEnvironment, name: string): string {
@@ -22,4 +24,8 @@ export function readTelegramConfig(environment: TelegramEnvironment = process.en
     notificationChatId: required(environment, "TELEGRAM_NOTIFICATION_CHAT_ID"),
     webhookSecret: required(environment, "TELEGRAM_WEBHOOK_SECRET"),
   });
+}
+
+export function readTelegramWebhookConfig(environment: TelegramEnvironment = process.env): TelegramWebhookConfig {
+  return Object.freeze({webhookSecret: required(environment, "TELEGRAM_WEBHOOK_SECRET")});
 }

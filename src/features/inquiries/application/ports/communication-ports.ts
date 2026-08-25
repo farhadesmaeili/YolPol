@@ -15,6 +15,7 @@ export type CommunicationRecipient = Readonly<{
 
 export interface CommunicationRecipientRepository {
   findAuthorizedNotificationRecipients(channel: CommunicationChannel): Promise<readonly CommunicationRecipient[]>;
+  findAuthorizedTeamMember(channel: CommunicationChannel, externalId: string): Promise<CommunicationRecipient | null>;
 }
 
 export interface TelegramMessageTransport {
