@@ -5,3 +5,5 @@ export type AppendConversationMessageResult = "created" | "duplicate" | "convers
 export interface ConversationMessageRepository {
   appendForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult>;
 }
+
+export interface ConversationMessageIdGenerator { generate(): string; }
