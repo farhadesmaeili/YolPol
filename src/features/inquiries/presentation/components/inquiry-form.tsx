@@ -3,9 +3,11 @@
 import {useEffect, useReducer, useRef} from "react";
 
 import {contactMethods, targetCountries} from "@/features/inquiries/domain/types/inquiry-types";
+import {CustomerChat} from "@/features/inquiries/presentation/components/customer-chat/customer-chat";
 import {mapInquiryDraft, normalizeInquiryPhoneDraft, preselectInquiryProducts} from "@/features/inquiries/presentation/parsers/inquiry-draft-mapper";
 import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
 import {createInitialInquiryFormState, inquiryAddedProductFocusId, inquiryControlId, inquiryErrorId, inquiryFailureFocusId, inquiryFormReducer, type InquiryTextField} from "@/features/inquiries/presentation/state/inquiry-form-reducer";
+import type {CustomerChatLabels} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 import type {InquiryDraftFailure, InquiryDraftLine, InquiryFormLabels, InquiryProductOption} from "@/features/inquiries/presentation/view-models/inquiry-form-view-model";
 import {LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
 import type {Locale} from "@/shared/types/locale";
@@ -80,7 +82,7 @@ export function revealInquiryFeedback(feedback: Pick<HTMLElement, "focus" | "get
   if (bounds.top < 0 || bounds.bottom > viewportHeight) feedback.scrollIntoView({block: "center", behavior: reducedMotion ? "auto" : "smooth"});
 }
 
-export function InquiryForm({locale, products, labels, privacyHref}: {locale: Locale; products: readonly InquiryProductOption[]; labels: InquiryFormLabels; privacyHref: string}) {
+export function InquiryForm({locale, products, labels, chatLabels, privacyHref}: {locale: Locale; products: readonly InquiryProductOption[]; labels: InquiryFormLabels; chatLabels: CustomerChatLabels; privacyHref: string}) {
   const formRef = useRef<HTMLFormElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
   const submissionInFlight = useRef(false);
@@ -136,7 +138,7 @@ export function InquiryForm({locale, products, labels, privacyHref}: {locale: Lo
     dispatch({type: "add_product", availableIds: available.map(({id}) => id)});
     window.setTimeout(() => document.getElementById(inquiryAddedProductFocusId(newIndex))?.focus(), 0);
   };
-  return <form ref={formRef} noValidate className="mt-12 min-w-0 space-y-8" onSubmit={(event) => { event.preventDefault(); void submit(); }} onReset={(event) => { event.preventDefault(); dispatch({type: "reset"}); }}>
+  return <><form ref={formRef} noValidate className="mt-12 min-w-0 space-y-8" onSubmit={(event) => { event.preventDefault(); void submit(); }} onReset={(event) => { event.preventDefault(); dispatch({type: "reset"}); }}>
     <fieldset className="grid min-w-0 gap-5 border border-stone-950/10 bg-white/35 p-5 shadow-[0_28px_80px_-60px_rgba(28,25,23,0.5)] backdrop-blur-sm sm:grid-cols-2 sm:p-8"><legend className="px-3 text-xl font-semibold text-stone-950">{labels.customer}</legend>
       <Field label={labels.fullName} error={fieldError("fullName")}><input id={inquiryControlId("fullName")} name="fullName" autoComplete="name" className={fieldClass} required value={state.fields.fullName} onChange={(event) => updateField("fullName", event.target.value)} {...invalidProps("fullName")} /></Field>
       <Field label={labels.company} error={fieldError("company")}><input id={inquiryControlId("company")} name="company" autoComplete="organization" className={fieldClass} value={state.fields.company} onChange={(event) => updateField("company", event.target.value)} {...invalidProps("company")} /></Field>
@@ -158,7 +160,7 @@ export function InquiryForm({locale, products, labels, privacyHref}: {locale: Lo
     <div className="flex items-start gap-3"><input id={inquiryControlId("privacy")} type="checkbox" required aria-label={labels.privacyAgreement} checked={state.fields.privacyAccepted} onChange={(event) => dispatch({type: "update_consent", value: event.target.checked})} className="mt-1 size-5" {...invalidProps("privacy")} /><span><a href={privacyHref} className="font-semibold text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-focus">{labels.privacyLink}</a>{fieldError("privacy")}</span></div>
     <button type="submit" disabled={state.feedback === "submitting"} className="min-h-12 bg-emerald-950 px-7 font-semibold text-white outline-none transition-colors hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-4 motion-reduce:transition-none">{state.feedback === "submitting" ? labels.submitting : labels.submit}</button>
     <InquirySubmissionFeedback state={state} labels={labels} feedbackRef={feedbackRef} />
-  </form>;
+  </form>{state.feedback === "succeeded" && state.inquiryId ? <CustomerChat inquiryId={state.inquiryId} labels={chatLabels} /> : null}</>;
 }
 
 export function InquirySubmissionFeedback({state, labels, feedbackRef}: {state: Pick<ReturnType<typeof createInitialInquiryFormState>, "feedback" | "inquiryId" | "failure" | "submissionFailure">; labels: InquiryFormLabels; feedbackRef?: React.RefObject<HTMLDivElement | null>}) {
