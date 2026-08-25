@@ -1,6 +1,6 @@
 import type {Locale} from "@/shared/types/locale";
 
-export const inquiryStatuses = ["received", "processing", "contacted", "quoted", "won", "lost", "spam"] as const;
+export const inquiryStatuses = ["NEW", "WAITING_FOR_TEAM", "WAITING_FOR_CUSTOMER", "QUOTED", "CONFIRMED", "CLOSED"] as const;
 export type InquiryStatus = (typeof inquiryStatuses)[number];
 export const inquiryUnits = ["pieces", "packages", "pallets", "truckloads"] as const;
 export type InquiryUnit = (typeof inquiryUnits)[number];

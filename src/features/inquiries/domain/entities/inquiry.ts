@@ -5,7 +5,14 @@ import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import {supportedLocales} from "@/shared/types/locale";
 
-const transitions: Readonly<Record<InquiryStatus, readonly InquiryStatus[]>> = Object.freeze({received: ["processing", "spam"], processing: ["contacted", "spam"], contacted: ["quoted", "lost", "spam"], quoted: ["won", "lost", "spam"], won: [], lost: [], spam: []});
+const transitions: Readonly<Record<InquiryStatus, readonly InquiryStatus[]>> = Object.freeze({
+  NEW: ["WAITING_FOR_TEAM", "CLOSED"],
+  WAITING_FOR_TEAM: ["WAITING_FOR_CUSTOMER", "QUOTED", "CLOSED"],
+  WAITING_FOR_CUSTOMER: ["WAITING_FOR_TEAM", "QUOTED", "CLOSED"],
+  QUOTED: ["WAITING_FOR_TEAM", "WAITING_FOR_CUSTOMER", "CONFIRMED", "CLOSED"],
+  CONFIRMED: ["CLOSED"],
+  CLOSED: [],
+});
 const freeze = <T extends object>(value: T): Readonly<T> => Object.freeze({...value});
 const date = (value: unknown, field: string): Date => {
   if (!(value instanceof Date) || !Number.isFinite(value.getTime())) throw new InquiryValidationError(field, `${field} must be a valid date.`);
@@ -18,7 +25,7 @@ function item(input: InquiryItemInput): Readonly<InquiryItemInput> {
 export class Inquiry {
   private constructor(readonly id: InquiryId, private readonly _contact: Readonly<InquiryCreateInput["contact"]>, private readonly _location: Readonly<InquiryCreateInput["location"]>, private readonly _destination: Readonly<InquiryCreateInput["destination"]> | undefined, readonly message: string | undefined, private readonly _privacy: Readonly<Omit<InquiryCreateInput["privacy"], "acceptedAt"> & {acceptedAt: Date}>, private readonly _source: Readonly<InquiryCreateInput["source"]>, private readonly _items: readonly Readonly<InquiryItemInput>[], private _status: InquiryStatus, private readonly _createdAt: Date, private _updatedAt: Date) {}
 
-  static create(input: InquiryCreateInput): Inquiry { return Inquiry.build({...input, status: "received", updatedAt: input.createdAt}, false); }
+  static create(input: InquiryCreateInput): Inquiry { return Inquiry.build({...input, status: "NEW", updatedAt: input.createdAt}, false); }
   static reconstitute(input: InquiryReconstitutionInput): Inquiry { return Inquiry.build(input, true); }
   private static build(input: InquiryReconstitutionInput, allowLegacy: boolean): Inquiry {
     const id = InquiryId.create(input.id);
@@ -50,7 +57,7 @@ export class Inquiry {
     if (!inquiryStatuses.includes(status)) throw new InquiryTransitionError("Unsupported target status.");
     if (status === this._status) return;
     const timestamp = date(at, "transitionAt");
-    if (timestamp < this._updatedAt) throw new InquiryTransitionError("Transition timestamp cannot move backwards.");
+    if (timestamp <= this._updatedAt) throw new InquiryTransitionError("Transition timestamp must move forwards.");
     if (!transitions[this._status].includes(status)) throw new InquiryTransitionError(`Cannot transition from ${this._status} to ${status}.`);
     this._status = status; this._updatedAt = timestamp;
   }

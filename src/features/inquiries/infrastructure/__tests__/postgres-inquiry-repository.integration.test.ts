@@ -10,6 +10,7 @@ import type {InquiryItemInput} from "@/features/inquiries/domain/types/inquiry-t
 import {createPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
+import {PostgresInquiryWorkflowRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-workflow-repository";
 import {PostgresConversationAccessRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-access-repository";
 import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
 import {inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
@@ -19,9 +20,12 @@ import {safeIntegrationPoolConfig} from "@/features/inquiries/testing/integratio
 import {createInquiryRequestHandler} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
 import {createInquirySubmission} from "@/composition/inquiries/inquiry-submission";
 import {deleteExpiredInquiries, inquiryRetentionCutoff} from "../../../../../tooling/retention/delete-expired-inquiries.mjs";
+import {createAssignmentWorkflowEvent, createStatusChangedWorkflowEvent} from "@/features/inquiries/domain/events/inquiry-workflow-event";
+import {TeamMember} from "@/features/inquiries/domain/entities/team-member";
 
 let pool: Pool;
 let repository: PostgresInquiryRepository;
+let workflowRepository: PostgresInquiryWorkflowRepository;
 
 const item = (position: number, unit: InquiryItemInput["unit"]): InquiryItemInput => ({
   productId: `test-product-${position}`,
@@ -36,15 +40,16 @@ beforeAll(async () => {
   pool = createPostgresPool(safeIntegrationPoolConfig(process.env.INTEGRATION_DATABASE_URL));
   await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
   repository = new PostgresInquiryRepository(pool);
+  workflowRepository = new PostgresInquiryWorkflowRepository(pool);
 });
 
 beforeEach(async () => {
   const identity = await pool.query<{current_database: string; current_user: string}>("select current_database(), current_user");
   expect(identity.rows[0]).toEqual({current_database: "yolpol_integration", current_user: "yolpol_test"});
-  await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
+  await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 });
 
-afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries"); });
+afterEach(async () => { vi.unstubAllEnvs(); await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries"); });
 
 afterAll(async () => { if (pool) await pool.end(); });
 
@@ -134,6 +139,8 @@ describe("PostgresInquiryRepository", () => {
     const events=await pool.query<{event_type:string;aggregate_id:string;payload:{inquiryId:string;occurredAt:string};attempts:number;processed_at:Date|null}>("select event_type,aggregate_id,payload,attempts,processed_at from inquiry_outbox");
     expect(events.rows).toEqual([{event_type:"InquiryCreated",aggregate_id:roots.rows[0]?.id,payload:{inquiryId:roots.rows[0]?.id,occurredAt:expect.any(String)},attempts:0,processed_at:null}]);
     expect(JSON.stringify(events.rows[0]?.payload)).not.toMatch(/price|secret|credential|token|api.?key/i);
+    const workflowEvents=await pool.query<{event_type:string;previous_value:string|null;new_value:string|null;actor_reference:string|null}>("select event_type,previous_value,new_value,actor_reference from inquiry_workflow_events");
+    expect(workflowEvents.rows).toEqual([{event_type:"INQUIRY_CREATED",previous_value:null,new_value:"NEW",actor_reference:null}]);
     const rows=await pool.query<{position:number;product_id:string;sku:string;slug:string;product_name:string;quantity:number;unit:string}>("select position,product_id,sku,slug,product_name,quantity,unit from inquiry_items order by position");
     expect(rows.rows).toEqual([
       {position:0,product_id:"ylp-gb-250-og-rd",sku:"YLP-GB-250-OG-RD",slug:"250ml-olive-green-round-glass-bottle",product_name:"250ml Olive Green Round Glass Bottle",quantity:27,unit:"pallets"},
@@ -166,18 +173,142 @@ describe("PostgresInquiryRepository", () => {
   });
   it("applies committed migrations and exposes the expected tables", async () => {
     await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
-    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_items','inquiry_outbox') order by table_name");
-    expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_items", "inquiry_outbox"]);
+    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events') order by table_name");
+    expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("5");
+    expect(migrations.rows[0]?.count).toBe("7");
+  });
+
+  it("persists status and assignment changes with ordered immutable workflow history", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "workflow-persistence"}).buildNew();
+    await repository.save(inquiry);
+    await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-1','Active member',true,'2026-01-01','2026-01-01'),('member-2','Inactive member',false,'2026-01-01','2026-01-01')");
+
+    const restored = await repository.findById(inquiry.id.value);
+    expect(restored).not.toBeNull();
+    const statusAt = new Date("2026-01-02T00:00:00.000Z");
+    restored!.transitionTo("WAITING_FOR_TEAM", statusAt);
+    const statusEvent = createStatusChangedWorkflowEvent(inquiry.id.value, "NEW", "WAITING_FOR_TEAM", "TEAM:member-1", statusAt);
+    await expect(workflowRepository.changeStatus(restored!, {status:"NEW",updatedAt:inquiry.updatedAt}, statusEvent)).resolves.toBe("changed");
+
+    const assignment = await workflowRepository.findAssignment(inquiry.id.value);
+    assignment.assignTo(TeamMember.reconstitute("member-1", true), new Date("2026-01-03T00:00:00.000Z"));
+    const assignmentEvent = createAssignmentWorkflowEvent(inquiry.id.value, null, "member-1", "TEAM:member-1", new Date("2026-01-03T00:00:00.000Z"));
+    await expect(workflowRepository.changeAssignment(assignment, {teamMemberId:null,changedAt:null}, assignmentEvent)).resolves.toBe("changed");
+
+    const history = await workflowRepository.readHistory(inquiry.id.value);
+    expect(history.map(({type,previousValue,newValue}) => ({type,previousValue,newValue}))).toEqual([
+      {type:"INQUIRY_CREATED",previousValue:null,newValue:"NEW"},
+      {type:"STATUS_CHANGED",previousValue:"NEW",newValue:"WAITING_FOR_TEAM"},
+      {type:"ASSIGNED",previousValue:null,newValue:"member-1"},
+    ]);
+    expect((await repository.findById(inquiry.id.value))?.status).toBe("WAITING_FOR_TEAM");
+    expect((await workflowRepository.findAssignment(inquiry.id.value)).teamMemberId).toBe("member-1");
+  });
+
+  it("rejects an assignment when the member becomes inactive before the atomic write", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "inactive-assignment"}).buildNew();
+    await repository.save(inquiry);
+    await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-2','Inactive member',false,'2026-01-01','2026-01-01')");
+    const assignment = await workflowRepository.findAssignment(inquiry.id.value);
+    assignment.assignTo(TeamMember.reconstitute("member-2", true), new Date("2026-01-02T00:00:00.000Z"));
+    const event = createAssignmentWorkflowEvent(inquiry.id.value, null, "member-2", null, new Date("2026-01-02T00:00:00.000Z"));
+    await expect(workflowRepository.changeAssignment(assignment, {teamMemberId:null,changedAt:null}, event)).resolves.toBe("member_inactive");
+    expect((await pool.query("select inquiry_id from inquiry_assignments")).rowCount).toBe(0);
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(1);
+  });
+
+  it("conflicts a stale status change after a simple concurrent update without appending history", async () => {
+    const inquiry = new InquiryTestBuilder().with({id:"status-simple-conflict"}).buildNew();
+    await repository.save(inquiry);
+    const first = (await repository.findById(inquiry.id.value))!;
+    first.transitionTo("WAITING_FOR_TEAM", new Date("2026-01-02T00:00:00.000Z"));
+    await workflowRepository.changeStatus(first, {status:"NEW",updatedAt:inquiry.updatedAt}, createStatusChangedWorkflowEvent(inquiry.id.value,"NEW","WAITING_FOR_TEAM",null,new Date("2026-01-02T00:00:00.000Z")));
+
+    const stale = (await repository.findById(inquiry.id.value))!;
+    const concurrent = (await repository.findById(inquiry.id.value))!;
+    concurrent.transitionTo("WAITING_FOR_CUSTOMER", new Date("2026-01-03T00:00:00.000Z"));
+    await expect(workflowRepository.changeStatus(concurrent, {status:"WAITING_FOR_TEAM",updatedAt:new Date("2026-01-02T00:00:00.000Z")}, createStatusChangedWorkflowEvent(inquiry.id.value,"WAITING_FOR_TEAM","WAITING_FOR_CUSTOMER",null,new Date("2026-01-03T00:00:00.000Z")))).resolves.toBe("changed");
+
+    stale.transitionTo("CLOSED", new Date("2026-01-04T00:00:00.000Z"));
+    await expect(workflowRepository.changeStatus(stale, {status:"WAITING_FOR_TEAM",updatedAt:new Date("2026-01-02T00:00:00.000Z")}, createStatusChangedWorkflowEvent(inquiry.id.value,"WAITING_FOR_TEAM","CLOSED",null,new Date("2026-01-04T00:00:00.000Z")))).resolves.toBe("conflict");
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(3);
+  });
+
+  it("conflicts a stale status change after WAITING_FOR_TEAM ABA even when the status matches again", async () => {
+    const inquiry = new InquiryTestBuilder().with({id:"status-aba"}).buildNew();
+    await repository.save(inquiry);
+    const initial = (await repository.findById(inquiry.id.value))!;
+    initial.transitionTo("WAITING_FOR_TEAM", new Date("2026-01-02T00:00:00.000Z"));
+    await workflowRepository.changeStatus(initial, {status:"NEW",updatedAt:inquiry.updatedAt}, createStatusChangedWorkflowEvent(inquiry.id.value,"NEW","WAITING_FOR_TEAM",null,new Date("2026-01-02T00:00:00.000Z")));
+    const stale = (await repository.findById(inquiry.id.value))!;
+
+    const toCustomer = (await repository.findById(inquiry.id.value))!;
+    toCustomer.transitionTo("WAITING_FOR_CUSTOMER", new Date("2026-01-03T00:00:00.000Z"));
+    await workflowRepository.changeStatus(toCustomer, {status:"WAITING_FOR_TEAM",updatedAt:new Date("2026-01-02T00:00:00.000Z")}, createStatusChangedWorkflowEvent(inquiry.id.value,"WAITING_FOR_TEAM","WAITING_FOR_CUSTOMER",null,new Date("2026-01-03T00:00:00.000Z")));
+    const backToTeam = (await repository.findById(inquiry.id.value))!;
+    backToTeam.transitionTo("WAITING_FOR_TEAM", new Date("2026-01-04T00:00:00.000Z"));
+    await workflowRepository.changeStatus(backToTeam, {status:"WAITING_FOR_CUSTOMER",updatedAt:new Date("2026-01-03T00:00:00.000Z")}, createStatusChangedWorkflowEvent(inquiry.id.value,"WAITING_FOR_CUSTOMER","WAITING_FOR_TEAM",null,new Date("2026-01-04T00:00:00.000Z")));
+
+    stale.transitionTo("CLOSED", new Date("2026-01-05T00:00:00.000Z"));
+    await expect(workflowRepository.changeStatus(stale, {status:"WAITING_FOR_TEAM",updatedAt:new Date("2026-01-02T00:00:00.000Z")}, createStatusChangedWorkflowEvent(inquiry.id.value,"WAITING_FOR_TEAM","CLOSED",null,new Date("2026-01-05T00:00:00.000Z")))).resolves.toBe("conflict");
+    expect((await repository.findById(inquiry.id.value))?.updatedAt).toEqual(new Date("2026-01-04T00:00:00.000Z"));
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(4);
+  });
+
+  it("conflicts a stale assignment after member-A ABA even when the member matches again", async () => {
+    const inquiry = new InquiryTestBuilder().with({id:"assignment-aba"}).buildNew();
+    await repository.save(inquiry);
+    await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-A','Member A',true,'2026-01-01','2026-01-01'),('member-B','Member B',true,'2026-01-01','2026-01-01'),('member-C','Member C',true,'2026-01-01','2026-01-01')");
+    const initial = await workflowRepository.findAssignment(inquiry.id.value);
+    initial.assignTo(TeamMember.reconstitute("member-A",true),new Date("2026-01-02T00:00:00.000Z"));
+    await workflowRepository.changeAssignment(initial,{teamMemberId:null,changedAt:null},createAssignmentWorkflowEvent(inquiry.id.value,null,"member-A",null,new Date("2026-01-02T00:00:00.000Z")));
+    const stale = await workflowRepository.findAssignment(inquiry.id.value);
+
+    const toB = await workflowRepository.findAssignment(inquiry.id.value);
+    toB.assignTo(TeamMember.reconstitute("member-B",true),new Date("2026-01-03T00:00:00.000Z"));
+    await workflowRepository.changeAssignment(toB,{teamMemberId:"member-A",changedAt:new Date("2026-01-02T00:00:00.000Z")},createAssignmentWorkflowEvent(inquiry.id.value,"member-A","member-B",null,new Date("2026-01-03T00:00:00.000Z")));
+    const backToA = await workflowRepository.findAssignment(inquiry.id.value);
+    backToA.assignTo(TeamMember.reconstitute("member-A",true),new Date("2026-01-04T00:00:00.000Z"));
+    await workflowRepository.changeAssignment(backToA,{teamMemberId:"member-B",changedAt:new Date("2026-01-03T00:00:00.000Z")},createAssignmentWorkflowEvent(inquiry.id.value,"member-B","member-A",null,new Date("2026-01-04T00:00:00.000Z")));
+
+    stale.assignTo(TeamMember.reconstitute("member-C",true),new Date("2026-01-05T00:00:00.000Z"));
+    await expect(workflowRepository.changeAssignment(stale,{teamMemberId:"member-A",changedAt:new Date("2026-01-02T00:00:00.000Z")},createAssignmentWorkflowEvent(inquiry.id.value,"member-A","member-C",null,new Date("2026-01-05T00:00:00.000Z")))).resolves.toBe("conflict");
+    expect((await workflowRepository.findAssignment(inquiry.id.value)).changedAt).toEqual(new Date("2026-01-04T00:00:00.000Z"));
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(4);
+  });
+
+  it("allows only one concurrent first assignment and appends only its event", async () => {
+    const inquiry = new InquiryTestBuilder().with({id:"assignment-first-conflict"}).buildNew();
+    await repository.save(inquiry);
+    await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-A','Member A',true,'2026-01-01','2026-01-01'),('member-B','Member B',true,'2026-01-01','2026-01-01')");
+    const first = await workflowRepository.findAssignment(inquiry.id.value);
+    const second = await workflowRepository.findAssignment(inquiry.id.value);
+    first.assignTo(TeamMember.reconstitute("member-A",true),new Date("2026-01-02T00:00:00.000Z"));
+    second.assignTo(TeamMember.reconstitute("member-B",true),new Date("2026-01-02T00:00:01.000Z"));
+    await expect(workflowRepository.changeAssignment(first,{teamMemberId:null,changedAt:null},createAssignmentWorkflowEvent(inquiry.id.value,null,"member-A",null,new Date("2026-01-02T00:00:00.000Z")))).resolves.toBe("changed");
+    await expect(workflowRepository.changeAssignment(second,{teamMemberId:null,changedAt:null},createAssignmentWorkflowEvent(inquiry.id.value,null,"member-B",null,new Date("2026-01-02T00:00:01.000Z")))).resolves.toBe("conflict");
+    expect((await workflowRepository.findAssignment(inquiry.id.value)).teamMemberId).toBe("member-A");
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(2);
+  });
+
+  it("rolls back a status update when its workflow event cannot be appended", async () => {
+    const inquiry = new InquiryTestBuilder().with({id:"workflow-atomicity"}).buildNew();
+    await repository.save(inquiry);
+    const changed = (await repository.findById(inquiry.id.value))!;
+    changed.transitionTo("WAITING_FOR_TEAM",new Date("2026-01-02T00:00:00.000Z"));
+    const invalidEvent = {...createStatusChangedWorkflowEvent(inquiry.id.value,"NEW","WAITING_FOR_TEAM",null,new Date("2026-01-02T00:00:00.000Z")),actorReference:"x".repeat(161)};
+    await expect(workflowRepository.changeStatus(changed,{status:"NEW",updatedAt:inquiry.updatedAt},invalidEvent)).rejects.toEqual(new InquiryPersistenceError());
+    expect((await repository.findById(inquiry.id.value))?.status).toBe("NEW");
+    expect(await workflowRepository.readHistory(inquiry.id.value)).toHaveLength(1);
   });
 
   it("saves and reconstitutes a complete Inquiry with exact instants", async () => {
-    const inquiry = new InquiryTestBuilder().buildReconstituted({status: "quoted", updatedAt: new Date("2026-01-03T04:05:06.789Z")});
+    const inquiry = new InquiryTestBuilder().buildReconstituted({status: "QUOTED", updatedAt: new Date("2026-01-03T04:05:06.789Z")});
     await repository.save(inquiry);
     const restored = await repository.findById(inquiry.id.value);
     expect(restored).not.toBeNull();
-    expect(restored?.status).toBe("quoted");
+    expect(restored?.status).toBe("QUOTED");
     expect(restored?.contact).toEqual(inquiry.contact);
     expect(restored?.privacy.acceptedAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
     expect(restored?.updatedAt.toISOString()).toBe("2026-01-03T04:05:06.789Z");
@@ -227,7 +358,7 @@ describe("PostgresInquiryRepository", () => {
     const inquiry = new InquiryTestBuilder().with({id: "duplicate-inquiry"}).buildNew();
     await repository.save(inquiry);
     await expect(repository.save(inquiry)).rejects.toBeInstanceOf(DuplicateInquiryIdError);
-    await pool.query("truncate table conversation_access, conversation_messages, conversations, inquiry_outbox, inquiry_items, inquiries");
+    await pool.query("truncate table conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
     const results = await Promise.allSettled([repository.save(inquiry), repository.save(inquiry)]);
     expect(results.filter(({status}) => status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected" && result.reason instanceof DuplicateInquiryIdError)).toHaveLength(1);
@@ -239,6 +370,7 @@ describe("PostgresInquiryRepository", () => {
       const inquiry = new InquiryTestBuilder().with({id: "rollback-inquiry", items: [{...item(1, "pallets"), productId: "rollback-product"}]}).buildNew();
       await expect(repository.save(inquiry)).rejects.toBeInstanceOf(InquiryPersistenceError);
       expect((await pool.query("select id from inquiries where id = 'rollback-inquiry'")).rowCount).toBe(0);
+      expect((await pool.query("select inquiry_id from inquiry_workflow_events where inquiry_id = 'rollback-inquiry'")).rowCount).toBe(0);
     } finally {
       await pool.query("alter table inquiry_items drop constraint integration_reject_product");
     }
@@ -265,9 +397,9 @@ describe("PostgresInquiryRepository", () => {
     const inquiry = new InquiryTestBuilder().with({id: "isolated-inquiry"}).buildNew();
     await repository.save(inquiry);
     const first = await repository.findById(inquiry.id.value);
-    first?.transitionTo("processing", new Date("2026-01-02T00:00:00.000Z"));
+    first?.transitionTo("WAITING_FOR_TEAM", new Date("2026-01-02T00:00:00.000Z"));
     const second = await repository.findById(inquiry.id.value);
-    expect(second?.status).toBe("received");
+    expect(second?.status).toBe("NEW");
     expect(second?.items).not.toBe(first?.items);
   });
 });

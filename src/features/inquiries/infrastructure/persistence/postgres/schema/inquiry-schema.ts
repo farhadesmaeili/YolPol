@@ -1,5 +1,5 @@
 import {sql} from "drizzle-orm";
-import {boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
+import {bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
 
 export const inquiries = pgTable("inquiries", {
   id: varchar("id", {length: 128}).primaryKey(),
@@ -25,7 +25,7 @@ export const inquiries = pgTable("inquiries", {
   updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
 }, (table) => [
   check("inquiries_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
-  check("inquiries_status_check", sql`${table.status} in ('received','processing','contacted','quoted','won','lost','spam')`),
+  check("inquiries_status_check", sql`${table.status} in ('NEW','WAITING_FOR_TEAM','WAITING_FOR_CUSTOMER','QUOTED','CONFIRMED','CLOSED')`),
   check("inquiries_preferred_contacts_check", sql`${table.preferredContactMethods} in (array['email']::varchar[], array['whatsapp']::varchar[], array['telegram']::varchar[], array['phone']::varchar[], array['email','whatsapp']::varchar[], array['email','telegram']::varchar[], array['whatsapp','telegram']::varchar[], array['email','whatsapp','telegram']::varchar[])`),
   check("inquiries_whatsapp_contact_check", sql`${table.whatsappPhone} is null or 'whatsapp' = any(${table.preferredContactMethods})`),
   check("inquiries_telegram_contact_check", sql`${table.telegramUsername} is null or 'telegram' = any(${table.preferredContactMethods})`),
@@ -120,6 +120,45 @@ export const communicationRecipients = pgTable("communication_recipients", {
   index("communication_recipients_notifications_idx").on(table.channel, table.authorized, table.notificationsEnabled),
 ]);
 
+export const inquiryTeamMembers = pgTable("inquiry_team_members", {
+  id: varchar("id", {length: 128}).primaryKey(),
+  displayName: varchar("display_name", {length: 120}).notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [
+  check("inquiry_team_members_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("inquiry_team_members_display_name_length_check", sql`char_length(${table.displayName}) between 1 and 120`),
+  check("inquiry_team_members_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt}`),
+  index("inquiry_team_members_active_idx").on(table.active, table.id),
+]);
+
+export const inquiryAssignments = pgTable("inquiry_assignments", {
+  inquiryId: varchar("inquiry_id", {length: 128}).primaryKey().references(() => inquiries.id, {onDelete: "cascade"}),
+  teamMemberId: varchar("team_member_id", {length: 128}).notNull().references(() => inquiryTeamMembers.id, {onDelete: "restrict"}),
+  assignedAt: timestamp("assigned_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [index("inquiry_assignments_team_member_idx").on(table.teamMemberId, table.assignedAt)]);
+
+export const inquiryWorkflowEvents = pgTable("inquiry_workflow_events", {
+  id: bigserial("id", {mode: "bigint"}).primaryKey(),
+  inquiryId: varchar("inquiry_id", {length: 128}).notNull().references(() => inquiries.id, {onDelete: "cascade"}),
+  eventType: varchar("event_type", {length: 32}).notNull(),
+  previousValue: varchar("previous_value", {length: 128}),
+  newValue: varchar("new_value", {length: 128}),
+  actorReference: varchar("actor_reference", {length: 160}),
+  occurredAt: timestamp("occurred_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (table) => [
+  check("inquiry_workflow_events_type_check", sql`${table.eventType} in ('INQUIRY_CREATED','STATUS_CHANGED','ASSIGNED','UNASSIGNED')`),
+  check("inquiry_workflow_events_values_check", sql`
+    (${table.eventType} = 'INQUIRY_CREATED' and ${table.previousValue} is null and ${table.newValue} in ('NEW','WAITING_FOR_TEAM','WAITING_FOR_CUSTOMER','QUOTED','CONFIRMED','CLOSED')) or
+    (${table.eventType} = 'STATUS_CHANGED' and ${table.previousValue} in ('NEW','WAITING_FOR_TEAM','WAITING_FOR_CUSTOMER','QUOTED','CONFIRMED','CLOSED') and ${table.newValue} in ('NEW','WAITING_FOR_TEAM','WAITING_FOR_CUSTOMER','QUOTED','CONFIRMED','CLOSED') and ${table.previousValue} <> ${table.newValue}) or
+    (${table.eventType} = 'ASSIGNED' and ${table.newValue} is not null) or
+    (${table.eventType} = 'UNASSIGNED' and ${table.previousValue} is not null and ${table.newValue} is null)
+  `),
+  check("inquiry_workflow_events_actor_check", sql`${table.actorReference} is null or char_length(${table.actorReference}) between 1 and 160`),
+  index("inquiry_workflow_events_inquiry_time_idx").on(table.inquiryId, table.occurredAt, table.id),
+]);
+
 export const inquiryOutbox = pgTable("inquiry_outbox", {
   id: varchar("id", {length: 160}).primaryKey(),
   eventType: varchar("event_type", {length: 64}).notNull(),
@@ -136,4 +175,4 @@ export const inquiryOutbox = pgTable("inquiry_outbox", {
   index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationAccess, conversationMessages, communicationRecipients, inquiryOutbox};
+export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationAccess, conversationMessages, communicationRecipients, inquiryTeamMembers, inquiryAssignments, inquiryWorkflowEvents, inquiryOutbox};
