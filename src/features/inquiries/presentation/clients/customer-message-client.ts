@@ -14,7 +14,7 @@ export type LoadCustomerMessageHistoryResult =
   | Readonly<{status: "network_error"}>
   | Readonly<{status: "unavailable"}>;
 
-const conversationAccessTokenPattern = /^ypc_[A-Za-z0-9_-]{43}$/u;
+export const conversationAccessTokenPattern = /^ypc_[A-Za-z0-9_-]{43}$/u;
 const messageIdPattern = /^[A-Za-z0-9_-]{1,160}$/u;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -30,7 +30,7 @@ function isExactCreatedResponse(value: unknown): value is Readonly<{status: "cre
     && messageIdPattern.test(record.messageId);
 }
 
-function parseHistoryMessage(value: unknown): CustomerChatMessage | null {
+export function parseCustomerChatMessage(value: unknown): CustomerChatMessage | null {
   if (!isPlainRecord(value) || Object.keys(value).sort().join(",") !== "body,channel,createdAt,id,senderType") return null;
   if (typeof value.id !== "string" || !messageIdPattern.test(value.id)) return null;
   const senderType = messageSenderTypes.find((candidate) => candidate === value.senderType);
@@ -52,7 +52,7 @@ async function parseCustomerMessageHistoryResponse(response: Response): Promise<
     if (!isPlainRecord(value) || Object.keys(value).join(",") !== "messages" || !Array.isArray(value.messages)) return {status: "unavailable"};
     const messages: CustomerChatMessage[] = [];
     for (const entry of value.messages) {
-      const message = parseHistoryMessage(entry);
+      const message = parseCustomerChatMessage(entry);
       if (!message) return {status: "unavailable"};
       messages.push(message);
     }

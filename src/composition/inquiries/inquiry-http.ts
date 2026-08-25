@@ -30,3 +30,7 @@ export function getCustomerConversationMessageHttpOptions() {
 export function getCustomerConversationHistoryHttpOptions() {
   return Object.freeze({rateLimiter: customerConversationHistoryRateLimiter, approvedDevelopmentOrigins});
 }
+
+export function getCustomerConversationStreamHttpOptions() {
+  return Object.freeze({approvedDevelopmentOrigins});
+}

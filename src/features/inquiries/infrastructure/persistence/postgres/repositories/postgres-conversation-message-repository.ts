@@ -1,4 +1,4 @@
-import {asc, eq, max} from "drizzle-orm";
+import {and, asc, eq, gt, max} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
@@ -67,6 +67,37 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         const channel = conversationChannels.find((value) => value === row.channel);
         if (!senderType || !channel) throw new InquiryPersistenceError();
         return Message.create({...row, senderType, channel});
+      }));
+    } catch {
+      throw new InquiryPersistenceError();
+    }
+  }
+
+  async findAfterPositionForInquiry(inquiryId: string, afterPosition: number, limit: number) {
+    try {
+      const [conversation] = await this.database.select({id: conversations.id})
+        .from(conversations)
+        .where(eq(conversations.inquiryId, inquiryId))
+        .limit(1);
+      if (!conversation) return null;
+
+      const rows = await this.database.select({
+        position: conversationMessages.position,
+        id: conversationMessages.id,
+        senderType: conversationMessages.senderType,
+        channel: conversationMessages.channel,
+        body: conversationMessages.body,
+        createdAt: conversationMessages.createdAt,
+      })
+        .from(conversationMessages)
+        .where(and(eq(conversationMessages.conversationId, conversation.id), gt(conversationMessages.position, afterPosition)))
+        .orderBy(asc(conversationMessages.position))
+        .limit(limit);
+      return Object.freeze(rows.map((row) => {
+        const senderType = messageSenderTypes.find((value) => value === row.senderType);
+        const channel = conversationChannels.find((value) => value === row.channel);
+        if (!senderType || !channel) throw new InquiryPersistenceError();
+        return Object.freeze({position: row.position, message: Message.create({...row, senderType, channel})});
       }));
     } catch {
       throw new InquiryPersistenceError();

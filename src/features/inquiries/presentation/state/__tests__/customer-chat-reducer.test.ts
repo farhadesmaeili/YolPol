@@ -40,4 +40,11 @@ describe("Customer chat presentation state", () => {
     const sent = customerChatReducer(drafted, {type: "submission_succeeded", message: {id: "message_1", body: "Please update me", sender: "customer"}});
     expect(sent).toEqual({draft: "", messages: [{id: "message_1", body: "Please update me", sender: "customer"}], status: "idle", historyStatus: "loading", historyFailure: null, failure: null, sentAnnouncement: true});
   });
+
+  it("appends realtime messages once without changing send or history state", () => {
+    const initial = customerChatReducer(createInitialCustomerChatState(), {type: "realtime_message_received", message: {id: "message_1", body: "Your quote is ready.", sender: "support"}});
+    const duplicate = customerChatReducer(initial, {type: "realtime_message_received", message: {id: "message_1", body: "Your quote is ready.", sender: "support"}});
+    expect(duplicate).toBe(initial);
+    expect(duplicate).toMatchObject({messages: [{id: "message_1", body: "Your quote is ready.", sender: "support"}], status: "idle", historyStatus: "loading"});
+  });
 });

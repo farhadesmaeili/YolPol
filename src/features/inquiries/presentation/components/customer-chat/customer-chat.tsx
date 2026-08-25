@@ -2,6 +2,7 @@
 
 import {useEffect, useId, useReducer, useRef} from "react";
 
+import {subscribeToCustomerConversation} from "@/features/inquiries/presentation/clients/customer-conversation-stream-client";
 import {loadCustomerMessageHistory, sendCustomerMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
 import {ChatContainer} from "@/features/inquiries/presentation/components/customer-chat/chat-container";
 import {ChatErrorState} from "@/features/inquiries/presentation/components/customer-chat/chat-error-state";
@@ -39,6 +40,11 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
   const submissionInFlight = useRef(false);
   const mounted = useRef(true);
   const [state, dispatch] = useReducer(customerChatReducer, undefined, createInitialCustomerChatState);
+
+  useEffect(() => {
+    const subscription = subscribeToCustomerConversation(accessToken, (message) => dispatch({type: "realtime_message_received", message}));
+    return () => subscription?.close();
+  }, [accessToken]);
 
   useEffect(() => {
     mounted.current = true;

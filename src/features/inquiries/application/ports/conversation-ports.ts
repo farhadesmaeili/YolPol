@@ -10,6 +10,12 @@ export interface ConversationMessageReader {
   findForInquiry(inquiryId: string): Promise<readonly Message[] | null>;
 }
 
-export interface ConversationMessageRepository extends ConversationMessageWriter, ConversationMessageReader {}
+export type PositionedConversationMessage = Readonly<{position: number; message: Message}>;
+
+export interface ConversationMessageUpdateReader {
+  findAfterPositionForInquiry(inquiryId: string, afterPosition: number, limit: number): Promise<readonly PositionedConversationMessage[] | null>;
+}
+
+export interface ConversationMessageRepository extends ConversationMessageWriter, ConversationMessageReader, ConversationMessageUpdateReader {}
 
 export interface ConversationMessageIdGenerator { generate(): string; }

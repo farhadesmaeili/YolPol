@@ -1,19 +1,8 @@
-import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
+import {toConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
 import type {ConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {GetConversationMessageHistoryResult} from "@/features/inquiries/application/results/get-conversation-message-history-result";
-import type {Message} from "@/features/inquiries/domain/entities/message";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
-
-function toDto(message: Message): ConversationMessageDto {
-  return Object.freeze({
-    id: message.id.value,
-    senderType: message.senderType,
-    channel: message.channel,
-    body: message.body,
-    createdAt: message.createdAt.toISOString(),
-  });
-}
 
 export class GetConversationMessageHistory {
   constructor(private readonly messages: ConversationMessageReader) {}
@@ -30,7 +19,7 @@ export class GetConversationMessageHistory {
     try {
       const messages = await this.messages.findForInquiry(inquiryId);
       if (messages === null) return {status: "conversation_not_found"};
-      return Object.freeze({status: "found", messages: Object.freeze(messages.map(toDto))});
+      return Object.freeze({status: "found", messages: Object.freeze(messages.map(toConversationMessageDto))});
     } catch {
       return {status: "persistence_failed"};
     }
