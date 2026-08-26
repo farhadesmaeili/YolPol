@@ -8,6 +8,20 @@ const postRequest = (origin = "https://yolpol.com") => new Request(`https://yolp
 const getRequest = (origin = "https://yolpol.com") => new Request(`https://yolpol.com/api/conversations/${token}/messages`, {headers: {Origin: origin}});
 const resolved = {status: "resolved", conversationId: "conversation-1", inquiryId: "inquiry-1"} as const;
 
+function containsInternalActor(value: unknown): boolean {
+  if (typeof value === "string") return value.includes("staff:admin-main") || value.includes("admin-main");
+  if (Array.isArray(value)) return value.some(containsInternalActor);
+  if (typeof value !== "object" || value === null) return false;
+  return Object.entries(value).some(([key, entry]) => key.toLowerCase() === "actorreference" || containsInternalActor(entry));
+}
+
+describe("customer actor-attribution confidentiality inspection", () => {
+  it("detects a forbidden actor key or value at a nested depth", () => {
+    expect(containsInternalActor({safe: [{nested: {actorReference: "staff:admin-main"}}]})).toBe(true);
+    expect(containsInternalActor({safe: [{nested: "admin-main"}]})).toBe(true);
+  });
+});
+
 describe("Customer conversation token request handlers", () => {
   it("sends a customer message only after valid conversation resolution", async () => {
     const resolve = vi.fn().mockResolvedValue(resolved);
@@ -25,7 +39,9 @@ describe("Customer conversation token request handlers", () => {
     const execute = vi.fn().mockResolvedValue({status: "found", messages});
     const response = await createCustomerConversationHistoryRequestHandler(() => ({execute: resolve}), () => ({execute}))(getRequest(), context());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({messages});
+    const responseBody = await response.json();
+    expect(responseBody).toEqual({messages});
+    expect(containsInternalActor(responseBody)).toBe(false);
     expect(execute).toHaveBeenCalledWith({inquiryId: "inquiry-1"});
   });
 

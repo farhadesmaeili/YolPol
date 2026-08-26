@@ -37,6 +37,7 @@ describe("ReceiveTelegramReply", () => {
     }));
     const storedMessage = appendForInquiry.mock.calls[0]?.[1];
     expect(storedMessage?.id.value).toBe("telegram_update_987654");
+    expect(storedMessage?.actorReference).toBeNull();
     expect(storedMessage?.createdAt.toISOString()).toBe("2026-08-25T01:02:03.000Z");
   });
 

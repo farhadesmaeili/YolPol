@@ -8,6 +8,7 @@ export type MessageCreateInput = Readonly<{
   id: string;
   senderType: MessageSenderType;
   channel: ConversationChannel;
+  actorReference?: string | null;
   body: string;
   createdAt: Date;
 }>;

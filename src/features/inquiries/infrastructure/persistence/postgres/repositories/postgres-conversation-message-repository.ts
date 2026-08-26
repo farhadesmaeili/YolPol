@@ -34,6 +34,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           position: (latest?.position ?? -1) + 1,
           senderType: message.senderType,
           channel: message.channel,
+          actorReference: message.actorReference?.value ?? null,
           body: message.body,
           createdAt: message.createdAt,
         }).onConflictDoNothing({target: conversationMessages.id}).returning({id: conversationMessages.id});
@@ -56,6 +57,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         id: conversationMessages.id,
         senderType: conversationMessages.senderType,
         channel: conversationMessages.channel,
+        actorReference: conversationMessages.actorReference,
         body: conversationMessages.body,
         createdAt: conversationMessages.createdAt,
       })
@@ -86,6 +88,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         id: conversationMessages.id,
         senderType: conversationMessages.senderType,
         channel: conversationMessages.channel,
+        actorReference: conversationMessages.actorReference,
         body: conversationMessages.body,
         createdAt: conversationMessages.createdAt,
       })

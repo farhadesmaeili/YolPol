@@ -26,6 +26,7 @@ describe("ReceiveCustomerMessage", () => {
       body: "Please send an update.",
     }));
     expect(appendForInquiry.mock.calls[0]?.[1].createdAt.toISOString()).toBe("2026-08-25T08:00:00.000Z");
+    expect(appendForInquiry.mock.calls[0]?.[1].actorReference).toBeNull();
   });
 
   it("returns not found when the Inquiry has no Conversation", async () => {

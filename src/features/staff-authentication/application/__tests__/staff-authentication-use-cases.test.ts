@@ -104,8 +104,10 @@ describe("StaffAuthorizationPolicy", () => {
     const principal = {staffAccountId: "account-1", teamMemberId: "member-1", role: "ADMIN" as const, displayName: "Staff", actorReference: deriveStaffActorReference("member-1")};
     const policy = new StaffAuthorizationPolicy();
     expect(policy.mayPerformTeamOperations(principal)).toBe(true);
+    expect(policy.mayReplyToCustomerConversation(principal)).toBe(true);
     expect(policy.actorReferenceFor(principal)).toBe("staff:member-1");
     expect(policy.mayPerformTeamOperations({...principal, role: "OWNER" as never})).toBe(false);
+    expect(policy.mayReplyToCustomerConversation({...principal, role: "OWNER" as never})).toBe(false);
     expect(policy.mayPerformTeamOperations({...principal, actorReference: "browser:override"})).toBe(false);
   });
 });

@@ -55,5 +55,6 @@ export interface StaffClock {
 
 export interface StaffAuthorization {
   mayPerformTeamOperations(principal: StaffPrincipal): boolean;
+  mayReplyToCustomerConversation(principal: StaffPrincipal): boolean;
   actorReferenceFor(principal: StaffPrincipal): string;
 }

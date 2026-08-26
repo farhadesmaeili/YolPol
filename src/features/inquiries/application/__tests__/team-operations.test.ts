@@ -180,14 +180,14 @@ describe("GetTeamInquiryDetail", () => {
     ]);
     const messages = Object.freeze([
       Message.create({id: "message-1", senderType: "CUSTOMER", channel: "WEBSITE", body: "Hello", createdAt: new Date("2026-08-20T08:05:00.000Z")}),
-      Message.create({id: "message-2", senderType: "INTERNAL_USER", channel: "TELEGRAM", body: "We are checking.", createdAt: new Date("2026-08-20T08:06:00.000Z")}),
+      Message.create({id: "message-2", senderType: "INTERNAL_USER", channel: "TELEGRAM", actorReference: "staff:member-1", body: "We are checking.", createdAt: new Date("2026-08-20T08:06:00.000Z")}),
     ]);
 
     const result = await new GetTeamInquiryDetail(reader, workflowReader(events), conversationReader(messages)).execute({inquiryId: "inquiry-detail"});
     expect(result).toMatchObject({status: "found", detail: {
       assignment,
       workflowHistory: [{id: "1"}, {id: "2"}],
-      conversationMessages: [{id: "message-1"}, {id: "message-2"}],
+      conversationMessages: [{id: "message-1", actorReference: null}, {id: "message-2", actorReference: "staff:member-1"}],
     }});
   });
 

@@ -18,6 +18,19 @@ describe("Conversation", () => {
     const conversation = start();
     conversation.addMessage({id: `message-${senderType}`, senderType, channel: "WEBSITE", body: " Message body ", createdAt});
     expect(conversation.messages[0]).toMatchObject({senderType, channel: "WEBSITE", body: "Message body"});
+    expect(conversation.messages[0]?.actorReference).toBeNull();
+  });
+
+  it("preserves an optional generic actor reference without coupling it to Staff authentication", () => {
+    const conversation = start();
+    conversation.addMessage({id: "message-staff", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member-1", body: "Reply", createdAt});
+    expect(conversation.messages[0]?.actorReference?.value).toBe("staff:member-1");
+  });
+
+  it.each(["", " staff:member-1", "staff:member-1 ", "staff:\u0000member", "x".repeat(161)])("rejects invalid actor reference %#", (actorReference) => {
+    const conversation = start();
+    expect(() => conversation.addMessage({id: "message-invalid-actor", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference, body: "Reply", createdAt}))
+      .toThrow(ConversationValidationError);
   });
 
   it("rejects duplicate and out-of-order messages", () => {
