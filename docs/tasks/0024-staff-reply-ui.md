@@ -52,7 +52,7 @@ No schema change or migration is required.
 
 ### B. iPhone over HTTP LAN
 
-1. Open `http://192.168.1.51:3000/{locale}/staff/login` in iPhone Chrome or Safari after confirming that address is the currently approved development origin.
+1. Set `.env.local` `YOLPOL_DEV_ORIGIN` to the exact LAN URL used by the device, restart the development server, and open `{YOLPOL_DEV_ORIGIN}/{locale}/staff/login` in iPhone Chrome or Safari.
 2. Open an Inquiry and send a Staff reply; confirm the composer no longer throws when `crypto.randomUUID` is unavailable.
 3. Keep the corresponding customer chat open and confirm the existing SSE displays the reply without refresh or raw actor attribution.
 4. Verify narrow-screen wrapping, touch targets, horizontal overflow, and at least one RTL locale.

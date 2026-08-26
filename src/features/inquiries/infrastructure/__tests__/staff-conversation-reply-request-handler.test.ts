@@ -197,9 +197,9 @@ describe("POST /api/staff/inquiries/[inquiryId]/messages", () => {
     vi.stubEnv("NODE_ENV", "development");
     try {
       const response = await createStaffConversationReplyRequestHandler(() => access(), () => sender(), {
-        approvedDevelopmentOrigins: new Set(["http://192.168.1.55:3000"]),
+        approvedDevelopmentOrigins: new Set(["http://192.168.1.100:3000"]),
         environment: {NODE_ENV: "development"},
-      })(request({origin: "http://192.168.1.55:3000"}), context());
+      })(request({origin: "http://192.168.1.100:3000"}), context());
       expect(response.status).toBe(201);
     } finally {
       vi.unstubAllEnvs();
