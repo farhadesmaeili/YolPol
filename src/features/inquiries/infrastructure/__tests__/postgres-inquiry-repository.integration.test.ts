@@ -6,13 +6,21 @@ import {Pool} from "pg";
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 
 import {DuplicateInquiryIdError} from "@/features/inquiries/application/ports/inquiry-ports";
+import {GetConversationMessageHistory} from "@/features/inquiries/application/use-cases/get-conversation-message-history";
+import {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
+import {SendStaffConversationReply} from "@/features/inquiries/application/use-cases/send-staff-conversation-reply";
+import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
+import {createStaffPrincipal} from "@/features/staff-authentication/application/use-cases/staff-principal-factory";
+import {Conversation} from "@/features/inquiries/domain/entities/conversation";
 import type {InquiryItemInput} from "@/features/inquiries/domain/types/inquiry-types";
 import {createPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
 import {PostgresInquiryWorkflowRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-workflow-repository";
 import {PostgresConversationAccessRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-access-repository";
+import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
 import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
+import {NodeStaffReplyMessageIdFactory} from "@/features/inquiries/infrastructure/security/staff-reply-message-id-factory";
 import {inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 import {InquiryTestBuilder} from "@/features/inquiries/testing/builders/inquiry-test-builder";
 import {inquiryFixture} from "@/features/inquiries/testing/fixtures/inquiry-fixtures";
@@ -26,6 +34,7 @@ import {TeamMember} from "@/features/inquiries/domain/entities/team-member";
 let pool: Pool;
 let repository: PostgresInquiryRepository;
 let workflowRepository: PostgresInquiryWorkflowRepository;
+let messageRepository: PostgresConversationMessageRepository;
 
 const item = (position: number, unit: InquiryItemInput["unit"]): InquiryItemInput => ({
   productId: `test-product-${position}`,
@@ -46,6 +55,7 @@ beforeAll(async () => {
   await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
   repository = new PostgresInquiryRepository(pool);
   workflowRepository = new PostgresInquiryWorkflowRepository(pool);
+  messageRepository = new PostgresConversationMessageRepository(pool);
 });
 
 beforeEach(async () => {
@@ -59,6 +69,82 @@ afterEach(async () => { vi.unstubAllEnvs(); await cleanInquiryIntegrationTables(
 afterAll(async () => { if (pool) await pool.end(); });
 
 describe("PostgresInquiryRepository", () => {
+  it("persists an idempotent Staff reply once and exposes it through ordered history and SSE reads", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "staff-reply-integration"}).buildNew();
+    const conversation = Conversation.start({
+      id: inquiry.id.value,
+      inquiryId: inquiry.id.value,
+      channel: "WEBSITE",
+      createdAt: inquiry.createdAt,
+    });
+    conversation.addMessage({
+      id: "legacy-customer-message",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Please send an update.",
+      createdAt: inquiry.createdAt,
+    });
+    await repository.save(inquiry, undefined, conversation);
+
+    const principal = createStaffPrincipal({
+      staffAccountId: "staff-integration",
+      teamMemberId: "member-integration",
+      role: "SALES",
+      teamMemberDisplayName: "Integration Staff",
+    });
+    const actorReference = new StaffAuthorizationPolicy().actorReferenceFor(principal);
+    const sendReply = new SendStaffConversationReply(
+      repository,
+      messageRepository,
+      new NodeStaffReplyMessageIdFactory(),
+      {now: () => new Date("2026-08-26T12:30:00.000Z")},
+    );
+    const command = {
+      inquiryId: inquiry.id.value,
+      body: "We are reviewing your request.",
+      clientMessageId: "019d-integration-reply-1",
+      actorReference,
+    } as const;
+
+    const first = await sendReply.execute(command);
+    const retry = await sendReply.execute(command);
+    expect(first).toMatchObject({status: "sent", idempotent: false, message: {
+      senderType: "INTERNAL_USER",
+      channel: "WEBSITE",
+      actorReference,
+      body: command.body,
+    }});
+    expect(retry).toEqual({...first, idempotent: true});
+
+    const rows = await pool.query<{
+      position: number;
+      sender_type: string;
+      channel: string;
+      actor_reference: string | null;
+      body: string;
+    }>("select position,sender_type,channel,actor_reference,body from conversation_messages where conversation_id=$1 order by position", [inquiry.id.value]);
+    expect(rows.rows).toEqual([
+      {position: 0, sender_type: "CUSTOMER", channel: "WEBSITE", actor_reference: null, body: "Please send an update."},
+      {position: 1, sender_type: "INTERNAL_USER", channel: "WEBSITE", actor_reference: actorReference, body: command.body},
+    ]);
+
+    const internalMessages = await messageRepository.findForInquiry(inquiry.id.value);
+    expect(internalMessages?.map((message) => message.actorReference?.value ?? null)).toEqual([null, actorReference]);
+
+    const customerHistory = await new GetConversationMessageHistory(messageRepository).execute({inquiryId: inquiry.id.value});
+    expect(customerHistory).toMatchObject({status: "found", messages: [
+      {senderType: "CUSTOMER", channel: "WEBSITE", body: "Please send an update."},
+      {senderType: "INTERNAL_USER", channel: "WEBSITE", body: command.body},
+    ]});
+    const customerUpdates = await new ReadNewConversationMessages(messageRepository).execute({inquiryId: inquiry.id.value, afterCursor: 0});
+    expect(customerUpdates).toMatchObject({status: "found", updates: [{cursor: 1, message: {senderType: "INTERNAL_USER", channel: "WEBSITE", body: command.body}}]});
+    expect(JSON.stringify({customerHistory, customerUpdates})).not.toMatch(/actorReference|staff:member-integration|member-integration/u);
+
+    expect((await pool.query("select status from inquiries where id=$1", [inquiry.id.value])).rows).toEqual([{status: "NEW"}]);
+    expect((await pool.query("select event_type from inquiry_workflow_events where inquiry_id=$1", [inquiry.id.value])).rows).toEqual([{event_type: "INQUIRY_CREATED"}]);
+    expect((await pool.query("select inquiry_id from inquiry_assignments where inquiry_id=$1", [inquiry.id.value])).rowCount).toBe(0);
+  });
+
   it("upgrades every historical contact preference without changing legacy item semantics", async () => {
     const splitMigration = (sql: string) => sql.split("--> statement-breakpoint").map((statement) => statement.trim()).filter(Boolean);
     const baseline = await readFile(resolve("drizzle/0000_hot_lorna_dane.sql"), "utf8");
@@ -181,7 +267,9 @@ describe("PostgresInquiryRepository", () => {
     const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events') order by table_name");
     expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("8");
+    expect(migrations.rows[0]?.count).toBe("9");
+    const actorColumn = await pool.query<{is_nullable: string; character_maximum_length: number}>("select is_nullable,character_maximum_length from information_schema.columns where table_schema='public' and table_name='conversation_messages' and column_name='actor_reference'");
+    expect(actorColumn.rows).toEqual([{is_nullable: "YES", character_maximum_length: 160}]);
   });
 
   it("persists status and assignment changes with ordered immutable workflow history", async () => {

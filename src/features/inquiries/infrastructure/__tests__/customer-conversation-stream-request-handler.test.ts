@@ -41,6 +41,7 @@ describe("Customer conversation stream request handler", () => {
     expect(frame).toContain("id: 4\nevent: message\n");
     expect(frame).toContain(JSON.stringify(update.message));
     expect(frame).not.toContain(token);
+    expect(frame).not.toMatch(/actorReference|staff:admin-main|admin-main/u);
     await reader.cancel();
     expect(close).toHaveBeenCalledOnce();
   });

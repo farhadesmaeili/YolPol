@@ -1,4 +1,5 @@
 import type {ConversationChannel, MessageSenderType} from "@/features/inquiries/domain/types/conversation-types";
+import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import type {InquiryStatus, InquiryUnit, StoredContactMethod} from "@/features/inquiries/domain/types/inquiry-types";
 import type {StoredInquiryWorkflowEvent} from "@/features/inquiries/domain/events/inquiry-workflow-event";
 
@@ -72,13 +73,7 @@ export type TeamInquiryDetailDto = Readonly<{
   }>;
   assignment: TeamInquiryAssignmentDto | null;
   workflowHistory: readonly StoredInquiryWorkflowEvent[];
-  conversationMessages: readonly Readonly<{
-    id: string;
-    senderType: MessageSenderType;
-    channel: ConversationChannel;
-    body: string;
-    createdAt: string;
-  }>[];
+  conversationMessages: readonly StaffConversationMessageDto[];
 }>;
 
 export type AssignableTeamMemberDto = Readonly<{

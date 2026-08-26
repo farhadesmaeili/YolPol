@@ -1,0 +1,2 @@
+ALTER TABLE "conversation_messages" ADD COLUMN "actor_reference" varchar(160);--> statement-breakpoint
+ALTER TABLE "conversation_messages" ADD CONSTRAINT "conversation_messages_actor_reference_check" CHECK ("conversation_messages"."actor_reference" is null or char_length("conversation_messages"."actor_reference") between 1 and 160);

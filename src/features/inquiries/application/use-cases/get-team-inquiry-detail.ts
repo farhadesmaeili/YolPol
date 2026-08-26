@@ -1,4 +1,4 @@
-import {toConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
+import {toStaffConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
 import type {ConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {InquiryWorkflowHistoryReader} from "@/features/inquiries/application/ports/inquiry-workflow-ports";
 import type {TeamOperationsReadRepository} from "@/features/inquiries/application/ports/team-operations-read-port";
@@ -30,7 +30,7 @@ export class GetTeamInquiryDetail {
           inquiry: snapshot.inquiry,
           assignment: snapshot.assignment,
           workflowHistory: Object.freeze([...workflowHistory]),
-          conversationMessages: Object.freeze((conversationMessages ?? []).map(toConversationMessageDto)),
+          conversationMessages: Object.freeze((conversationMessages ?? []).map(toStaffConversationMessageDto)),
         }),
       });
     } catch { return {status: "persistence_failed"}; }

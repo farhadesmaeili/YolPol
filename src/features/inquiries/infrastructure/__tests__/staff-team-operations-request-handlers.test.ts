@@ -76,8 +76,16 @@ const detail = Object.freeze({
     id: "message-1",
     senderType: "CUSTOMER" as const,
     channel: "WEBSITE" as const,
+    actorReference: null,
     body: "Please send details.",
     createdAt: "2026-08-26T08:00:00.000Z",
+  }), Object.freeze({
+    id: "message-2",
+    senderType: "INTERNAL_USER" as const,
+    channel: "WEBSITE" as const,
+    actorReference: "staff:member-1",
+    body: "We are reviewing your request.",
+    createdAt: "2026-08-26T08:05:00.000Z",
   })]),
 });
 
@@ -344,6 +352,10 @@ describe("GET /api/staff/inquiries/[inquiryId]", () => {
     expect(reads.getInquiryDetail.execute).toHaveBeenCalledWith({inquiryId: "inquiry-1"});
     const responseBody = await body(response);
     expect(responseBody).toEqual({status: "found", detail});
+    expect(responseBody).toMatchObject({detail: {conversationMessages: [
+      {actorReference: null},
+      {actorReference: "staff:member-1"},
+    ]}});
     expectKeysNotToContain(collectKeys(responseBody), forbiddenCredentialAndPricingKeys);
   });
 

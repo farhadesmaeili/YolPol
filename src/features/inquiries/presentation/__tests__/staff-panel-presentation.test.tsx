@@ -67,7 +67,7 @@ const detail: TeamInquiryDetailDto = Object.freeze({
   },
   assignment: null,
   workflowHistory: [{id: "event-1", inquiryId: listItem.id, type: "INQUIRY_CREATED", previousValue: null, newValue: "NEW", actorReference: null, occurredAt: listItem.createdAt}],
-  conversationMessages: [{id: "message-1", senderType: "CUSTOMER", channel: "WEBSITE", body: "<script>message()</script>", createdAt: listItem.createdAt}],
+  conversationMessages: [{id: "message-1", senderType: "CUSTOMER", channel: "WEBSITE", actorReference: null, body: "<script>message()</script>", createdAt: listItem.createdAt}],
 });
 
 describe("Staff Inquiry filters", () => {

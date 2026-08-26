@@ -19,3 +19,7 @@ export interface ConversationMessageUpdateReader {
 export interface ConversationMessageRepository extends ConversationMessageWriter, ConversationMessageReader, ConversationMessageUpdateReader {}
 
 export interface ConversationMessageIdGenerator { generate(): string; }
+
+export interface StaffReplyMessageIdFactory {
+  create(actorReference: string, inquiryId: string, clientMessageId: string): string;
+}

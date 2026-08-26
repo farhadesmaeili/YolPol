@@ -1,4 +1,5 @@
 import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
+import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import type {Message} from "@/features/inquiries/domain/entities/message";
 
 export function toConversationMessageDto(message: Message): ConversationMessageDto {
@@ -8,5 +9,12 @@ export function toConversationMessageDto(message: Message): ConversationMessageD
     channel: message.channel,
     body: message.body,
     createdAt: message.createdAt.toISOString(),
+  });
+}
+
+export function toStaffConversationMessageDto(message: Message): StaffConversationMessageDto {
+  return Object.freeze({
+    ...toConversationMessageDto(message),
+    actorReference: message.actorReference?.value ?? null,
   });
 }

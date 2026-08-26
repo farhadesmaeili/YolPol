@@ -20,9 +20,12 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
     }
   }
 
+  mayReplyToCustomerConversation(principal: StaffPrincipal): boolean {
+    return this.mayPerformTeamOperations(principal);
+  }
+
   actorReferenceFor(principal: StaffPrincipal): string {
     if (!this.mayPerformTeamOperations(principal)) throw new StaffAuthenticationValidationError("Staff principal is not authorized.");
     return deriveStaffActorReference(principal.teamMemberId);
   }
 }
-

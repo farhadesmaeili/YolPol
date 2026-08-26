@@ -56,7 +56,7 @@ export class PostgresInquiryRepository implements InquiryRepository {
             if (access.conversationId.value !== conversation.id.value) throw new InquiryPersistenceError();
             await transaction.insert(conversationAccess).values({conversationId: access.conversationId.value, tokenLookup: access.tokenLookup, tokenHash: access.tokenHash, createdAt: access.createdAt, expiresAt: access.expiresAt});
           }
-          if (conversation.messages.length > 0) await transaction.insert(conversationMessages).values(conversation.messages.map((message, position) => ({id: message.id.value, conversationId: conversation.id.value, position, senderType: message.senderType, channel: message.channel, body: message.body, createdAt: message.createdAt})));
+          if (conversation.messages.length > 0) await transaction.insert(conversationMessages).values(conversation.messages.map((message, position) => ({id: message.id.value, conversationId: conversation.id.value, position, senderType: message.senderType, channel: message.channel, actorReference: message.actorReference?.value ?? null, body: message.body, createdAt: message.createdAt})));
         }
         if (event) {
           await transaction.insert(inquiryOutbox).values({

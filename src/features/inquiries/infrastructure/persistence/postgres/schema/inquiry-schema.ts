@@ -88,6 +88,7 @@ export const conversationMessages = pgTable("conversation_messages", {
   position: integer("position").notNull(),
   senderType: varchar("sender_type", {length: 20}).notNull(),
   channel: varchar("channel", {length: 20}).notNull(),
+  actorReference: varchar("actor_reference", {length: 160}),
   body: text("body").notNull(),
   createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
 }, (table) => [
@@ -96,6 +97,7 @@ export const conversationMessages = pgTable("conversation_messages", {
   check("conversation_messages_position_check", sql`${table.position} >= 0`),
   check("conversation_messages_sender_type_check", sql`${table.senderType} in ('CUSTOMER','INTERNAL_USER','AI_AGENT','SYSTEM')`),
   check("conversation_messages_channel_check", sql`${table.channel} in ('WEBSITE','TELEGRAM','EMAIL','WHATSAPP')`),
+  check("conversation_messages_actor_reference_check", sql`${table.actorReference} is null or char_length(${table.actorReference}) between 1 and 160`),
   check("conversation_messages_body_length_check", sql`char_length(${table.body}) between 1 and 10000`),
 ]);
 
