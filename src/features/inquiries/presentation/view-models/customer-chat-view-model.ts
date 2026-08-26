@@ -13,6 +13,7 @@ export type CustomerChatLabels = Readonly<{
   empty: string;
   customerAuthor: string;
   supportAuthor: string;
+  teamTyping: string;
   messageLabel: string;
   messagePlaceholder: string;
   send: string;

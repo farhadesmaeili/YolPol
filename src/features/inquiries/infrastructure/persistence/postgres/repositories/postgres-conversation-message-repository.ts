@@ -2,7 +2,7 @@ import {and, asc, eq, gt, max} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
-import type {AppendConversationMessageResult, ConversationMessageRepository} from "@/features/inquiries/application/ports/conversation-ports";
+import type {AppendConversationMessageResult, ConversationMessageRepository, ConversationReferenceReader} from "@/features/inquiries/application/ports/conversation-ports";
 import {Message} from "@/features/inquiries/domain/entities/message";
 import {conversationChannels, messageSenderTypes} from "@/features/inquiries/domain/types/conversation-types";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
@@ -10,10 +10,22 @@ import {conversationMessages, conversations, inquiryPostgresSchema} from "@/feat
 
 type InquiryDatabase = NodePgDatabase<typeof inquiryPostgresSchema>;
 
-export class PostgresConversationMessageRepository implements ConversationMessageRepository {
+export class PostgresConversationMessageRepository implements ConversationMessageRepository, ConversationReferenceReader {
   private readonly database: InquiryDatabase;
 
   constructor(pool: Pool) { this.database = drizzle(pool, {schema: inquiryPostgresSchema}); }
+
+  async findConversationIdForInquiry(inquiryId: string): Promise<string | null> {
+    try {
+      const [conversation] = await this.database.select({id: conversations.id})
+        .from(conversations)
+        .where(eq(conversations.inquiryId, inquiryId))
+        .limit(1);
+      return conversation?.id ?? null;
+    } catch {
+      throw new InquiryPersistenceError();
+    }
+  }
 
   async appendForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult> {
     try {

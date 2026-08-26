@@ -27,4 +27,15 @@ describe("Customer conversation stream client", () => {
     expect(subscribeToCustomerConversation("../private", vi.fn(), createEventSource)).toBeNull();
     expect(createEventSource).not.toHaveBeenCalled();
   });
+
+  it("accepts only aggregate Staff typing events and rejects confidential identity fields", () => {
+    const listeners = new Map<string, (event: MessageEvent<string>) => void>();
+    const source: CustomerConversationEventSource = {addEventListener: (type, value) => { listeners.set(type, value); }, close: vi.fn()};
+    const onTyping = vi.fn();
+    subscribeToCustomerConversation(accessToken, vi.fn(), () => source, onTyping);
+    listeners.get("typing")!({data: '{"participant":"STAFF","isTyping":true}'} as MessageEvent<string>);
+    listeners.get("typing")!({data: '{"participant":"STAFF","isTyping":true,"actorReference":"staff:admin-main"}'} as MessageEvent<string>);
+    expect(onTyping).toHaveBeenCalledOnce();
+    expect(onTyping).toHaveBeenCalledWith(true);
+  });
 });

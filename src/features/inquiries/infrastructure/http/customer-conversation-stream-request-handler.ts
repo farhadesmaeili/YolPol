@@ -1,4 +1,5 @@
 import type {ConversationMessageUpdate} from "@/features/inquiries/application/ports/conversation-stream-ports";
+import type {ConversationTypingRegistry, ConversationTypingSubscription} from "@/features/inquiries/application/ports/conversation-typing-ports";
 import type {StreamConversationUpdatesResult} from "@/features/inquiries/application/results/stream-conversation-updates-result";
 import type {ResolveConversationByAccessTokenResult} from "@/features/inquiries/application/results/resolve-conversation-by-access-token-result";
 import {originAllowed} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
@@ -32,10 +33,15 @@ function messageFrame(update: ConversationMessageUpdate): Uint8Array {
   return encoder.encode(`id: ${update.cursor}\nevent: message\ndata: ${JSON.stringify(update.message)}\n\n`);
 }
 
+function typingFrame(isTyping: boolean): Uint8Array {
+  return encoder.encode(`event: typing\ndata: ${JSON.stringify({participant: "STAFF", isTyping})}\n\n`);
+}
+
 export function createCustomerConversationStreamRequestHandler(
   getResolver: () => AccessResolver,
   getStreamer: () => ConversationStreamer,
   options: ConversationStreamHttpOptions = {},
+  getTypingRegistry?: () => ConversationTypingRegistry,
 ) {
   return async function handle(request: Request, context: ConversationStreamRouteContext): Promise<Response> {
     if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
@@ -55,14 +61,18 @@ export function createCustomerConversationStreamRequestHandler(
     let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     let closeSession: (() => void) | null = null;
+    let typingSubscription: ConversationTypingSubscription | null = null;
     let finished = false;
+    const pending: Uint8Array[] = [];
     const enqueue = (value: Uint8Array) => {
-      if (finished || !streamController) return;
+      if (finished) return;
+      if (!streamController) { pending.push(value); return; }
       try { streamController.enqueue(value); }
       catch {
         finished = true;
         if (heartbeat) clearInterval(heartbeat);
         heartbeat = null;
+        typingSubscription?.close();
         closeSession?.();
       }
     };
@@ -84,21 +94,42 @@ export function createCustomerConversationStreamRequestHandler(
 
     const {session} = opened;
     closeSession = session.close;
+    if (getTypingRegistry) {
+      try {
+        typingSubscription = getTypingRegistry().subscribe({
+          conversationId: access.conversationId,
+          participant: "STAFF",
+          listener: (event) => enqueue(typingFrame(event.isTyping)),
+        });
+      } catch {
+        session.close();
+        return failure("service_unavailable", 503);
+      }
+      if (!typingSubscription) {
+        session.close();
+        return failure("service_unavailable", 503);
+      }
+    }
     const cleanup = () => {
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = null;
+      typingSubscription?.close();
+      typingSubscription = null;
       session.close();
     };
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         streamController = controller;
         enqueue(encoder.encode(": connected\nretry: 3000\n\n"));
+        for (const frame of pending.splice(0)) enqueue(frame);
         heartbeat = setInterval(() => enqueue(encoder.encode(": keep-alive\n\n")), options.heartbeatIntervalMs ?? 15_000);
         void session.completed.finally(() => {
           if (finished) return;
           finished = true;
           if (heartbeat) clearInterval(heartbeat);
           heartbeat = null;
+          typingSubscription?.close();
+          typingSubscription = null;
           try { controller.close(); } catch { /* Cancellation may already have closed the HTTP stream. */ }
         });
       },
