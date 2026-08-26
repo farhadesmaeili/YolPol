@@ -21,7 +21,10 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}:
   locale: Locale;
   teamMemberNames?: Readonly<Record<string, string>>;
 }>) {
-  const t = await getTranslations({locale, namespace: "Staff"});
+  const [t, typing] = await Promise.all([
+    getTranslations({locale, namespace: "Staff"}),
+    getTranslations({locale, namespace: "ConversationTyping"}),
+  ]);
   const inquiry = detail.inquiry;
   const valueArrow = locale === "fa" || locale === "ar" ? "←" : "→";
   const valueLabel = (value: string | null) => value === null
@@ -128,6 +131,7 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}:
                 replyToCustomer: t("reply.replyToCustomer"),
                 writeReply: t("reply.writeReply"),
                 characters: t("reply.characters"),
+                customerTyping: typing("customer"),
                 keyboardHint: t("reply.keyboardHint"),
                 sendReply: t("reply.sendReply"),
                 sending: t("reply.sending"),

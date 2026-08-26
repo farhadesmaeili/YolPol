@@ -22,7 +22,7 @@ const message: StaffConversationMessageDto = Object.freeze({
   createdAt: "2026-08-26T10:00:00.000Z",
 });
 
-function labels(catalog: typeof enMessages.Staff): StaffReplyComposerLabels {
+function labels(catalog: typeof enMessages.Staff, customerTyping = enMessages.ConversationTyping.customer): StaffReplyComposerLabels {
   return {
     aiAgent: catalog.senders.AI_AGENT,
     customer: catalog.senders.CUSTOMER,
@@ -35,6 +35,7 @@ function labels(catalog: typeof enMessages.Staff): StaffReplyComposerLabels {
     replyToCustomer: catalog.reply.replyToCustomer,
     writeReply: catalog.reply.writeReply,
     characters: catalog.reply.characters,
+    customerTyping,
     keyboardHint: catalog.reply.keyboardHint,
     sendReply: catalog.reply.sendReply,
     sending: catalog.reply.sending,
@@ -74,7 +75,7 @@ describe("Staff Reply Composer presentation", () => {
   });
 
   it("renders complete Persian RTL-ready content without physical-side spacing", () => {
-    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="خریدار" initialMessages={[]} inquiryId="inquiry-1" labels={labels(faMessages.Staff)} locale="fa" teamMemberNames={{}} />);
+    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="خریدار" initialMessages={[]} inquiryId="inquiry-1" labels={labels(faMessages.Staff, faMessages.ConversationTyping.customer)} locale="fa" teamMemberNames={{}} />);
     expect(html).toContain(faMessages.Staff.reply.replyToCustomer);
     expect(html).toContain(faMessages.Staff.reply.sendReply);
     const source = readFileSync(join(process.cwd(), "src", "features", "inquiries", "presentation", "components", "staff", "staff-reply-composer.tsx"), "utf8");

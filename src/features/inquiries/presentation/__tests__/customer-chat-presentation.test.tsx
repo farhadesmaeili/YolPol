@@ -9,7 +9,7 @@ import enMessages from "@/i18n/messages/en.json";
 import faMessages from "@/i18n/messages/fa.json";
 import trMessages from "@/i18n/messages/tr.json";
 
-const labels: CustomerChatLabels = enMessages.CustomerChat;
+const labels: CustomerChatLabels = {...enMessages.CustomerChat, teamTyping: enMessages.ConversationTyping.team};
 
 describe("Customer chat presentation", () => {
   it("renders an accessible responsive chat foundation without exposing the inquiry path", () => {
@@ -42,5 +42,15 @@ describe("Customer chat presentation", () => {
     expect(Object.keys(catalog).sort()).toEqual(Object.keys(enMessages.CustomerChat).sort());
     expect(Object.keys(catalog.errors).sort()).toEqual(Object.keys(enMessages.CustomerChat.errors).sort());
     expect(Object.values(catalog).every((value) => typeof value === "object" || value.length > 0)).toBe(true);
+  });
+
+  it.each([
+    ["en", enMessages.ConversationTyping],
+    ["tr", trMessages.ConversationTyping],
+    ["fa", faMessages.ConversationTyping],
+    ["ar", arMessages.ConversationTyping],
+  ] as const)("provides complete %s typing labels", (_locale, catalog) => {
+    expect(Object.keys(catalog).sort()).toEqual(["customer", "team"]);
+    expect(Object.values(catalog).every((value) => value.length > 0)).toBe(true);
   });
 });

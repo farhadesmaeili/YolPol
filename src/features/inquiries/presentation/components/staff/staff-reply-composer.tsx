@@ -1,10 +1,13 @@
 "use client";
 
-import {useEffect, useId, useReducer, useRef, type FormEvent, type KeyboardEvent} from "react";
+import {useEffect, useId, useReducer, useRef, useState, type FormEvent, type KeyboardEvent} from "react";
 
 import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/message-input-validation";
+import {ConversationTypingHeartbeat, sendStaffConversationTyping} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import {createStaffClientMessageId, sendStaffConversationReply, type StaffConversationReplyFailure} from "@/features/inquiries/presentation/clients/staff-conversation-reply-client";
+import {subscribeToStaffConversationTyping} from "@/features/inquiries/presentation/clients/staff-conversation-typing-stream-client";
+import {ConversationTypingIndicator} from "@/features/inquiries/presentation/components/conversation-typing-indicator";
 import {StaffConversationMessageList, type StaffConversationLabels} from "@/features/inquiries/presentation/components/staff/staff-conversation-message-list";
 import {createInitialStaffReplyState, staffReplyDraftFailure, staffReplyReducer, type StaffReplyDraftFailure} from "@/features/inquiries/presentation/state/staff-reply-reducer";
 import {useRouter} from "@/i18n/navigation";
@@ -12,6 +15,7 @@ import type {Locale} from "@/shared/types/locale";
 
 export type StaffReplyComposerLabels = StaffConversationLabels & Readonly<{
   characters: string;
+  customerTyping: string;
   keyboardHint: string;
   replyToCustomer: string;
   sendReply: string;
@@ -48,6 +52,8 @@ export function StaffReplyComposer({
   const controller = useRef<AbortController | null>(null);
   const submissionInFlight = useRef(false);
   const mounted = useRef(true);
+  const typingHeartbeat = useRef<ConversationTypingHeartbeat | null>(null);
+  const [customerTyping, setCustomerTyping] = useState(false);
   const [state, dispatch] = useReducer(staffReplyReducer, initialMessages, createInitialStaffReplyState);
 
   useEffect(() => {
@@ -59,6 +65,20 @@ export function StaffReplyComposer({
       submissionInFlight.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    const subscription = subscribeToStaffConversationTyping(inquiryId, setCustomerTyping);
+    return () => subscription?.close();
+  }, [inquiryId]);
+
+  useEffect(() => {
+    const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendStaffConversationTyping(inquiryId, isTyping));
+    typingHeartbeat.current = heartbeat;
+    return () => {
+      heartbeat.dispose();
+      if (typingHeartbeat.current === heartbeat) typingHeartbeat.current = null;
+    };
+  }, [inquiryId]);
 
   async function submit() {
     if (submissionInFlight.current) return;
@@ -94,6 +114,7 @@ export function StaffReplyComposer({
     if (!mounted.current || !active) return;
 
     if (result.status === "sent") {
+      typingHeartbeat.current?.stop();
       dispatch({type: "submission_succeeded", message: result.message});
       requestAnimationFrame(() => textarea.current?.focus());
       return;
@@ -138,6 +159,8 @@ export function StaffReplyComposer({
         teamMemberNames={teamMemberNames}
       />
 
+      <ConversationTypingIndicator active={customerTyping} label={labels.customerTyping} />
+
       <div className="my-5 border-t border-stone-200" />
 
       <form onSubmit={handleSubmit} noValidate className="min-w-0">
@@ -153,7 +176,7 @@ export function StaffReplyComposer({
           disabled={sending}
           aria-describedby={`${descriptionId}${feedback ? ` ${feedbackId}` : ""}`}
           aria-invalid={state.failure ? true : undefined}
-          onChange={(event) => dispatch({type: "draft_changed", value: event.target.value})}
+          onChange={(event) => { typingHeartbeat.current?.draftChanged(event.target.value); dispatch({type: "draft_changed", value: event.target.value}); }}
           onKeyDown={handleKeyDown}
           className="mt-2 min-h-36 w-full resize-y rounded-xl border border-stone-300 bg-white px-4 py-3 text-start text-base leading-7 text-stone-950 outline-none transition focus:border-emerald-800 focus:ring-2 focus:ring-emerald-800/20 disabled:cursor-wait disabled:bg-stone-100 disabled:opacity-70 motion-reduce:transition-none"
         />

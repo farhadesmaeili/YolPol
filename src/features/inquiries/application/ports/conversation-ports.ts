@@ -18,6 +18,10 @@ export interface ConversationMessageUpdateReader {
 
 export interface ConversationMessageRepository extends ConversationMessageWriter, ConversationMessageReader, ConversationMessageUpdateReader {}
 
+export interface ConversationReferenceReader {
+  findConversationIdForInquiry(inquiryId: string): Promise<string | null>;
+}
+
 export interface ConversationMessageIdGenerator { generate(): string; }
 
 export interface StaffReplyMessageIdFactory {

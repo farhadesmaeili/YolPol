@@ -1,7 +1,8 @@
 "use client";
 
-import {useEffect, useId, useReducer, useRef} from "react";
+import {useEffect, useId, useReducer, useRef, useState} from "react";
 
+import {ConversationTypingHeartbeat, sendCustomerConversationTyping} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import {subscribeToCustomerConversation} from "@/features/inquiries/presentation/clients/customer-conversation-stream-client";
 import {loadCustomerMessageHistory, sendCustomerMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
 import {ChatContainer} from "@/features/inquiries/presentation/components/customer-chat/chat-container";
@@ -9,6 +10,7 @@ import {ChatErrorState} from "@/features/inquiries/presentation/components/custo
 import {ChatLoadingState} from "@/features/inquiries/presentation/components/customer-chat/chat-loading-state";
 import {MessageInput} from "@/features/inquiries/presentation/components/customer-chat/message-input";
 import {MessageList} from "@/features/inquiries/presentation/components/customer-chat/message-list";
+import {ConversationTypingIndicator} from "@/features/inquiries/presentation/components/conversation-typing-indicator";
 import {createInitialCustomerChatState, customerChatReducer, customerMessageDraftFailure, type CustomerChatFailure, type CustomerChatHistoryFailure} from "@/features/inquiries/presentation/state/customer-chat-reducer";
 import type {CustomerChatLabels} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
@@ -39,11 +41,27 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
   const activeHistoryController = useRef<AbortController | null>(null);
   const submissionInFlight = useRef(false);
   const mounted = useRef(true);
+  const typingHeartbeat = useRef<ConversationTypingHeartbeat | null>(null);
+  const [staffTyping, setStaffTyping] = useState(false);
   const [state, dispatch] = useReducer(customerChatReducer, undefined, createInitialCustomerChatState);
 
   useEffect(() => {
-    const subscription = subscribeToCustomerConversation(accessToken, (message) => dispatch({type: "realtime_message_received", message}));
+    const subscription = subscribeToCustomerConversation(
+      accessToken,
+      (message) => dispatch({type: "realtime_message_received", message}),
+      undefined,
+      setStaffTyping,
+    );
     return () => subscription?.close();
+  }, [accessToken]);
+
+  useEffect(() => {
+    const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendCustomerConversationTyping(accessToken, isTyping));
+    typingHeartbeat.current = heartbeat;
+    return () => {
+      heartbeat.dispose();
+      if (typingHeartbeat.current === heartbeat) typingHeartbeat.current = null;
+    };
   }, [accessToken]);
 
   useEffect(() => {
@@ -88,7 +106,10 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
     }
     if (!mounted.current || !isActiveSubmission) return;
 
-    if (result.status === "created") dispatch({type: "submission_succeeded", message: {id: result.messageId, body: message, sender: "customer"}});
+    if (result.status === "created") {
+      typingHeartbeat.current?.stop();
+      dispatch({type: "submission_succeeded", message: {id: result.messageId, body: message, sender: "customer"}});
+    }
     else dispatch({type: "submission_failed", failure: result.status === "validation_error" ? "validation" : result.status === "rate_limited" ? "rate_limited" : result.status === "network_error" ? "network" : "service"});
   };
 
@@ -96,11 +117,12 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
   const isLoadingHistory = state.historyStatus === "loading";
   return <ChatContainer headingId={headingId} title={labels.title} description={labels.description} isBusy={isSubmitting || isLoadingHistory}>
     <MessageList messages={state.messages} label={labels.messages} empty={labels.empty} customerAuthor={labels.customerAuthor} supportAuthor={labels.supportAuthor} />
+    <ConversationTypingIndicator active={staffTyping} label={labels.teamTyping} />
     {isLoadingHistory ? <ChatLoadingState message={labels.loadingHistory} /> : null}
     {isSubmitting ? <ChatLoadingState message={labels.loading} /> : null}
     {state.historyFailure ? <ChatErrorState id={historyErrorId} title={labels.historyErrorTitle} message={historyFailureMessage(state.historyFailure, labels)} /> : null}
     {state.failure ? <ChatErrorState id={errorId} title={labels.errorTitle} message={failureMessage(state.failure, labels)} /> : null}
     {state.sentAnnouncement ? <p role="status" className="sr-only">{labels.sent}</p> : null}
-    <MessageInput draft={state.draft} label={labels.messageLabel} placeholder={labels.messagePlaceholder} sendLabel={labels.send} sendingLabel={labels.sending} submitting={isSubmitting} errorId={errorId} invalid={state.failure !== null} onDraftChange={(value) => dispatch({type: "draft_changed", value})} onSubmit={() => { void submit(); }} />
+    <MessageInput draft={state.draft} label={labels.messageLabel} placeholder={labels.messagePlaceholder} sendLabel={labels.send} sendingLabel={labels.sending} submitting={isSubmitting} errorId={errorId} invalid={state.failure !== null} onDraftChange={(value) => { typingHeartbeat.current?.draftChanged(value); dispatch({type: "draft_changed", value}); }} onSubmit={() => { void submit(); }} />
   </ChatContainer>;
 }

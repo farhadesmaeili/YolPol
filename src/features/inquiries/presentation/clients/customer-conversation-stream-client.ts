@@ -1,8 +1,9 @@
 import {conversationAccessTokenPattern, parseCustomerChatMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
+import {parseConversationTypingEvent} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
 export interface CustomerConversationEventSource {
-  addEventListener(type: "message", listener: (event: MessageEvent<string>) => void): void;
+  addEventListener(type: "message" | "typing", listener: (event: MessageEvent<string>) => void): void;
   close(): void;
 }
 
@@ -12,6 +13,7 @@ export function subscribeToCustomerConversation(
   accessToken: string,
   onMessage: (message: CustomerChatMessage) => void,
   createEventSource: (url: string) => CustomerConversationEventSource = (url) => new EventSource(url),
+  onStaffTyping?: (isTyping: boolean) => void,
 ): CustomerConversationStreamSubscription | null {
   if (!conversationAccessTokenPattern.test(accessToken)) return null;
 
@@ -25,5 +27,13 @@ export function subscribeToCustomerConversation(
       if (message) onMessage(message);
     } catch { /* EventSource reconnects automatically; malformed events stay presentation-safe. */ }
   });
+  if (onStaffTyping) {
+    source.addEventListener("typing", (event) => {
+      try {
+        const isTyping = parseConversationTypingEvent(JSON.parse(event.data) as unknown, "STAFF");
+        if (isTyping !== null) onStaffTyping(isTyping);
+      } catch { /* Malformed ephemeral events never affect persisted message delivery. */ }
+    });
+  }
   return Object.freeze({close: () => source.close()});
 }
