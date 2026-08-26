@@ -29,6 +29,7 @@ vi.mock("next-intl/server", () => ({
 
 vi.mock("@/i18n/navigation", () => ({
   Link: ({children, href, ...props}: Readonly<{children: ReactNode; href: string}>) => <a href={href} {...props}>{children}</a>,
+  useRouter: () => ({replace: vi.fn(), refresh: vi.fn()}),
 }));
 
 let StaffInquiryDetail: typeof import("@/features/inquiries/presentation/components/staff/staff-inquiry-detail").StaffInquiryDetail;
@@ -86,7 +87,7 @@ describe("Staff Inquiry filters", () => {
   });
 });
 
-describe("Staff Inquiry read-only presentation", () => {
+describe("Staff Inquiry presentation", () => {
   it("renders a populated responsive queue with localized status and forward keyset navigation", async () => {
     const filters = parseStaffInquiryFilters({status: "WAITING_FOR_TEAM"}, new Set());
     const html = renderToStaticMarkup(await StaffInquiryList({locale: "en", filters, inquiries: [listItem], nextCursor: "next-cursor", teamMembers: []}));
@@ -118,13 +119,13 @@ describe("Staff Inquiry read-only presentation", () => {
     expect(emptyDetail).toContain("No conversation messages");
   });
 
-  it("contains no mutation controls, unsafe HTML rendering, prices, or credential fields", () => {
+  it("contains no unrelated mutations, unsafe HTML rendering, prices, or credential fields", () => {
     const directory = join(process.cwd(), "src", "features", "inquiries", "presentation", "components", "staff");
     const source = ["staff-dashboard.tsx", "staff-inquiry-list.tsx", "staff-inquiry-detail.tsx", "staff-team-members.tsx"]
       .map((file) => readFileSync(join(directory, file), "utf8"))
       .join("\n");
     expect(source).not.toMatch(/dangerouslySetInnerHTML|internalUnitPrice|internalTotalPrice|accessToken|lookupDigest|verificationDigest/u);
-    expect(source).not.toMatch(/change status|send reply|assign inquiry|unassign inquiry/iu);
+    expect(source).not.toMatch(/change status|assign inquiry|unassign inquiry/iu);
   });
 });
 
