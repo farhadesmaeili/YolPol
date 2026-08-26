@@ -61,20 +61,20 @@ describe("Inquiry global limiter", () => {
 
 describe("Inquiry origins", () => {
   afterEach(()=>vi.unstubAllEnvs());
-  const allowed=new Set(["http://192.168.1.55:3000"]);
+  const allowed=new Set(["http://192.168.1.100:3000"]);
   const accepted=(origin:string|undefined,url="http://localhost:3000/api/inquiries") => originAllowed(new Request(url,{headers:origin===undefined?{}:{Origin:origin}}),allowed);
   it("accepts canonical, missing, loopback, and approved development LAN origins",()=>{
     vi.stubEnv("NODE_ENV","development");
     expect(accepted("https://yolpol.com","https://internal:3000/api/inquiries")).toBe(true);
     expect(accepted(undefined)).toBe(true); expect(accepted("http://localhost:3000")).toBe(true);
     expect(accepted("http://127.0.0.1:3000","http://127.0.0.1:3000/api/inquiries")).toBe(true);
-    expect(accepted("http://192.168.1.55:3000","http://192.168.1.55:3000/api/inquiries")).toBe(true);
+    expect(accepted("http://192.168.1.100:3000","http://192.168.1.100:3000/api/inquiries")).toBe(true);
   });
   it("accepts only the canonical approved site Origin in production",()=>{vi.stubEnv("NODE_ENV","production");expect(accepted("https://yolpol.com","https://internal:3000/api/inquiries")).toBe(true);expect(accepted("https://www.yolpol.com","https://internal:3000/api/inquiries")).toBe(false);});
   it("uses the HTTP Host header when Next.js normalizes the request URL",()=>{vi.stubEnv("NODE_ENV","development");expect(originAllowed(new Request("http://localhost/api/inquiries",{headers:{Origin:"http://localhost:3000",Host:"localhost:3000"}}),allowed)).toBe(true);});
   it("rejects a loopback Origin that does not match the HTTP Host",()=>{vi.stubEnv("NODE_ENV","development");expect(originAllowed(new Request("http://localhost/api/inquiries",{headers:{Origin:"http://localhost:3001",Host:"localhost:3000"}}),allowed)).toBe(false);});
-  it.each(["http://localhost:3000","http://127.0.0.1:3000","http://192.168.1.55:3000"])("rejects development Origin %s in production",origin=>{vi.stubEnv("NODE_ENV","production");expect(accepted(origin,origin.replace("192.168.1.55","localhost")+"/api/inquiries")).toBe(false);});
+  it.each(["http://localhost:3000","http://127.0.0.1:3000","http://192.168.1.100:3000"])("rejects development Origin %s in production",origin=>{vi.stubEnv("NODE_ENV","production");expect(accepted(origin,origin.replace("192.168.1.100","localhost")+"/api/inquiries")).toBe(false);});
   it.each(["https://localhost:3000","http://localhost:3001"])("rejects loopback with the wrong scheme or port: %s",origin=>{vi.stubEnv("NODE_ENV","development");expect(originAllowed(new Request("http://localhost/api/inquiries",{headers:{Origin:origin,Host:"localhost:3000"}}),allowed)).toBe(false);});
-  it.each(["http://192.168.1.56:3000","https://192.168.1.55:3000","http://192.168.1.55:3001","null","bad origin","https://yolpol.com, https://evil.test"])("rejects unapproved origin %s",origin=>{vi.stubEnv("NODE_ENV","development");expect(accepted(origin,"http://192.168.1.55:3000/api/inquiries")).toBe(false);});
-  it("does not allow the LAN origin in production",()=>{vi.stubEnv("NODE_ENV","production");expect(accepted("http://192.168.1.55:3000","http://192.168.1.55:3000/api/inquiries")).toBe(false);});
+  it.each(["http://192.168.1.101:3000","https://192.168.1.100:3000","http://192.168.1.100:3001","null","bad origin","https://yolpol.com, https://evil.test"])("rejects unapproved origin %s",origin=>{vi.stubEnv("NODE_ENV","development");expect(accepted(origin,"http://192.168.1.100:3000/api/inquiries")).toBe(false);});
+  it("does not allow the configured LAN origin in production",()=>{vi.stubEnv("NODE_ENV","production");expect(accepted("http://192.168.1.100:3000","http://192.168.1.100:3000/api/inquiries")).toBe(false);});
 });
