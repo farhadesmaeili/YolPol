@@ -9,6 +9,7 @@ import {routing, type Locale} from "@/i18n/routing";
 import {createLocalizedMetadata} from "@/shared/seo/metadata";
 import {SiteFooter} from "@/shared/presentation/site-shell/site-footer";
 import {SiteHeader} from "@/shared/presentation/site-shell/site-header";
+import {PublicSiteFrame} from "@/shared/presentation/site-shell/public-site-frame";
 import {getLocaleFontClass} from "@/shared/presentation/typography/locale-font";
 import "../globals.css";
 
@@ -61,11 +62,12 @@ export default async function LocaleLayout({
     >
       <body className={`${getLocaleFontClass(locale as Locale)} min-h-screen bg-background text-foreground antialiased`}>
         <NextIntlClientProvider messages={messages}>
-          <div className="flex min-h-screen flex-col">
-            <SiteHeader locale={locale as Locale} />
-            <main id="main-content" className="flex-1">{children}</main>
-            <SiteFooter locale={locale as Locale} />
-          </div>
+          <PublicSiteFrame
+            header={<SiteHeader locale={locale as Locale} />}
+            footer={<SiteFooter locale={locale as Locale} />}
+          >
+            {children}
+          </PublicSiteFrame>
         </NextIntlClientProvider>
       </body>
     </html>
