@@ -21,11 +21,21 @@ export default async function StaffInquiryDetailPage({params}: StaffInquiryDetai
   setRequestLocale(locale);
   const access = await resolveStaffPanelAccess();
   if (access.status !== "authorized") return null;
-  const result = await getStaffPanelTeamOperations().getInquiryDetail.execute({inquiryId});
+  const operations = getStaffPanelTeamOperations();
+  const [result, teamMembersResult] = await Promise.all([
+    operations.getInquiryDetail.execute({inquiryId}),
+    operations.listAssignableTeamMembers.execute(),
+  ]);
   if (result.status === "inquiry_not_found" || result.status === "validation_failed") notFound();
   if (result.status !== "found") {
     const t = await getTranslations({locale, namespace: "Staff"});
     return <StaffState title={t("states.serviceUnavailableTitle")} description={t("states.serviceUnavailableDescription")} />;
   }
-  return <StaffInquiryDetail detail={result.detail} locale={locale} />;
+  const teamMemberNames = Object.freeze(Object.fromEntries([
+    ...(teamMembersResult.status === "found"
+      ? teamMembersResult.teamMembers.map(({id, displayName}) => [id, displayName] as const)
+      : []),
+    [access.principal.teamMemberId, access.principal.displayName] as const,
+  ]));
+  return <StaffInquiryDetail detail={result.detail} locale={locale} teamMemberNames={teamMemberNames} />;
 }

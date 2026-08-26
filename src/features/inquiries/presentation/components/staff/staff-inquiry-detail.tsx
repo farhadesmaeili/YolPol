@@ -2,6 +2,7 @@ import {getTranslations} from "next-intl/server";
 
 import type {TeamInquiryDetailDto} from "@/features/inquiries/application/dto/team-operations-dto";
 import type {InquiryStatus} from "@/features/inquiries/domain/types/inquiry-types";
+import {StaffReplyComposer} from "@/features/inquiries/presentation/components/staff/staff-reply-composer";
 import {StaffDateTime, StaffPageHeader, StaffPanel, StaffState, StaffStatusBadge} from "@/features/inquiries/presentation/components/staff/staff-ui";
 import {Link} from "@/i18n/navigation";
 import {formatHumanNumber, LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
@@ -15,7 +16,11 @@ function DetailValue({children, label, ltr = false}: Readonly<{children: React.R
   return <div className="min-w-0"><dt className="text-xs font-medium text-stone-500">{label}</dt><dd className={`mt-1 break-words text-sm font-semibold text-stone-900 ${ltr ? "font-mono text-xs" : ""}`}>{ltr ? <LtrIsolate>{children}</LtrIsolate> : children}</dd></div>;
 }
 
-export async function StaffInquiryDetail({detail, locale}: Readonly<{detail: TeamInquiryDetailDto; locale: Locale}>) {
+export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}: Readonly<{
+  detail: TeamInquiryDetailDto;
+  locale: Locale;
+  teamMemberNames?: Readonly<Record<string, string>>;
+}>) {
   const t = await getTranslations({locale, namespace: "Staff"});
   const inquiry = detail.inquiry;
   const valueArrow = locale === "fa" || locale === "ar" ? "←" : "→";
@@ -100,17 +105,48 @@ export async function StaffInquiryDetail({detail, locale}: Readonly<{detail: Tea
           </StaffPanel>
 
           <StaffPanel title={t("inquiryDetail.conversation")}>
-            {detail.conversationMessages.length === 0 ? <StaffState title={t("states.emptyConversationTitle")} description={t("states.emptyConversationDescription")} /> : (
-              <ol className="space-y-3">
-                {detail.conversationMessages.map((message) => (
-                  <li key={message.id} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><span className="font-bold text-stone-800">{t(`senders.${message.senderType}`)}</span><span className="rounded-full bg-white px-2 py-1 text-stone-600">{t(`channels.${message.channel}`)}</span></div>
-                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-stone-800">{message.body}</p>
-                    <p className="mt-3 text-xs text-stone-500"><StaffDateTime locale={locale} value={message.createdAt} /></p>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <StaffReplyComposer
+              customerDisplayName={inquiry.contact.fullName}
+              initialMessages={detail.conversationMessages}
+              inquiryId={inquiry.id}
+              locale={locale}
+              teamMemberNames={teamMemberNames}
+              labels={{
+                aiAgent: t("senders.AI_AGENT"),
+                customer: t("senders.CUSTOMER"),
+                system: t("senders.SYSTEM"),
+                yolpolTeam: t("reply.yolpolTeam"),
+                channels: {
+                  WEBSITE: t("channels.WEBSITE"),
+                  TELEGRAM: t("channels.TELEGRAM"),
+                  EMAIL: t("channels.EMAIL"),
+                  WHATSAPP: t("channels.WHATSAPP"),
+                },
+                emptyTitle: t("states.emptyConversationTitle"),
+                emptyDescription: t("states.emptyConversationDescription"),
+                messageList: t("reply.messageList"),
+                replyToCustomer: t("reply.replyToCustomer"),
+                writeReply: t("reply.writeReply"),
+                characters: t("reply.characters"),
+                keyboardHint: t("reply.keyboardHint"),
+                sendReply: t("reply.sendReply"),
+                sending: t("reply.sending"),
+                sent: t("reply.sent"),
+                errors: {
+                  required: t("reply.errors.required"),
+                  too_long: t("reply.errors.tooLong"),
+                  invalid_message: t("reply.errors.invalidMessage"),
+                  session_expired: t("reply.errors.sessionExpired"),
+                  permission_denied: t("reply.errors.permissionDenied"),
+                  conversation_unavailable: t("reply.errors.conversationUnavailable"),
+                  retry_conflict: t("reply.errors.retryConflict"),
+                  message_too_large: t("reply.errors.messageTooLarge"),
+                  unsupported_request: t("reply.errors.unsupportedRequest"),
+                  rate_limited: t("reply.errors.rateLimited"),
+                  service_unavailable: t("reply.errors.serviceUnavailable"),
+                },
+              }}
+            />
           </StaffPanel>
         </div>
       </div>
