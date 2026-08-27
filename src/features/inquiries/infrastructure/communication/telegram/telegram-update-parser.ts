@@ -2,17 +2,17 @@ import type {ExternalChannelReply} from "@/features/inquiries/application/dto/no
 
 type UnknownRecord = Readonly<Record<string, unknown>>;
 
+export type TelegramUpdateClassification =
+  | Readonly<{status: "actionable"; reply: ExternalChannelReply}>
+  | Readonly<{status: "ignored"}>
+  | Readonly<{status: "invalid"}>;
+
 function record(value: unknown): UnknownRecord | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
 function safeInteger(value: unknown, minimum: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= minimum ? value : null;
-}
-
-function inquiryIdFromNotification(body: string): string | null {
-  const matches = [...body.matchAll(/^\s*Inquiry(?:\s+#|:)\s*([A-Za-z0-9_-]{1,128})\s*$/gmu)];
-  return matches.length === 1 ? matches[0]?.[1] ?? null : null;
 }
 
 export function parseTelegramUpdate(input: unknown): ExternalChannelReply | null {
@@ -25,13 +25,11 @@ export function parseTelegramUpdate(input: unknown): ExternalChannelReply | null
   const chat = record(message?.chat);
   const chatId = safeInteger(chat?.id, Number.MIN_SAFE_INTEGER);
   const repliedMessage = record(message?.reply_to_message);
-  const repliedMessageBody = typeof repliedMessage?.text === "string" ? repliedMessage.text : typeof repliedMessage?.caption === "string" ? repliedMessage.caption : null;
+  const repliedMessageId = safeInteger(repliedMessage?.message_id, 1);
   const replyBody = typeof message?.text === "string" ? message.text.trim() : null;
 
-  if (updateId === null || messageId === null || senderId === null || chatId === null) return null;
-  if (!replyBody || replyBody.length > 10_000 || !repliedMessageBody) return null;
-  const inquiryId = inquiryIdFromNotification(repliedMessageBody);
-  if (!inquiryId) return null;
+  if (updateId === null || messageId === null || senderId === null || chatId === null || repliedMessageId === null) return null;
+  if (!replyBody || replyBody.length > 10_000) return null;
 
   return Object.freeze({
     externalUpdateId: String(updateId),
@@ -39,7 +37,18 @@ export function parseTelegramUpdate(input: unknown): ExternalChannelReply | null
     externalRecipientId: String(chatId),
     senderExternalId: String(senderId),
     body: replyBody,
-    repliedMessageBody,
-    inquiryId,
+    repliedMessageId: String(repliedMessageId),
   });
+}
+
+export function classifyTelegramUpdate(input: unknown): TelegramUpdateClassification {
+  const update = record(input);
+  const updateId = safeInteger(update?.update_id, 0);
+  if (!update || updateId === null) return {status: "invalid"};
+
+  const payloadFields = Object.keys(update).filter((field) => field !== "update_id");
+  if (payloadFields.length !== 1) return {status: "invalid"};
+
+  const reply = parseTelegramUpdate(input);
+  return reply ? {status: "actionable", reply} : {status: "ignored"};
 }

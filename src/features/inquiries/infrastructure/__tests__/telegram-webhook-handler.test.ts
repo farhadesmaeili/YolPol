@@ -34,7 +34,7 @@ describe("Telegram webhook handler", () => {
     const response = await handle(request(JSON.stringify(validUpdate)));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({status: "accepted"});
-    expect(execute).toHaveBeenCalledWith(expect.objectContaining({senderExternalId: "456", inquiryId: "1234", body: "We can ship next week."}));
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({senderExternalId: "456", externalRecipientId: "-100123", repliedMessageId: "44", body: "We can ship next week."}));
   });
 
   it("returns the same success contract for a duplicate update", async () => {
@@ -44,14 +44,33 @@ describe("Telegram webhook handler", () => {
   });
 
   it.each([
-    [{status: "unauthorized"}, 403, "unauthorized_sender"],
-    [{status: "conversation_not_found"}, 422, "conversation_not_found"],
-    [{status: "invalid_reply"}, 400, "invalid_update"],
-    [{status: "persistence_failed"}, 503, "service_unavailable"],
-  ] as const)("maps %s safely", async (result, status, code) => {
+    {status: "unauthorized"},
+    {status: "conversation_not_found"},
+    {status: "invalid_reply"},
+  ] as const)("acknowledges and conceals the non-actionable %s result", async (result) => {
     const response = await handler(result).handle(request(JSON.stringify(validUpdate)));
-    expect(response.status).toBe(status);
-    expect(await response.json()).toEqual({status: "error", code});
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+  });
+
+  it.each([
+    ["a private /start message", {update_id: 1, message: {message_id: 1, from: {id: 456}, chat: {id: 456}, text: "/start"}}],
+    ["ordinary private text", {update_id: 2, message: {message_id: 2, from: {id: 456}, chat: {id: 456}, text: "Hello"}}],
+    ["ordinary group text", {update_id: 3, message: {message_id: 3, from: {id: 456}, chat: {id: -100123}, text: "Test message"}}],
+    ["an unsupported update type", {update_id: 4, callback_query: {id: "callback-1", from: {id: 456}}}],
+    ["a text message without reply_to_message", {...validUpdate, update_id: 5, message: {...validUpdate.message, reply_to_message: undefined}}],
+  ] as const)("acknowledges %s without gateway execution", async (_name, update) => {
+    const {execute, handle} = handler();
+    const response = await handle(request(JSON.stringify(update)));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable server failure when persistence fails", async () => {
+    const response = await handler({status: "persistence_failed"}).handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({status: "error", code: "service_unavailable"});
   });
 
   it("rejects a missing or invalid secret before parsing or execution", async () => {

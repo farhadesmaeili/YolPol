@@ -2,16 +2,17 @@ import {createHash, timingSafeEqual} from "node:crypto";
 
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
 import type {ReceiveTelegramReplyResult} from "@/features/inquiries/application/results/receive-telegram-reply-result";
-import {parseTelegramUpdate} from "@/features/inquiries/infrastructure/communication/telegram/telegram-update-parser";
+import {classifyTelegramUpdate} from "@/features/inquiries/infrastructure/communication/telegram/telegram-update-parser";
 
 export const telegramWebhookRequestSizeLimit = 64 * 1024;
 const telegramSecretHeader = "x-telegram-bot-api-secret-token";
 
 type TelegramReplyGateway = Readonly<{execute(reply: ExternalChannelReply): Promise<ReceiveTelegramReplyResult>}>;
-type ErrorCode = "invalid_secret" | "invalid_request" | "invalid_update" | "payload_too_large" | "unsupported_media_type" | "unauthorized_sender" | "conversation_not_found" | "service_unavailable";
+type ErrorCode = "invalid_secret" | "invalid_request" | "invalid_update" | "payload_too_large" | "unsupported_media_type" | "service_unavailable";
 
 const json = (body: Readonly<Record<string, unknown>>, status: number) => Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
 const failure = (code: ErrorCode, status: number) => json({status: "error", code}, status);
+const accepted = () => json({status: "accepted"}, 200);
 
 function secretMatches(actual: string | null, expected: string): boolean {
   if (actual === null || expected.length === 0) return false;
@@ -77,17 +78,18 @@ export function createTelegramWebhookHandler(
     const body = await readBody(request);
     if (body.status === "too_large") return failure("payload_too_large", 413);
     if (body.status === "invalid") return failure("invalid_request", 400);
-    const reply = parseTelegramUpdate(body.value);
-    if (!reply) return failure("invalid_update", 400);
+    const update = classifyTelegramUpdate(body.value);
+    if (update.status === "invalid") return failure("invalid_update", 400);
+    if (update.status === "ignored") return accepted();
 
     let result: ReceiveTelegramReplyResult;
-    try { result = await getGateway().execute(reply); } catch { return failure("service_unavailable", 503); }
+    try { result = await getGateway().execute(update.reply); } catch { return failure("service_unavailable", 503); }
     switch (result.status) {
       case "created":
-      case "duplicate": return json({status: "accepted"}, 200);
-      case "unauthorized": return failure("unauthorized_sender", 403);
-      case "conversation_not_found": return failure("conversation_not_found", 422);
-      case "invalid_reply": return failure("invalid_update", 400);
+      case "duplicate":
+      case "unauthorized":
+      case "conversation_not_found":
+      case "invalid_reply": return accepted();
       case "persistence_failed": return failure("service_unavailable", 503);
     }
   };

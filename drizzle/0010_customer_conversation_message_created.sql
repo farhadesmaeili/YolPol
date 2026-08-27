@@ -1,0 +1,2 @@
+ALTER TABLE "inquiry_outbox" DROP CONSTRAINT "inquiry_outbox_event_type_check";--> statement-breakpoint
+ALTER TABLE "inquiry_outbox" ADD CONSTRAINT "inquiry_outbox_event_type_check" CHECK ("inquiry_outbox"."event_type" in ('InquiryCreated','CustomerConversationMessageCreated'));

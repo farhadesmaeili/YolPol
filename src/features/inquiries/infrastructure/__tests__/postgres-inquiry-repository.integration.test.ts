@@ -8,14 +8,17 @@ import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} fr
 import {DuplicateInquiryIdError} from "@/features/inquiries/application/ports/inquiry-ports";
 import {GetConversationMessageHistory} from "@/features/inquiries/application/use-cases/get-conversation-message-history";
 import {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
+import {ReceiveCustomerMessage} from "@/features/inquiries/application/use-cases/receive-customer-message";
 import {SendStaffConversationReply} from "@/features/inquiries/application/use-cases/send-staff-conversation-reply";
 import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
 import {createStaffPrincipal} from "@/features/staff-authentication/application/use-cases/staff-principal-factory";
 import {Conversation} from "@/features/inquiries/domain/entities/conversation";
+import {Message} from "@/features/inquiries/domain/entities/message";
 import type {InquiryItemInput} from "@/features/inquiries/domain/types/inquiry-types";
 import {createPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
+import {PostgresInquiryOutbox} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-outbox";
 import {PostgresInquiryWorkflowRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-workflow-repository";
 import {PostgresConversationAccessRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-access-repository";
 import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
@@ -47,7 +50,7 @@ const item = (position: number, unit: InquiryItemInput["unit"]): InquiryItemInpu
 
 async function cleanInquiryIntegrationTables() {
   // Staff Auth tables are explicit because their FK chain references Inquiry Team Members.
-  await pool.query("truncate table staff_sessions, staff_accounts, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table staff_sessions, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 beforeAll(async () => {
@@ -143,6 +146,145 @@ describe("PostgresInquiryRepository", () => {
     expect((await pool.query("select status from inquiries where id=$1", [inquiry.id.value])).rows).toEqual([{status: "NEW"}]);
     expect((await pool.query("select event_type from inquiry_workflow_events where inquiry_id=$1", [inquiry.id.value])).rows).toEqual([{event_type: "INQUIRY_CREATED"}]);
     expect((await pool.query("select inquiry_id from inquiry_assignments where inquiry_id=$1", [inquiry.id.value])).rowCount).toBe(0);
+  });
+
+  it("atomically emits one minimal customer-message outbox event for a created Website message", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "customer-message-outbox"}).buildNew();
+    const conversation = Conversation.start({
+      id: "customer-message-conversation",
+      inquiryId: inquiry.id.value,
+      channel: "WEBSITE",
+      createdAt: inquiry.createdAt,
+    });
+    await repository.save(inquiry, undefined, conversation);
+    const receive = new ReceiveCustomerMessage(
+      messageRepository,
+      {generate: () => "customer-message-accepted-1"},
+      {now: () => new Date("2026-08-27T09:00:00.000Z")},
+    );
+
+    await expect(receive.execute({inquiryId: inquiry.id.value, message: " Please confirm the sailing date. "}))
+      .resolves.toEqual({status: "created", messageId: "customer-message-accepted-1"});
+    await expect(receive.execute({inquiryId: inquiry.id.value, message: "Please confirm the sailing date."}))
+      .resolves.toEqual({status: "conflict"});
+
+    const messages = await pool.query<{id: string; sender_type: string; channel: string; body: string}>(
+      "select id,sender_type,channel,body from conversation_messages where conversation_id=$1",
+      [conversation.id.value],
+    );
+    expect(messages.rows).toEqual([{
+      id: "customer-message-accepted-1",
+      sender_type: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Please confirm the sailing date.",
+    }]);
+
+    const events = await pool.query<{
+      id: string;
+      event_type: string;
+      aggregate_id: string;
+      payload: Record<string, unknown>;
+    }>("select id,event_type,aggregate_id,payload from inquiry_outbox where aggregate_id=$1", [inquiry.id.value]);
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0]).toEqual({
+      id: expect.stringMatching(/^customer_message_[a-f0-9]{64}$/u),
+      event_type: "CustomerConversationMessageCreated",
+      aggregate_id: inquiry.id.value,
+      payload: {
+        inquiryId: inquiry.id.value,
+        conversationId: conversation.id.value,
+        messageId: "customer-message-accepted-1",
+        occurredAt: "2026-08-27T09:00:00.000Z",
+      },
+    });
+    expect(Object.keys(events.rows[0]!.payload).sort()).toEqual(["conversationId", "inquiryId", "messageId", "occurredAt"]);
+    const payloadText = JSON.stringify(events.rows[0]!.payload);
+    for (const forbidden of [
+      "Please confirm the sailing date.",
+      inquiry.contact.fullName,
+      inquiry.contact.email,
+      inquiry.contact.phone,
+      "INTERNAL-PRICE-SENTINEL",
+      "BOT-TOKEN-SENTINEL",
+      "DATABASE-URL-SENTINEL",
+    ]) expect(payloadText).not.toContain(forbidden);
+
+    const [pending] = await new PostgresInquiryOutbox(pool).claimPending(1, new Date("2026-08-27T09:00:01.000Z"));
+    expect(pending).toEqual({
+      event: {
+        eventId: events.rows[0]!.id,
+        type: "CustomerConversationMessageCreated",
+        inquiryId: inquiry.id.value,
+        conversationId: conversation.id.value,
+        messageId: "customer-message-accepted-1",
+        occurredAt: new Date("2026-08-27T09:00:00.000Z"),
+      },
+      attempts: 1,
+    });
+  });
+
+  it("rolls back the customer message when its required outbox insert fails", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "customer-message-atomic"}).buildNew();
+    const conversation = Conversation.start({
+      id: "customer-message-atomic-conversation",
+      inquiryId: inquiry.id.value,
+      channel: "WEBSITE",
+      createdAt: inquiry.createdAt,
+    });
+    await repository.save(inquiry, undefined, conversation);
+    await pool.query(`
+      create function reject_customer_message_outbox_for_atomicity_test() returns trigger language plpgsql as $$
+      begin
+        if new.event_type = 'CustomerConversationMessageCreated' then
+          raise exception 'forced customer message outbox failure';
+        end if;
+        return new;
+      end
+      $$
+    `);
+    await pool.query(`
+      create trigger reject_customer_message_outbox_for_atomicity_test
+      before insert on inquiry_outbox
+      for each row execute function reject_customer_message_outbox_for_atomicity_test()
+    `);
+    try {
+      const message = Message.create({
+        id: "customer-message-rollback",
+        senderType: "CUSTOMER",
+        channel: "WEBSITE",
+        body: "This message must roll back.",
+        createdAt: new Date("2026-08-27T09:05:00.000Z"),
+      });
+      await expect(messageRepository.appendCustomerWebsiteForInquiry(inquiry.id.value, message)).rejects.toBeInstanceOf(InquiryPersistenceError);
+      expect((await pool.query("select id from conversation_messages where id=$1", [message.id.value])).rowCount).toBe(0);
+      expect((await pool.query("select id from inquiry_outbox where aggregate_id=$1", [inquiry.id.value])).rowCount).toBe(0);
+    } finally {
+      await pool.query("drop trigger if exists reject_customer_message_outbox_for_atomicity_test on inquiry_outbox");
+      await pool.query("drop function if exists reject_customer_message_outbox_for_atomicity_test()");
+    }
+  });
+
+  it("does not emit customer-message events for Staff, Telegram, AI, or System messages", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "customer-message-anti-loop"}).buildNew();
+    const conversation = Conversation.start({
+      id: "customer-message-anti-loop-conversation",
+      inquiryId: inquiry.id.value,
+      channel: "WEBSITE",
+      createdAt: inquiry.createdAt,
+    });
+    await repository.save(inquiry, undefined, conversation);
+    const messages = [
+      Message.create({id: "staff-website-no-event", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member-1", body: "Staff Website reply", createdAt: new Date("2026-08-27T09:10:00.000Z")}),
+      Message.create({id: "telegram-no-event", senderType: "INTERNAL_USER", channel: "TELEGRAM", actorReference: "staff:member-1", body: "Telegram reply", createdAt: new Date("2026-08-27T09:11:00.000Z")}),
+      Message.create({id: "ai-no-event", senderType: "AI_AGENT", channel: "WEBSITE", body: "AI response", createdAt: new Date("2026-08-27T09:12:00.000Z")}),
+      Message.create({id: "system-no-event", senderType: "SYSTEM", channel: "WEBSITE", body: "System response", createdAt: new Date("2026-08-27T09:13:00.000Z")}),
+    ];
+
+    await expect(messageRepository.appendForInquiry(inquiry.id.value, messages[0]!)).resolves.toBe("created");
+    await expect(messageRepository.appendForConversation(conversation.id.value, messages[1]!)).resolves.toBe("created");
+    await expect(messageRepository.appendForInquiry(inquiry.id.value, messages[2]!)).resolves.toBe("created");
+    await expect(messageRepository.appendForInquiry(inquiry.id.value, messages[3]!)).resolves.toBe("created");
+    expect((await pool.query("select id from inquiry_outbox where aggregate_id=$1", [inquiry.id.value])).rowCount).toBe(0);
   });
 
   it("upgrades every historical contact preference without changing legacy item semantics", async () => {
@@ -264,10 +406,18 @@ describe("PostgresInquiryRepository", () => {
   });
   it("applies committed migrations and exposes the expected tables", async () => {
     await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
-    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events') order by table_name");
-    expect(result.rows.map(({table_name}) => table_name)).toEqual(["conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events"]);
+    const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('communication_recipients','conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events','telegram_inquiry_deliveries') order by table_name");
+    expect(result.rows.map(({table_name}) => table_name)).toEqual(["communication_recipients", "conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events", "telegram_inquiry_deliveries"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("9");
+    expect(migrations.rows[0]?.count).toBe("11");
+    const outboxEventTypeConstraint = await pool.query<{definition: string}>(`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conname = 'inquiry_outbox_event_type_check'
+    `);
+    expect(outboxEventTypeConstraint.rows).toEqual([{
+      definition: "CHECK (((event_type)::text = ANY ((ARRAY['InquiryCreated'::character varying, 'CustomerConversationMessageCreated'::character varying])::text[])))",
+    }]);
     const actorColumn = await pool.query<{is_nullable: string; character_maximum_length: number}>("select is_nullable,character_maximum_length from information_schema.columns where table_schema='public' and table_name='conversation_messages' and column_name='actor_reference'");
     expect(actorColumn.rows).toEqual([{is_nullable: "YES", character_maximum_length: 160}]);
   });

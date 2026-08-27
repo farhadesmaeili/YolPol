@@ -1,32 +1,32 @@
 import {describe, expect, it, vi} from "vitest";
 
-import type {ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
+import type {CustomerWebsiteConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import {ReceiveCustomerMessage} from "@/features/inquiries/application/use-cases/receive-customer-message";
 
 const input = {inquiryId: "inquiry-1", message: " Please send an update. "};
 
 function create(result: "created" | "duplicate" | "conversation_not_found" = "created") {
-  const appendForInquiry = vi.fn<ConversationMessageWriter["appendForInquiry"]>().mockResolvedValue(result);
+  const appendCustomerWebsiteForInquiry = vi.fn<CustomerWebsiteConversationMessageWriter["appendCustomerWebsiteForInquiry"]>().mockResolvedValue(result);
   const useCase = new ReceiveCustomerMessage(
-    {appendForInquiry},
+    {appendCustomerWebsiteForInquiry},
     {generate: () => "website_message_1"},
     {now: () => new Date("2026-08-25T08:00:00.000Z")},
   );
-  return {appendForInquiry, useCase};
+  return {appendCustomerWebsiteForInquiry, useCase};
 }
 
 describe("ReceiveCustomerMessage", () => {
   it("creates a customer Website message in the Inquiry conversation", async () => {
-    const {appendForInquiry, useCase} = create();
+    const {appendCustomerWebsiteForInquiry, useCase} = create();
 
     await expect(useCase.execute(input)).resolves.toEqual({status: "created", messageId: "website_message_1"});
-    expect(appendForInquiry).toHaveBeenCalledWith("inquiry-1", expect.objectContaining({
+    expect(appendCustomerWebsiteForInquiry).toHaveBeenCalledWith("inquiry-1", expect.objectContaining({
       senderType: "CUSTOMER",
       channel: "WEBSITE",
       body: "Please send an update.",
     }));
-    expect(appendForInquiry.mock.calls[0]?.[1].createdAt.toISOString()).toBe("2026-08-25T08:00:00.000Z");
-    expect(appendForInquiry.mock.calls[0]?.[1].actorReference).toBeNull();
+    expect(appendCustomerWebsiteForInquiry.mock.calls[0]?.[1].createdAt.toISOString()).toBe("2026-08-25T08:00:00.000Z");
+    expect(appendCustomerWebsiteForInquiry.mock.calls[0]?.[1].actorReference).toBeNull();
   });
 
   it("returns not found when the Inquiry has no Conversation", async () => {
@@ -39,13 +39,13 @@ describe("ReceiveCustomerMessage", () => {
     [{...input, message: "   "}, "message"],
     [{...input, message: "x".repeat(10_001)}, "message"],
   ] as const)("rejects invalid customer-owned input %#", async (invalid, field) => {
-    const {appendForInquiry, useCase} = create();
+    const {appendCustomerWebsiteForInquiry, useCase} = create();
     await expect(useCase.execute(invalid)).resolves.toEqual({status: "validation_failed", field});
-    expect(appendForInquiry).not.toHaveBeenCalled();
+    expect(appendCustomerWebsiteForInquiry).not.toHaveBeenCalled();
   });
 
   it("maps ID, clock, duplicate, and persistence failures safely", async () => {
-    const messages: ConversationMessageWriter = {appendForInquiry: vi.fn().mockRejectedValue(new Error("database secret"))};
+    const messages: CustomerWebsiteConversationMessageWriter = {appendCustomerWebsiteForInquiry: vi.fn().mockRejectedValue(new Error("database secret"))};
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "message-1"}, {now: () => new Date()}).execute(input)).resolves.toEqual({status: "persistence_failed"});
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "invalid/id"}, {now: () => new Date()}).execute(input)).resolves.toEqual({status: "dependency_failed"});
     await expect(new ReceiveCustomerMessage(messages, {generate: () => "message-1"}, {now: () => new Date("invalid")}).execute(input)).resolves.toEqual({status: "dependency_failed"});

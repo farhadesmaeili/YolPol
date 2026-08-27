@@ -16,7 +16,10 @@
     "db:studio": "drizzle-kit studio",
     "retention:inquiries": "node tooling/retention/delete-expired-inquiries.mjs",
     "staff:provision": "pnpm exec tsx tooling/staff-provisioning/index.ts",
-    "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts"
+    "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts",
+    "dev:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications-dev.ts",
+    "telegram:webhook:set": "pnpm exec tsx tooling/telegram/set-telegram-webhook.ts",
+    "telegram:webhook:info": "pnpm exec tsx tooling/telegram/get-telegram-webhook-info.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

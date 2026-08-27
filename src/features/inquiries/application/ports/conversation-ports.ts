@@ -6,6 +6,14 @@ export interface ConversationMessageWriter {
   appendForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult>;
 }
 
+export interface CustomerWebsiteConversationMessageWriter {
+  appendCustomerWebsiteForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult>;
+}
+
+export interface CorrelatedConversationMessageWriter {
+  appendForConversation(conversationId: string, message: Message): Promise<AppendConversationMessageResult>;
+}
+
 export interface ConversationMessageReader {
   findForInquiry(inquiryId: string): Promise<readonly Message[] | null>;
 }
@@ -20,6 +28,10 @@ export interface ConversationMessageRepository extends ConversationMessageWriter
 
 export interface ConversationReferenceReader {
   findConversationIdForInquiry(inquiryId: string): Promise<string | null>;
+}
+
+export interface InquiryNotificationConversationReader extends ConversationReferenceReader {
+  findCustomerWebsiteMessage(input: Readonly<{inquiryId: string; conversationId: string; messageId: string}>): Promise<Message | null>;
 }
 
 export interface ConversationMessageIdGenerator { generate(): string; }
