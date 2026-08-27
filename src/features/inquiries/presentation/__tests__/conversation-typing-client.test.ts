@@ -45,10 +45,9 @@ describe("Conversation typing client", () => {
 
   it("posts exact minimal customer and Staff payloads with keepalive", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(null, {status: 204}));
-    const token = `ypc_${"A".repeat(43)}`;
-    await sendCustomerConversationTyping(token, true, fetcher);
+    await sendCustomerConversationTyping(true, fetcher);
     await sendStaffConversationTyping("inquiry-1", false, fetcher);
-    expect(fetcher).toHaveBeenNthCalledWith(1, `/api/conversations/${token}/typing`, expect.objectContaining({body: '{"isTyping":true}', keepalive: true}));
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/customer/conversation/typing", expect.objectContaining({body: '{"isTyping":true}', keepalive: true}));
     expect(fetcher).toHaveBeenNthCalledWith(2, "/api/staff/inquiries/inquiry-1/typing", expect.objectContaining({body: '{"isTyping":false}', keepalive: true}));
     expect(JSON.stringify(fetcher.mock.calls)).not.toMatch(/draft|actorReference|teamMemberId|staffAccountId|role/u);
   });

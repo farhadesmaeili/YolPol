@@ -11,7 +11,7 @@ const customerConversationMessageRateLimiter = new InquiryRateLimiter(rateLimitC
 const customerConversationHistoryRateLimiter = new InquiryRateLimiter(rateLimitConfig);
 
 export function getInquiryHttpOptions(environment: DevelopmentOriginEnvironment = process.env) {
-  return Object.freeze({rateLimiter, approvedDevelopmentOrigins: getApprovedDevelopmentOrigins(environment)});
+  return Object.freeze({rateLimiter, approvedDevelopmentOrigins: getApprovedDevelopmentOrigins(environment), environment});
 }
 
 export function getCustomerMessageHttpOptions(environment: DevelopmentOriginEnvironment = process.env) {

@@ -13,6 +13,7 @@ import {MessageList} from "@/features/inquiries/presentation/components/customer
 import {ConversationTypingIndicator} from "@/features/inquiries/presentation/components/conversation-typing-indicator";
 import {createInitialCustomerChatState, customerChatReducer, customerMessageDraftFailure, type CustomerChatFailure, type CustomerChatHistoryFailure} from "@/features/inquiries/presentation/state/customer-chat-reducer";
 import type {CustomerChatLabels} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
+import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
 function failureMessage(failure: CustomerChatFailure, labels: CustomerChatLabels): string {
   switch (failure) {
@@ -33,7 +34,7 @@ function historyFailureMessage(failure: CustomerChatHistoryFailure, labels: Cust
   }
 }
 
-export function CustomerChat({accessToken, labels}: {accessToken: string; labels: CustomerChatLabels}) {
+export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLabels; initialMessages?: readonly CustomerChatMessage[]}) {
   const headingId = useId();
   const errorId = useId();
   const historyErrorId = useId();
@@ -43,33 +44,33 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
   const mounted = useRef(true);
   const typingHeartbeat = useRef<ConversationTypingHeartbeat | null>(null);
   const [staffTyping, setStaffTyping] = useState(false);
-  const [state, dispatch] = useReducer(customerChatReducer, undefined, createInitialCustomerChatState);
+  const [state, dispatch] = useReducer(customerChatReducer, initialMessages, createInitialCustomerChatState);
 
   useEffect(() => {
     const subscription = subscribeToCustomerConversation(
-      accessToken,
       (message) => dispatch({type: "realtime_message_received", message}),
       undefined,
       setStaffTyping,
     );
     return () => subscription?.close();
-  }, [accessToken]);
+  }, []);
 
   useEffect(() => {
-    const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendCustomerConversationTyping(accessToken, isTyping));
+    const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendCustomerConversationTyping(isTyping));
     typingHeartbeat.current = heartbeat;
     return () => {
       heartbeat.dispose();
       if (typingHeartbeat.current === heartbeat) typingHeartbeat.current = null;
     };
-  }, [accessToken]);
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
+    if (initialMessages) return () => { mounted.current = false; activeSubmissionController.current?.abort(); activeSubmissionController.current = null; submissionInFlight.current = false; };
     const controller = new AbortController();
     activeHistoryController.current = controller;
     dispatch({type: "history_started"});
-    void loadCustomerMessageHistory(accessToken, controller.signal).then((result) => {
+    void loadCustomerMessageHistory(controller.signal).then((result) => {
       if (!mounted.current || activeHistoryController.current !== controller) return;
       activeHistoryController.current = null;
       if (result.status === "loaded") dispatch({type: "history_succeeded", messages: result.messages});
@@ -83,7 +84,7 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
       activeSubmissionController.current = null;
       submissionInFlight.current = false;
     };
-  }, [accessToken]);
+  }, [initialMessages]);
 
   const submit = async () => {
     if (submissionInFlight.current) return;
@@ -98,7 +99,7 @@ export function CustomerChat({accessToken, labels}: {accessToken: string; labels
     submissionInFlight.current = true;
     activeSubmissionController.current = controller;
     dispatch({type: "submission_started"});
-    const result = await sendCustomerMessage({accessToken, message}, controller.signal);
+    const result = await sendCustomerMessage({message}, controller.signal);
     const isActiveSubmission = activeSubmissionController.current === controller;
     if (isActiveSubmission) {
       activeSubmissionController.current = null;

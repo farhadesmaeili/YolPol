@@ -4,9 +4,16 @@ import {getConversationAccessResolver} from "@/composition/inquiries/conversatio
 import {getConversationTypingRegistry} from "@/composition/inquiries/conversation-typing";
 import {getCustomerConversationStreamer} from "@/composition/inquiries/customer-conversation-stream";
 import {getCustomerConversationStreamHttpOptions} from "@/composition/inquiries/inquiry-http";
-import {createCustomerConversationStreamRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-stream-request-handler";
+import {createCustomerConversationStreamRequestHandler, createCustomerResumeStreamRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-stream-request-handler";
 
 export const customerConversationStreamHandler = createCustomerConversationStreamRequestHandler(
+  getConversationAccessResolver,
+  getCustomerConversationStreamer,
+  getCustomerConversationStreamHttpOptions(),
+  getConversationTypingRegistry,
+);
+
+export const customerResumeStreamHandler = createCustomerResumeStreamRequestHandler(
   getConversationAccessResolver,
   getCustomerConversationStreamer,
   getCustomerConversationStreamHttpOptions(),

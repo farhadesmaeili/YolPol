@@ -1,6 +1,7 @@
 import type {ResolveConversationByAccessTokenResult} from "@/features/inquiries/application/results/resolve-conversation-by-access-token-result";
 import type {UpdateConversationTypingResult} from "@/features/inquiries/application/results/update-conversation-typing-result";
 import type {ConversationTypingRateLimiter} from "@/features/inquiries/infrastructure/http/conversation-typing-rate-limiter";
+import {readCustomerConversationCookie, type CustomerConversationCookieEnvironment} from "@/features/inquiries/infrastructure/http/customer-conversation-cookie";
 import {parseConversationTypingPayload} from "@/features/inquiries/infrastructure/validation/conversation-typing-payload";
 import {readJsonBodyWithinLimit} from "@/shared/infrastructure/http/bounded-json-body";
 import {strictOriginAllowed} from "@/shared/infrastructure/http/strict-origin";
@@ -65,5 +66,20 @@ export function createCustomerConversationTypingRequestHandler(
     if (result.status === "validation_failed") return failure("invalid_request", 400);
     if (result.status !== "updated") return failure("service_unavailable", 503);
     return new Response(null, {status: 204, headers: {"Cache-Control": "no-store"}});
+  };
+}
+
+export function createCustomerResumeTypingRequestHandler(
+  getResolver: () => AccessResolver,
+  getUpdater: () => TypingUpdater,
+  options: Options = {},
+  environment: CustomerConversationCookieEnvironment = process.env,
+) {
+  const handleTokenRequest = createCustomerConversationTypingRequestHandler(getResolver, getUpdater, options);
+  return async function handle(request: Request): Promise<Response> {
+    if (!strictOriginAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const token = readCustomerConversationCookie(request, environment);
+    if (!token) return failure("unauthorized", 401);
+    return handleTokenRequest(request, {params: Promise.resolve({token})});
   };
 }

@@ -4,6 +4,7 @@ import {ConversationTypingRateLimiter} from "@/features/inquiries/infrastructure
 import {
   conversationTypingRequestSizeLimit,
   createCustomerConversationTypingRequestHandler,
+  createCustomerResumeTypingRequestHandler,
 } from "@/features/inquiries/infrastructure/http/customer-conversation-typing-request-handler";
 
 const token = `ypc_${"A".repeat(43)}`;
@@ -76,5 +77,19 @@ describe("POST /api/conversations/[token]/typing", () => {
     expect((await createCustomerConversationTypingRequestHandler(() => ({execute: vi.fn()}), () => updater)(request("x".repeat(conversationTypingRequestSizeLimit + 1)), context())).status).toBe(413);
     expect((await createCustomerConversationTypingRequestHandler(() => ({execute: vi.fn()}), () => updater)(request("{}", {contentType: "text/plain"}), context())).status).toBe(415);
     expect((await createCustomerConversationTypingRequestHandler(() => ({execute: vi.fn()}), () => updater)(request(undefined, {query: "?conversationId=other"}), context())).status).toBe(400);
+  });
+
+  it("authenticates the tokenless Customer typing route from the cookie", async () => {
+    const execute = vi.fn().mockReturnValue({status: "updated"});
+    const resolver = {execute: vi.fn().mockResolvedValue(resolved)};
+    const response = await createCustomerResumeTypingRequestHandler(
+      () => resolver,
+      () => ({execute}),
+      {},
+      {NODE_ENV: "production"},
+    )(new Request("https://yolpol.com/api/customer/conversation/typing", {method: "POST", headers: {Origin: "https://yolpol.com", Cookie: `__Host-yolpol_customer_conversation=${token}`, "Content-Type": "application/json"}, body: '{"isTyping":true}'}));
+    expect(response.status).toBe(204);
+    expect(resolver.execute).toHaveBeenCalledWith({token});
+    expect(execute).toHaveBeenCalledWith({conversationId: "conversation-1", participant: "CUSTOMER", actorKey: "customer", isTyping: true});
   });
 });

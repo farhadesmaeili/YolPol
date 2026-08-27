@@ -3,6 +3,7 @@ import type {ConversationTypingRegistry, ConversationTypingSubscription} from "@
 import type {StreamConversationUpdatesResult} from "@/features/inquiries/application/results/stream-conversation-updates-result";
 import type {ResolveConversationByAccessTokenResult} from "@/features/inquiries/application/results/resolve-conversation-by-access-token-result";
 import {originAllowed} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
+import {readCustomerConversationCookie, type CustomerConversationCookieEnvironment} from "@/features/inquiries/infrastructure/http/customer-conversation-cookie";
 
 type AccessResolver = Readonly<{execute(input: Readonly<{token: string}>): Promise<ResolveConversationByAccessTokenResult>}>;
 type ConversationStreamer = Readonly<{open(input: Readonly<{
@@ -148,5 +149,21 @@ export function createCustomerConversationStreamRequestHandler(
         "X-Accel-Buffering": "no",
       },
     });
+  };
+}
+
+export function createCustomerResumeStreamRequestHandler(
+  getResolver: () => AccessResolver,
+  getStreamer: () => ConversationStreamer,
+  options: ConversationStreamHttpOptions = {},
+  getTypingRegistry?: () => ConversationTypingRegistry,
+  environment: CustomerConversationCookieEnvironment = process.env,
+) {
+  const handleTokenRequest = createCustomerConversationStreamRequestHandler(getResolver, getStreamer, options, getTypingRegistry);
+  return async function handle(request: Request): Promise<Response> {
+    if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const token = readCustomerConversationCookie(request, environment);
+    if (!token) return failure("unauthorized", 401);
+    return handleTokenRequest(request, {params: Promise.resolve({token})});
   };
 }

@@ -4,7 +4,7 @@ import type {InquiryDraftFailure, InquiryDraftLine} from "@/features/inquiries/p
 
 export type InquiryFormFeedback = "idle" | "invalid" | "submitting" | "succeeded" | "failed";
 export type InquirySubmissionFailureKind = "service" | "timeout" | "rate_limited";
-export type InquiryFormState = Readonly<{fields: InquiryDraftFields; lines: readonly InquiryDraftLine[]; pendingProductId: string; feedback: InquiryFormFeedback; inquiryId: string | null; conversationAccessToken: string | null; failure: InquiryDraftFailure | null; submissionFailure: InquirySubmissionFailureKind | null; preselectionResolved: boolean}>;
+export type InquiryFormState = Readonly<{fields: InquiryDraftFields; lines: readonly InquiryDraftLine[]; pendingProductId: string; feedback: InquiryFormFeedback; inquiryId: string | null; failure: InquiryDraftFailure | null; submissionFailure: InquirySubmissionFailureKind | null; preselectionResolved: boolean}>;
 export type InquiryTextField = Exclude<keyof InquiryDraftFields, "privacyAccepted">;
 
 export type InquiryFormAction =
@@ -19,15 +19,15 @@ export type InquiryFormAction =
   | Readonly<{type: "apply_preselection"; lines: readonly InquiryDraftLine[]}>
   | Readonly<{type: "validation_failed"; failure: InquiryDraftFailure}>
   | Readonly<{type: "submission_started"}>
-  | Readonly<{type: "submission_succeeded"; inquiryId: string; conversationAccessToken: string}>
+  | Readonly<{type: "submission_succeeded"; inquiryId: string}>
   | Readonly<{type: "submission_failed"; failure?: InquiryDraftFailure; kind?: InquirySubmissionFailureKind}>
   | Readonly<{type: "reset"}>;
 
 export function createInitialInquiryFormState(preselectionResolved = false): InquiryFormState {
-  return Object.freeze({fields: Object.freeze({fullName: "", company: "", country: "", city: "", email: "", phone: "", whatsappPhone: "", telegramUsername: "", preferredMethods: Object.freeze([]), destinationCountry: "", destinationCity: "", message: "", privacyAccepted: false}), lines: Object.freeze([]), pendingProductId: "", feedback: "idle", inquiryId: null, conversationAccessToken: null, failure: null, submissionFailure: null, preselectionResolved});
+  return Object.freeze({fields: Object.freeze({fullName: "", company: "", country: "", city: "", email: "", phone: "", whatsappPhone: "", telegramUsername: "", preferredMethods: Object.freeze([]), destinationCountry: "", destinationCity: "", message: "", privacyAccepted: false}), lines: Object.freeze([]), pendingProductId: "", feedback: "idle", inquiryId: null, failure: null, submissionFailure: null, preselectionResolved});
 }
 
-const edited = (state: InquiryFormState, change: Partial<InquiryFormState>): InquiryFormState => Object.freeze({...state, ...change, feedback: "idle", inquiryId: null, conversationAccessToken: null, failure: null, submissionFailure: null});
+const edited = (state: InquiryFormState, change: Partial<InquiryFormState>): InquiryFormState => Object.freeze({...state, ...change, feedback: "idle", inquiryId: null, failure: null, submissionFailure: null});
 const updateLine = (state: InquiryFormState, index: number, change: Partial<InquiryDraftLine>): InquiryFormState => edited(state, {lines: Object.freeze(state.lines.map((line, lineIndex) => lineIndex === index ? Object.freeze({...line, ...change}) : line))});
 
 export function inquiryFormReducer(state: InquiryFormState, action: InquiryFormAction): InquiryFormState {
@@ -49,10 +49,10 @@ export function inquiryFormReducer(state: InquiryFormState, action: InquiryFormA
     case "change_product": return updateLine(state, action.index, {productId: action.productId});
     case "change_pallet_count": return updateLine(state, action.index, {palletCountText: action.value});
     case "apply_preselection": return edited(state, {lines: Object.freeze(action.lines.map((line) => Object.freeze({...line}))), pendingProductId: "", preselectionResolved: true});
-    case "validation_failed": return Object.freeze({...state, feedback: "invalid", inquiryId:null, conversationAccessToken:null, failure: action.failure, submissionFailure:null});
-    case "submission_started": return state.feedback === "submitting" ? state : Object.freeze({...state, feedback: "submitting", inquiryId:null, conversationAccessToken:null, failure: null, submissionFailure:null});
-    case "submission_succeeded": return Object.freeze({...state, feedback: "succeeded", inquiryId:action.inquiryId, conversationAccessToken:action.conversationAccessToken, failure: null, submissionFailure:null});
-    case "submission_failed": return Object.freeze({...state, feedback: "failed", inquiryId:null, conversationAccessToken:null, failure: action.failure ?? null, submissionFailure:action.kind ?? "service"});
+    case "validation_failed": return Object.freeze({...state, feedback: "invalid", inquiryId:null, failure: action.failure, submissionFailure:null});
+    case "submission_started": return state.feedback === "submitting" ? state : Object.freeze({...state, feedback: "submitting", inquiryId:null, failure: null, submissionFailure:null});
+    case "submission_succeeded": return Object.freeze({...state, feedback: "succeeded", inquiryId:action.inquiryId, failure: null, submissionFailure:null});
+    case "submission_failed": return Object.freeze({...state, feedback: "failed", inquiryId:null, failure: action.failure ?? null, submissionFailure:action.kind ?? "service"});
     case "reset": return createInitialInquiryFormState(true);
   }
 }

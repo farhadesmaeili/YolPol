@@ -1,13 +1,15 @@
 "use client";
 
-import {useEffect, useReducer, useRef} from "react";
+import {useEffect, useReducer, useRef, useState} from "react";
 
 import {contactMethods, targetCountries} from "@/features/inquiries/domain/types/inquiry-types";
 import {CustomerChat} from "@/features/inquiries/presentation/components/customer-chat/customer-chat";
+import {loadCustomerMessageHistory} from "@/features/inquiries/presentation/clients/customer-message-client";
 import {mapInquiryDraft, normalizeInquiryPhoneDraft, preselectInquiryProducts} from "@/features/inquiries/presentation/parsers/inquiry-draft-mapper";
 import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
 import {createInitialInquiryFormState, inquiryAddedProductFocusId, inquiryControlId, inquiryErrorId, inquiryFailureFocusId, inquiryFormReducer, type InquiryTextField} from "@/features/inquiries/presentation/state/inquiry-form-reducer";
 import type {CustomerChatLabels} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
+import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 import type {InquiryDraftFailure, InquiryDraftLine, InquiryFormLabels, InquiryProductOption} from "@/features/inquiries/presentation/view-models/inquiry-form-view-model";
 import {LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
 import type {Locale} from "@/shared/types/locale";
@@ -39,7 +41,7 @@ export function focusInquiryFailure(failure: InquiryDraftFailure, findControl: (
 }
 
 export const inquirySubmissionTimeoutMs = 15_000;
-type InquiryHttpResult = Readonly<{status:"created";inquiryId:string;conversationAccessToken:string}> | Readonly<{status:"rejected";code?:string;field?:unknown}>;
+type InquiryHttpResult = Readonly<{status:"created";inquiryId:string}> | Readonly<{status:"rejected";code?:string;field?:unknown}>;
 
 export async function parseInquirySubmissionResponse(response: Response): Promise<InquiryHttpResult> {
   const mediaType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -49,8 +51,8 @@ export async function parseInquirySubmissionResponse(response: Response): Promis
     try { value = await response.json(); } catch { return {status:"rejected"}; }
     if (typeof value !== "object" || value === null || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return {status:"rejected"};
     const record = value as Record<string, unknown>;
-    if (Object.keys(record).sort().join(",") !== "conversationAccessToken,inquiryId,status" || record.status !== "created" || typeof record.inquiryId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(record.inquiryId) || typeof record.conversationAccessToken !== "string" || !/^ypc_[A-Za-z0-9_-]{43}$/u.test(record.conversationAccessToken)) return {status:"rejected"};
-    return {status:"created",inquiryId:record.inquiryId,conversationAccessToken:record.conversationAccessToken};
+    if (Object.keys(record).sort().join(",") !== "inquiryId,status" || record.status !== "created" || typeof record.inquiryId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(record.inquiryId)) return {status:"rejected"};
+    return {status:"created",inquiryId:record.inquiryId};
   }
   if (mediaType !== "application/json") return {status:"rejected",code:response.status === 429 ? "rate_limited" : undefined};
   try {
@@ -87,14 +89,29 @@ export function InquiryForm({locale, products, labels, chatLabels, privacyHref}:
   const feedbackRef = useRef<HTMLDivElement>(null);
   const submissionInFlight = useRef(false);
   const activeController = useRef<AbortController | null>(null);
+  const activeResumeController = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const [resumedConversation, setResumedConversation] = useState<Readonly<{key: string; messages: readonly CustomerChatMessage[]}> | null>(null);
   const [state, dispatch] = useReducer(inquiryFormReducer, undefined, () => createInitialInquiryFormState());
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).getAll("product");
     const timer = window.setTimeout(() => dispatch({type: "apply_preselection", lines: preselectInquiryProducts(products, requested)}), 0);
     return () => window.clearTimeout(timer);
   }, [products]);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; activeController.current?.abort(); }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; activeController.current?.abort(); activeResumeController.current?.abort(); }; }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    activeResumeController.current = controller;
+    void loadCustomerMessageHistory(controller.signal).then((result) => {
+      if (!mounted.current || activeResumeController.current !== controller) return;
+      activeResumeController.current = null;
+      if (result.status === "loaded") setResumedConversation({key: "resumed", messages: result.messages});
+    });
+    return () => {
+      controller.abort();
+      if (activeResumeController.current === controller) activeResumeController.current = null;
+    };
+  }, []);
   useEffect(() => {
     if (state.feedback !== "succeeded" && (state.feedback !== "failed" || state.failure)) return;
     const feedback = feedbackRef.current;
@@ -123,7 +140,12 @@ export function InquiryForm({locale, products, labels, chatLabels, privacyHref}:
     try {
       const response = await requestInquirySubmissionWithTimeout(result.input, controller);
       if (!mounted.current) return;
-      if (response.status === "created") dispatch({type:"submission_succeeded",inquiryId:response.inquiryId,conversationAccessToken:response.conversationAccessToken});
+      if (response.status === "created") {
+        activeResumeController.current?.abort();
+        activeResumeController.current = null;
+        setResumedConversation(null);
+        dispatch({type:"submission_succeeded",inquiryId:response.inquiryId});
+      }
       else {
         const serverFailure = response.code === "product_unavailable" || response.code === "validation_failed" ? inquiryServerFailure(response.field) : undefined;
         dispatch({type:"submission_failed",failure:serverFailure,kind:response.code === "rate_limited" ? "rate_limited" : response.code === "timeout" ? "timeout" : "service"});
@@ -160,7 +182,11 @@ export function InquiryForm({locale, products, labels, chatLabels, privacyHref}:
     <div className="flex items-start gap-3"><input id={inquiryControlId("privacy")} type="checkbox" required aria-label={labels.privacyAgreement} checked={state.fields.privacyAccepted} onChange={(event) => dispatch({type: "update_consent", value: event.target.checked})} className="mt-1 size-5" {...invalidProps("privacy")} /><span><a href={privacyHref} className="font-semibold text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-focus">{labels.privacyLink}</a>{fieldError("privacy")}</span></div>
     <button type="submit" disabled={state.feedback === "submitting"} className="min-h-12 bg-emerald-950 px-7 font-semibold text-white outline-none transition-colors hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-4 motion-reduce:transition-none">{state.feedback === "submitting" ? labels.submitting : labels.submit}</button>
     <InquirySubmissionFeedback state={state} labels={labels} feedbackRef={feedbackRef} />
-  </form>{state.feedback === "succeeded" && state.conversationAccessToken ? <CustomerChat accessToken={state.conversationAccessToken} labels={chatLabels} /> : null}</>;
+  </form>{state.feedback === "succeeded" && state.inquiryId
+    ? <CustomerChat key={state.inquiryId} labels={chatLabels} />
+    : resumedConversation
+      ? <CustomerChat key={resumedConversation.key} labels={chatLabels} initialMessages={resumedConversation.messages} />
+      : null}</>;
 }
 
 export function InquirySubmissionFeedback({state, labels, feedbackRef}: {state: Pick<ReturnType<typeof createInitialInquiryFormState>, "feedback" | "inquiryId" | "failure" | "submissionFailure">; labels: InquiryFormLabels; feedbackRef?: React.RefObject<HTMLDivElement | null>}) {

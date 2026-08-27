@@ -75,13 +75,10 @@ async function postTyping(url: string, isTyping: boolean, fetcher: TypingFetch):
 }
 
 export async function sendCustomerConversationTyping(
-  accessToken: string,
   isTyping: boolean,
   fetcher: TypingFetch = fetch,
 ): Promise<void> {
-  const tokenPattern = /^ypc_[A-Za-z0-9_-]{43}$/u;
-  if (!tokenPattern.test(accessToken)) return;
-  await postTyping(`/api/conversations/${encodeURIComponent(accessToken)}/typing`, isTyping, fetcher);
+  await postTyping("/api/customer/conversation/typing", isTyping, fetcher);
 }
 
 export async function sendStaffConversationTyping(

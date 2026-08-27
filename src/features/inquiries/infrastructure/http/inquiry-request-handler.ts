@@ -4,6 +4,7 @@ import {parseSubmissionPayload} from "@/features/inquiries/infrastructure/valida
 import type {InquiryRateLimiter} from "@/features/inquiries/infrastructure/http/inquiry-rate-limiter";
 import {readJsonBodyWithinLimit} from "@/shared/infrastructure/http/bounded-json-body";
 import {originAllowed} from "@/shared/infrastructure/http/strict-origin";
+import {serializeCustomerConversationCookie, type CustomerConversationCookieEnvironment} from "@/features/inquiries/infrastructure/http/customer-conversation-cookie";
 
 export {originAllowed} from "@/shared/infrastructure/http/strict-origin";
 
@@ -22,7 +23,7 @@ export async function readBoundedJsonBody(request: Request): Promise<BodyReadRes
   return readJsonBodyWithinLimit(request, inquiryRequestSizeLimit, "Inquiry request body exceeds limit.");
 }
 
-export function createInquiryRequestHandler(getSubmission: () => InquirySubmission, options: Readonly<{rateLimiter?: InquiryRateLimiter; approvedDevelopmentOrigins?: ReadonlySet<string>}> = {}) {
+export function createInquiryRequestHandler(getSubmission: () => InquirySubmission, options: Readonly<{rateLimiter?: InquiryRateLimiter; approvedDevelopmentOrigins?: ReadonlySet<string>; environment?: CustomerConversationCookieEnvironment}> = {}) {
   return async function handle(request: Request): Promise<Response> {
     if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
     const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -39,8 +40,16 @@ export function createInquiryRequestHandler(getSubmission: () => InquirySubmissi
     try { result = await getSubmission().execute(parsed.value); } catch { return failure("service_unavailable", 503); }
     switch (result.status) {
       case "accepted":
-      case "accepted_with_notification_failures":
-        return json({status: "created", inquiryId: result.inquiry.inquiryId, conversationAccessToken: result.conversationAccessToken}, 201);
+      case "accepted_with_notification_failures": {
+        const expiresAt = new Date(result.conversationAccessExpiresAt);
+        let cookie: string;
+        try { cookie = serializeCustomerConversationCookie(result.conversationAccessToken, expiresAt, options.environment); }
+        catch { return failure("service_unavailable", 503); }
+        return Response.json(
+          {status: "created", inquiryId: result.inquiry.inquiryId},
+          {status: 201, headers: {"Cache-Control": "no-store", "Set-Cookie": cookie}},
+        );
+      }
       case "validation_failed": return failure("validation_failed", 422, result.field);
       case "product_not_found":
       case "product_unavailable":

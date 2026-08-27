@@ -9,7 +9,7 @@ import {
 import {getStaffConversationStreamer} from "@/composition/inquiries/staff-conversation-stream";
 import {getStaffAuthentication} from "@/composition/staff-authentication/staff-authentication";
 import {ConversationTypingRateLimiter, parseConversationTypingRateLimitConfig} from "@/features/inquiries/infrastructure/http/conversation-typing-rate-limiter";
-import {createCustomerConversationTypingRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-typing-request-handler";
+import {createCustomerConversationTypingRequestHandler, createCustomerResumeTypingRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-typing-request-handler";
 import {createStaffConversationTypingRequestHandler} from "@/features/inquiries/infrastructure/http/staff-conversation-typing-request-handler";
 import {createStaffConversationStreamRequestHandler} from "@/features/inquiries/infrastructure/http/staff-conversation-stream-request-handler";
 import {getApprovedDevelopmentOrigins, type DevelopmentOriginEnvironment} from "@/shared/config/inquiry-development";
@@ -22,6 +22,12 @@ export function getConversationTypingHttpOptions(environment: DevelopmentOriginE
 }
 
 export const handleCustomerConversationTyping = createCustomerConversationTypingRequestHandler(
+  getConversationAccessResolver,
+  getConversationTypingUpdater,
+  {...getConversationTypingHttpOptions(), rateLimiter: customerRateLimiter},
+);
+
+export const handleCustomerResumeTyping = createCustomerResumeTypingRequestHandler(
   getConversationAccessResolver,
   getConversationTypingUpdater,
   {...getConversationTypingHttpOptions(), rateLimiter: customerRateLimiter},
