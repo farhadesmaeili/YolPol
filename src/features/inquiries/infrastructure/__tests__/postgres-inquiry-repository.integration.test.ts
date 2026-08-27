@@ -6,6 +6,7 @@ import {Pool} from "pg";
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 
 import {DuplicateInquiryIdError} from "@/features/inquiries/application/ports/inquiry-ports";
+import {toConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
 import {GetConversationMessageHistory} from "@/features/inquiries/application/use-cases/get-conversation-message-history";
 import {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
 import {ReceiveCustomerMessage} from "@/features/inquiries/application/use-cases/receive-customer-message";
@@ -133,13 +134,18 @@ describe("PostgresInquiryRepository", () => {
 
     const internalMessages = await messageRepository.findForInquiry(inquiry.id.value);
     expect(internalMessages?.map((message) => message.actorReference?.value ?? null)).toEqual([null, actorReference]);
+    const positionedStaffMessages = await messageRepository.findPositionedForInquiry(inquiry.id.value);
+    expect(positionedStaffMessages?.map(({position, message}) => ({position, actorReference: message.actorReference?.value ?? null}))).toEqual([
+      {position: 0, actorReference: null},
+      {position: 1, actorReference},
+    ]);
 
     const customerHistory = await new GetConversationMessageHistory(messageRepository).execute({inquiryId: inquiry.id.value});
     expect(customerHistory).toMatchObject({status: "found", messages: [
       {senderType: "CUSTOMER", channel: "WEBSITE", body: "Please send an update."},
       {senderType: "INTERNAL_USER", channel: "WEBSITE", body: command.body},
     ]});
-    const customerUpdates = await new ReadNewConversationMessages(messageRepository).execute({inquiryId: inquiry.id.value, afterCursor: 0});
+    const customerUpdates = await new ReadNewConversationMessages(messageRepository, toConversationMessageDto).execute({inquiryId: inquiry.id.value, afterCursor: 0});
     expect(customerUpdates).toMatchObject({status: "found", updates: [{cursor: 1, message: {senderType: "INTERNAL_USER", channel: "WEBSITE", body: command.body}}]});
     expect(JSON.stringify({customerHistory, customerUpdates})).not.toMatch(/actorReference|staff:member-integration|member-integration/u);
 

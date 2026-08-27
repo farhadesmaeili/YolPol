@@ -60,15 +60,16 @@ const detail: TeamInquiryDetailDto = Object.freeze({
     status: listItem.status,
     createdAt: listItem.createdAt,
     updatedAt: listItem.updatedAt,
-    contact: {fullName: listItem.customerDisplayName, company: listItem.company, email: "buyer@example.test", phone: "+905551234567", whatsappPhone: null, telegramUsername: "@buyer", preferredMethods: ["email", "telegram"]},
+    contact: {fullName: listItem.customerDisplayName, company: listItem.company, email: "buyer@example.test", phone: "+905551234567", whatsappPhone: null, telegramUsername: "@buyer", preferredMethods: ["email", "telegram"] as const},
     location: listItem.origin,
     destination: listItem.destination,
     message: "<img src=x onerror=alert(1)>",
     items: listItem.items,
   },
   assignment: null,
-  workflowHistory: [{id: "event-1", inquiryId: listItem.id, type: "INQUIRY_CREATED", previousValue: null, newValue: "NEW", actorReference: null, occurredAt: listItem.createdAt}],
-  conversationMessages: [{id: "message-1", senderType: "CUSTOMER", channel: "WEBSITE", actorReference: null, body: "<script>message()</script>", createdAt: listItem.createdAt}],
+  workflowHistory: [{id: "event-1", inquiryId: listItem.id, type: "INQUIRY_CREATED" as const, previousValue: null, newValue: "NEW", actorReference: null, occurredAt: listItem.createdAt}],
+  conversationCursor: 0,
+  conversationMessages: [{id: "message-1", senderType: "CUSTOMER" as const, channel: "WEBSITE" as const, actorReference: null, body: "<script>message()</script>", createdAt: listItem.createdAt}],
 });
 
 describe("Staff Inquiry filters", () => {

@@ -4,6 +4,7 @@ import {migrate} from "drizzle-orm/node-postgres/migrator";
 import {Pool} from "pg";
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from "vitest";
 
+import {toConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
 import {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
 import {ReceiveTelegramReply} from "@/features/inquiries/application/use-cases/receive-telegram-reply";
 import {Conversation} from "@/features/inquiries/domain/entities/conversation";
@@ -135,7 +136,7 @@ describe("PostgresTelegramDeliveryRepository", () => {
     const storedActors = await pool.query<{actor_reference: string | null}>("select actor_reference from conversation_messages order by position");
     expect(storedActors.rows).toEqual([{actor_reference: "staff:member-a"}, {actor_reference: "staff:member-a"}, {actor_reference: null}]);
 
-    const customerUpdates = await new ReadNewConversationMessages(messageRepository).execute({inquiryId: inquiry.id.value, afterCursor: -1});
+    const customerUpdates = await new ReadNewConversationMessages(messageRepository, toConversationMessageDto).execute({inquiryId: inquiry.id.value, afterCursor: -1});
     expect(customerUpdates).toMatchObject({status: "found", updates: [
       {cursor: 0, message: {senderType: "INTERNAL_USER", channel: "TELEGRAM", body: incoming.body}},
       {cursor: 1, message: {senderType: "INTERNAL_USER", channel: "TELEGRAM", body: privateIncoming.body}},

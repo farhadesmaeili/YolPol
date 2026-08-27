@@ -110,6 +110,7 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}:
           <StaffPanel title={t("inquiryDetail.conversation")}>
             <StaffReplyComposer
               customerDisplayName={inquiry.contact.fullName}
+              initialConversationCursor={detail.conversationCursor}
               initialMessages={detail.conversationMessages}
               inquiryId={inquiry.id}
               locale={locale}

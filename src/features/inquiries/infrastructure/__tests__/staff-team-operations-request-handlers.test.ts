@@ -72,6 +72,7 @@ const detail = Object.freeze({
     actorReference: null,
     occurredAt: "2026-08-26T08:00:00.000Z",
   })]),
+  conversationCursor: 1,
   conversationMessages: Object.freeze([Object.freeze({
     id: "message-1",
     senderType: "CUSTOMER" as const,

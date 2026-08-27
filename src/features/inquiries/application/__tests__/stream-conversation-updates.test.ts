@@ -37,4 +37,50 @@ describe("StreamConversationUpdates", () => {
     expect(result).toEqual({status: "validation_failed"});
     expect(registry.activeCount()).toBe(0);
   });
+
+  it("resumes after the last delivered position without duplicates or missed persisted messages", async () => {
+    const updates = [
+      update,
+      {...update, cursor: 1, message: {...update.message, id: "message-2"}},
+      {...update, cursor: 2, message: {...update.message, id: "message-3"}},
+    ] as const;
+    let available: readonly typeof updates[number][] = updates.slice(0, 2);
+    const execute = vi.fn(async ({afterCursor}: Readonly<{afterCursor: number}>) => ({
+      status: "found" as const,
+      updates: available.filter(({cursor}) => cursor > afterCursor),
+    }));
+    const firstController = new AbortController();
+    const firstUpdates = vi.fn();
+    const first = new StreamConversationUpdates({execute}, new InMemoryConversationUpdateStreamRegistry(), new AbortOnlyDelay()).open({
+      conversationId: "conversation-1",
+      inquiryId: "inquiry-1",
+      afterCursor: -1,
+      signal: firstController.signal,
+      onUpdate: firstUpdates,
+      onUnavailable: vi.fn(),
+    });
+    expect(first.status).toBe("opened");
+    if (first.status !== "opened") return;
+    await vi.waitFor(() => expect(firstUpdates).toHaveBeenCalledTimes(2));
+    firstController.abort();
+    await first.session.completed;
+
+    available = updates;
+    const reconnectController = new AbortController();
+    const recovered = vi.fn();
+    const reconnect = new StreamConversationUpdates({execute}, new InMemoryConversationUpdateStreamRegistry(), new AbortOnlyDelay()).open({
+      conversationId: "conversation-1",
+      inquiryId: "inquiry-1",
+      afterCursor: 1,
+      signal: reconnectController.signal,
+      onUpdate: recovered,
+      onUnavailable: vi.fn(),
+    });
+    expect(reconnect.status).toBe("opened");
+    if (reconnect.status !== "opened") return;
+    await vi.waitFor(() => expect(recovered).toHaveBeenCalledOnce());
+    expect(recovered).toHaveBeenCalledWith(updates[2]);
+    reconnectController.abort();
+    await reconnect.session.completed;
+  });
 });

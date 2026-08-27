@@ -73,6 +73,7 @@ export type TeamInquiryDetailDto = Readonly<{
   }>;
   assignment: TeamInquiryAssignmentDto | null;
   workflowHistory: readonly StoredInquiryWorkflowEvent[];
+  conversationCursor: number;
   conversationMessages: readonly StaffConversationMessageDto[];
 }>;
 

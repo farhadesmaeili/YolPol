@@ -36,7 +36,7 @@ The actor mapping is Staff-only. Customer history and SSE DTOs remain unchanged 
 
 Sending a Staff website reply does not mutate Inquiry status, assignment, workflow history, or Inquiry timestamps. It does not invoke Telegram, email, WhatsApp, SMS, AI, or any other provider. The existing Conversation persistence remains the single source of truth, and the already-established customer SSE path can naturally deliver the stored reply.
 
-There is no Staff SSE, WebSocket, Redis, or multi-user synchronization in this feature. The sender receives immediate feedback from the authenticated API response. Staff multi-user realtime is a separate concern.
+The composer still receives immediate feedback from the authenticated API response. Staff persisted-message synchronization is now implemented separately by the existing authenticated Staff SSE endpoint and reconciles that local response by stable message ID; see `0027-staff-conversation-realtime.md`. No WebSocket, Redis, or provider-specific synchronization was added.
 
 The existing Telegram reply gateway remains independent. A future outbound or bidirectional Telegram feature must reuse trusted operational identity and Conversation persistence without adding provider calls to this composer or exposing channel selection in the Staff UI.
 
