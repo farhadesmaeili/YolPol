@@ -1,6 +1,5 @@
 export type NotificationMessage = Readonly<{
-  subject: string;
-  body: string;
+  text: string;
 }>;
 
 export type ExternalChannelReply = Readonly<{
@@ -9,6 +8,5 @@ export type ExternalChannelReply = Readonly<{
   externalRecipientId: string;
   senderExternalId: string;
   body: string;
-  repliedMessageBody: string;
-  inquiryId: string;
+  repliedMessageId: string;
 }>;

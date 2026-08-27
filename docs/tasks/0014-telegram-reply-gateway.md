@@ -1,19 +1,23 @@
-# Telegram Reply Gateway Phase 1
+# Telegram Reply Gateway
 
-## Decision
+## Current decision
 
-The inbound endpoint is `POST /api/webhooks/telegram`. It accepts only JSON requests whose `X-Telegram-Bot-Api-Secret-Token` header matches the server-side `TELEGRAM_WEBHOOK_SECRET`. Configuration is read when a request arrives so builds do not require live Telegram credentials.
+The inbound endpoint remains `POST /api/webhooks/telegram`. It accepts bounded JSON only when `X-Telegram-Bot-Api-Secret-Token` matches the server-only `TELEGRAM_WEBHOOK_SECRET`. Authentication happens before body parsing, configuration is read per request, and errors remain provider-neutral.
 
-Telegram update parsing remains in infrastructure. A valid Phase 1 update is a text message sent as a reply to a text or caption containing exactly one standalone `Inquiry #<id>` line. The parser also accepts the existing provider-neutral `Inquiry: <id>` notification line for compatibility. It extracts the update, message, chat, and sender identifiers; the reply body; the replied message body; and the inquiry identifier.
+Telegram update parsing is infrastructure-only. A correlatable update must contain stable numeric `update_id`, `message.message_id`, `message.from.id`, `message.chat.id`, and `message.reply_to_message.message_id` values plus non-empty text. Display names, usernames, and copied reply text are not trusted.
 
-The application authorizes the Telegram sender against `communication_recipients`. The row must match the `TELEGRAM` channel, `TEAM_MEMBER` kind, sender external ID, and `authorized = true`. Notification enablement does not control reply authorization.
+After secret validation, syntactically valid Telegram Updates that are unsupported or not actionable are acknowledged with the same neutral HTTP 200 response as accepted and duplicate replies. Unauthorized senders and unknown delivery bindings are also acknowledged without persistence so Telegram does not retry irrelevant traffic and the response reveals neither authorization nor Conversation existence. Malformed transport requests retain 4xx responses, while dependency or persistence failures retain 5xx responses so Telegram can retry genuine service failures.
 
-## Conversation persistence and idempotency
+## Authorization, correlation, and persistence
 
-An accepted reply becomes an existing conversation message with `INTERNAL_USER` sender type, `TELEGRAM` channel, and the trimmed reply text. Conversation lookup uses the parsed inquiry ID.
+The sender must match an authorized `TELEGRAM`/`TEAM_MEMBER` row in `communication_recipients`. `notifications_enabled` controls outbound notifications and does not revoke inbound authorization.
 
-No migration is required. Telegram's update ID becomes the deterministic message ID `telegram_update_<update_id>`, protected by the existing `conversation_messages` primary key. The PostgreSQL repository locks the matched conversation row while assigning the next position, and a primary-key conflict is treated as an already accepted delivery. No customer delivery is triggered.
+Correlation uses the authoritative provider binding `(message.chat.id, message.reply_to_message.message_id)` recorded on a `DELIVERED` row in `telegram_inquiry_deliveries`. Copied `Inquiry #...` text is no longer parsed or used as a fallback. The binding supplies the existing `conversation_id`.
+
+An accepted reply is appended through the shared Conversation repository with `senderType = INTERNAL_USER` and `channel = TELEGRAM`. If the authorized recipient has a trusted mapping to an active Team Member, the internal message receives `actorReference = staff:<teamMemberId>`; unmapped or inactive mappings remain `NULL` for new messages. Existing historical attribution is unchanged. Identity is never inferred from Telegram profile data or `staff_accounts`.
+
+Telegram's update ID remains the deterministic message ID `telegram_update_<update_id>`, so redelivery is idempotent. Customer history and streaming projections deliberately omit actor references and all Telegram/provider/recipient identifiers.
 
 ## Security boundaries
 
-Webhook and bot secrets remain environment-only. Secret comparison uses fixed-length SHA-256 digests and a timing-safe equality check. The endpoint authenticates before reading the payload, bounds the request body, returns provider-neutral errors, disables response caching, and does not log request bodies, credentials, or configuration values.
+Webhook and bot secrets are separate environment-only values. Secret comparison uses fixed-length SHA-256 digests and timing-safe equality. The endpoint does not log request bodies, credentials, provider responses, or configuration values. See [0026](./0026-telegram-real-integration.md) for the outbound delivery ledger, worker, and operational setup.

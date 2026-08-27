@@ -1,15 +1,16 @@
-import {closeInquiryPostgresPool} from "../../src/features/inquiries/infrastructure/database/postgres-pool";
 import {createInquiryNotificationWorker} from "../../src/composition/inquiries/inquiry-notification-worker";
+import {runInquiryNotificationWorkerOneShot} from "./inquiry-notification-runtime";
 
-let exitCode = 0;
-try {
-  const result = await createInquiryNotificationWorker().execute();
-  console.info(JSON.stringify(result));
-  if (result.scheduledForRetry > 0) exitCode = 1;
-} catch {
-  console.error("Inquiry notification worker failed.");
-  exitCode = 1;
-} finally {
-  await closeInquiryPostgresPool();
+export async function main(): Promise<void> {
+  process.exitCode = await runInquiryNotificationWorkerOneShot({
+    createRuntime: createInquiryNotificationWorker,
+    logger: console,
+  });
 }
-process.exitCode = exitCode;
+
+if (require.main === module) {
+  void main().catch(() => {
+    console.error("Inquiry notification worker failed.");
+    process.exitCode = 1;
+  });
+}

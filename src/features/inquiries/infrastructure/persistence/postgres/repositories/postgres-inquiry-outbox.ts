@@ -3,12 +3,23 @@ import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
 import type {InquiryOutbox, PendingInquiryEvent} from "@/features/inquiries/application/ports/inquiry-ports";
+import {createCustomerConversationMessageCreated, customerConversationMessageCreatedEventType} from "@/features/inquiries/domain/events/customer-conversation-message-created";
 import {inquiryCreatedEventType} from "@/features/inquiries/domain/events/inquiry-created";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {inquiryOutbox, inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 
 type InquiryDatabase = NodePgDatabase<typeof inquiryPostgresSchema>;
 const leaseMilliseconds = 60_000;
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseOccurredAt(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const occurredAt = new Date(value);
+  return Number.isFinite(occurredAt.getTime()) ? occurredAt : null;
+}
 
 export class PostgresInquiryOutbox implements InquiryOutbox {
   private readonly database: InquiryDatabase;
@@ -26,10 +37,29 @@ export class PostgresInquiryOutbox implements InquiryOutbox {
         for (const candidate of candidates) {
           const [row] = await transaction.update(inquiryOutbox).set({attempts: sql`${inquiryOutbox.attempts} + 1`, lockedUntil: new Date(now.getTime() + leaseMilliseconds)})
             .where(eq(inquiryOutbox.id, candidate.id)).returning();
-          if (!row || row.eventType !== inquiryCreatedEventType || row.payload.inquiryId !== row.aggregateId) throw new InquiryPersistenceError();
-          const occurredAt = new Date(row.payload.occurredAt);
-          if (!Number.isFinite(occurredAt.getTime())) throw new InquiryPersistenceError();
-          claimed.push(Object.freeze({event: Object.freeze({eventId: row.id, type: inquiryCreatedEventType, inquiryId: row.aggregateId, occurredAt}), attempts: row.attempts}));
+          if (!row || !isRecord(row.payload) || row.payload.inquiryId !== row.aggregateId) throw new InquiryPersistenceError();
+          const occurredAt = parseOccurredAt(row.payload.occurredAt);
+          if (!occurredAt) throw new InquiryPersistenceError();
+
+          if (row.eventType === inquiryCreatedEventType) {
+            claimed.push(Object.freeze({event: Object.freeze({eventId: row.id, type: inquiryCreatedEventType, inquiryId: row.aggregateId, occurredAt}), attempts: row.attempts}));
+            continue;
+          }
+          if (
+            row.eventType !== customerConversationMessageCreatedEventType
+            || typeof row.payload.conversationId !== "string"
+            || typeof row.payload.messageId !== "string"
+          ) throw new InquiryPersistenceError();
+          claimed.push(Object.freeze({
+            event: createCustomerConversationMessageCreated({
+              eventId: row.id,
+              inquiryId: row.aggregateId,
+              conversationId: row.payload.conversationId,
+              messageId: row.payload.messageId,
+              occurredAt,
+            }),
+            attempts: row.attempts,
+          }));
         }
         return Object.freeze(claimed);
       });

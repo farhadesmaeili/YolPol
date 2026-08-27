@@ -1,5 +1,5 @@
 import type {ReceiveCustomerMessageInput} from "@/features/inquiries/application/dto/customer-message-dto";
-import type {ConversationMessageIdGenerator, ConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
+import type {ConversationMessageIdGenerator, CustomerWebsiteConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import type {Clock} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {ReceiveCustomerMessageResult} from "@/features/inquiries/application/results/receive-customer-message-result";
 import {Message} from "@/features/inquiries/domain/entities/message";
@@ -10,7 +10,7 @@ import {normalizeMessageBody} from "@/features/inquiries/domain/validation/messa
 
 export class ReceiveCustomerMessage {
   constructor(
-    private readonly messages: ConversationMessageWriter,
+    private readonly messages: CustomerWebsiteConversationMessageWriter,
     private readonly idGenerator: ConversationMessageIdGenerator,
     private readonly clock: Clock,
   ) {}
@@ -45,7 +45,7 @@ export class ReceiveCustomerMessage {
     }
 
     try {
-      const result = await this.messages.appendForInquiry(inquiryId, message);
+      const result = await this.messages.appendCustomerWebsiteForInquiry(inquiryId, message);
       if (result === "conversation_not_found") return {status: "conversation_not_found"};
       if (result === "duplicate") return {status: "conflict"};
       return {status: "created", messageId: message.id.value};

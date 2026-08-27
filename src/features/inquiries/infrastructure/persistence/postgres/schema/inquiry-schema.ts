@@ -1,5 +1,5 @@
 import {sql} from "drizzle-orm";
-import {bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
+import {bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
 
 export const inquiries = pgTable("inquiries", {
   id: varchar("id", {length: 128}).primaryKey(),
@@ -107,6 +107,7 @@ export const communicationRecipients = pgTable("communication_recipients", {
   kind: varchar("kind", {length: 20}).notNull(),
   externalId: varchar("external_id", {length: 160}).notNull(),
   displayName: varchar("display_name", {length: 120}).notNull(),
+  teamMemberId: varchar("team_member_id", {length: 128}).references(() => inquiryTeamMembers.id, {onDelete: "restrict"}),
   authorized: boolean("authorized").notNull().default(false),
   notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
@@ -116,6 +117,7 @@ export const communicationRecipients = pgTable("communication_recipients", {
   check("communication_recipients_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
   check("communication_recipients_channel_check", sql`${table.channel} in ('TELEGRAM','EMAIL','WHATSAPP')`),
   check("communication_recipients_kind_check", sql`${table.kind} in ('TEAM_GROUP','TEAM_MEMBER')`),
+  check("communication_recipients_team_member_kind_check", sql`${table.kind} = 'TEAM_MEMBER' or ${table.teamMemberId} is null`),
   check("communication_recipients_external_id_length_check", sql`char_length(${table.externalId}) between 1 and 160`),
   check("communication_recipients_display_name_length_check", sql`char_length(${table.displayName}) between 1 and 120`),
   check("communication_recipients_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt}`),
@@ -133,6 +135,38 @@ export const inquiryTeamMembers = pgTable("inquiry_team_members", {
   check("inquiry_team_members_display_name_length_check", sql`char_length(${table.displayName}) between 1 and 120`),
   check("inquiry_team_members_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt}`),
   index("inquiry_team_members_active_idx").on(table.active, table.id),
+]);
+
+export const telegramInquiryDeliveries = pgTable("telegram_inquiry_deliveries", {
+  outboxEventId: varchar("outbox_event_id", {length: 160}).notNull().references(() => inquiryOutbox.id, {onDelete: "cascade"}),
+  recipientId: varchar("recipient_id", {length: 128}).notNull().references(() => communicationRecipients.id, {onDelete: "restrict"}),
+  conversationId: varchar("conversation_id", {length: 128}).notNull().references(() => conversations.id, {onDelete: "cascade"}),
+  recipientKind: varchar("recipient_kind", {length: 20}).notNull(),
+  recipientExternalId: varchar("recipient_external_id", {length: 160}).notNull(),
+  status: varchar("status", {length: 32}).notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", {withTimezone: true, mode: "date"}).notNull(),
+  lockedUntil: timestamp("locked_until", {withTimezone: true, mode: "date"}),
+  telegramChatId: bigint("telegram_chat_id", {mode: "number"}),
+  telegramMessageId: bigint("telegram_message_id", {mode: "number"}),
+  lastErrorCode: varchar("last_error_code", {length: 64}),
+  createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
+  deliveredAt: timestamp("delivered_at", {withTimezone: true, mode: "date"}),
+}, (table) => [
+  primaryKey({name: "telegram_inquiry_deliveries_pkey", columns: [table.outboxEventId, table.recipientId]}),
+  check("telegram_inquiry_deliveries_recipient_kind_check", sql`${table.recipientKind} in ('TEAM_GROUP','TEAM_MEMBER')`),
+  check("telegram_inquiry_deliveries_status_check", sql`${table.status} in ('PENDING','IN_FLIGHT','RETRYABLE_FAILURE','DELIVERED','PERMANENT_FAILURE','UNKNOWN')`),
+  check("telegram_inquiry_deliveries_attempts_check", sql`${table.attempts} >= 0`),
+  check("telegram_inquiry_deliveries_external_id_check", sql`char_length(${table.recipientExternalId}) between 1 and 160`),
+  check("telegram_inquiry_deliveries_confirmation_check", sql`
+    (${table.status} = 'DELIVERED' and ${table.telegramChatId} is not null and ${table.telegramMessageId} is not null and ${table.deliveredAt} is not null) or
+    (${table.status} <> 'DELIVERED' and ${table.telegramChatId} is null and ${table.telegramMessageId} is null and ${table.deliveredAt} is null)
+  `),
+  check("telegram_inquiry_deliveries_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt} and (${table.deliveredAt} is null or ${table.deliveredAt} >= ${table.createdAt})`),
+  uniqueIndex("telegram_inquiry_deliveries_provider_binding_uidx").on(table.telegramChatId, table.telegramMessageId).where(sql`${table.telegramChatId} is not null and ${table.telegramMessageId} is not null`),
+  index("telegram_inquiry_deliveries_due_idx").on(table.status, table.availableAt, table.lockedUntil),
+  index("telegram_inquiry_deliveries_event_status_idx").on(table.outboxEventId, table.status),
 ]);
 
 export const inquiryAssignments = pgTable("inquiry_assignments", {
@@ -165,16 +199,21 @@ export const inquiryOutbox = pgTable("inquiry_outbox", {
   id: varchar("id", {length: 160}).primaryKey(),
   eventType: varchar("event_type", {length: 64}).notNull(),
   aggregateId: varchar("aggregate_id", {length: 128}).notNull().references(() => inquiries.id, {onDelete: "cascade"}),
-  payload: jsonb("payload").$type<Readonly<{inquiryId: string; occurredAt: string}>>().notNull(),
+  payload: jsonb("payload").$type<Readonly<{
+    inquiryId: string;
+    occurredAt: string;
+    conversationId?: string;
+    messageId?: string;
+  }>>().notNull(),
   occurredAt: timestamp("occurred_at", {withTimezone: true, mode: "date"}).notNull(),
   attempts: integer("attempts").notNull().default(0),
   availableAt: timestamp("available_at", {withTimezone: true, mode: "date"}).notNull(),
   lockedUntil: timestamp("locked_until", {withTimezone: true, mode: "date"}),
   processedAt: timestamp("processed_at", {withTimezone: true, mode: "date"}),
 }, (table) => [
-  check("inquiry_outbox_event_type_check", sql`${table.eventType} = 'InquiryCreated'`),
+  check("inquiry_outbox_event_type_check", sql`${table.eventType} in ('InquiryCreated','CustomerConversationMessageCreated')`),
   check("inquiry_outbox_attempts_check", sql`${table.attempts} >= 0`),
   index("inquiry_outbox_pending_idx").on(table.availableAt, table.occurredAt).where(sql`${table.processedAt} is null`),
 ]);
 
-export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationAccess, conversationMessages, communicationRecipients, inquiryTeamMembers, inquiryAssignments, inquiryWorkflowEvents, inquiryOutbox};
+export const inquiryPostgresSchema = {inquiries, inquiryItems, conversations, conversationAccess, conversationMessages, communicationRecipients, inquiryTeamMembers, inquiryAssignments, inquiryWorkflowEvents, inquiryOutbox, telegramInquiryDeliveries};
