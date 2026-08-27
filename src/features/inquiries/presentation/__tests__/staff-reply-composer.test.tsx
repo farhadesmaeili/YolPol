@@ -58,7 +58,7 @@ function labels(catalog: typeof enMessages.Staff, customerTyping = enMessages.Co
 
 describe("Staff Reply Composer presentation", () => {
   it("renders a localized accessible multiline composer with mobile-safe controls", () => {
-    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="Buyer" initialMessages={[]} inquiryId="inquiry-1" labels={labels(enMessages.Staff)} locale="en" teamMemberNames={{}} />);
+    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="Buyer" initialConversationCursor={-1} initialMessages={[]} inquiryId="inquiry-1" labels={labels(enMessages.Staff)} locale="en" teamMemberNames={{}} />);
     expect(html).toContain("Reply to customer");
     expect(html).toMatch(/<label[^>]*for="[^"]+"[^>]*>Write a reply<\/label>/u);
     expect(html).toContain("<textarea");
@@ -75,7 +75,7 @@ describe("Staff Reply Composer presentation", () => {
   });
 
   it("renders complete Persian RTL-ready content without physical-side spacing", () => {
-    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="خریدار" initialMessages={[]} inquiryId="inquiry-1" labels={labels(faMessages.Staff, faMessages.ConversationTyping.customer)} locale="fa" teamMemberNames={{}} />);
+    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="خریدار" initialConversationCursor={-1} initialMessages={[]} inquiryId="inquiry-1" labels={labels(faMessages.Staff, faMessages.ConversationTyping.customer)} locale="fa" teamMemberNames={{}} />);
     expect(html).toContain(faMessages.Staff.reply.replyToCustomer);
     expect(html).toContain(faMessages.Staff.reply.sendReply);
     const source = readFileSync(join(process.cwd(), "src", "features", "inquiries", "presentation", "components", "staff", "staff-reply-composer.tsx"), "utf8");
@@ -88,7 +88,7 @@ describe("Staff Reply Composer presentation", () => {
     expect(resolveStaffMessageAuthor({...message, actorReference: null}, "Buyer", {}, catalog)).toBe("YOLPOL Team");
     expect(resolveStaffMessageAuthor({...message, actorReference: "staff:inactive-member"}, "Buyer", {}, catalog)).toBe("YOLPOL Team");
 
-    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="Buyer" initialMessages={[message, {...message, id: "message-2", actorReference: null}]} inquiryId="inquiry-1" labels={catalog} locale="en" teamMemberNames={{"member-1": "Farhad"}} />);
+    const html = renderToStaticMarkup(<StaffReplyComposer customerDisplayName="Buyer" initialConversationCursor={1} initialMessages={[message, {...message, id: "message-2", actorReference: null}]} inquiryId="inquiry-1" labels={catalog} locale="en" teamMemberNames={{"member-1": "Farhad"}} />);
     expect(html).toContain("Farhad");
     expect(html).toContain("YOLPOL Team");
     expect(html).not.toContain("staff:member-1");

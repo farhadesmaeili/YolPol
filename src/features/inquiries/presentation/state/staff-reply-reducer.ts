@@ -7,6 +7,7 @@ export type StaffReplyDraftFailure = "required" | "too_long";
 
 export type StaffReplyState = Readonly<{
   clientMessageId: string | null;
+  conversationCursor: number;
   draft: string;
   failure: StaffReplyDraftFailure | StaffConversationReplyFailure | null;
   messages: readonly StaffConversationMessageDto[];
@@ -17,7 +18,8 @@ export type StaffReplyAction =
   | Readonly<{type: "draft_changed"; value: string}>
   | Readonly<{type: "submission_started"; clientMessageId: string}>
   | Readonly<{type: "submission_failed"; failure: StaffReplyDraftFailure | StaffConversationReplyFailure; discardClientMessageId?: boolean}>
-  | Readonly<{type: "submission_succeeded"; message: StaffConversationMessageDto}>;
+  | Readonly<{type: "submission_succeeded"; message: StaffConversationMessageDto}>
+  | Readonly<{type: "conversation_message_received"; cursor: number; message: StaffConversationMessageDto}>;
 
 export function staffReplyDraftFailure(draft: string): StaffReplyDraftFailure | null {
   const normalized = draft.trim();
@@ -26,8 +28,18 @@ export function staffReplyDraftFailure(draft: string): StaffReplyDraftFailure | 
   return null;
 }
 
-export function createInitialStaffReplyState(messages: readonly StaffConversationMessageDto[]): StaffReplyState {
-  return Object.freeze({clientMessageId: null, draft: "", failure: null, messages: Object.freeze([...messages]), status: "idle"});
+export function createInitialStaffReplyState(input: Readonly<{
+  conversationCursor: number;
+  messages: readonly StaffConversationMessageDto[];
+}>): StaffReplyState {
+  return Object.freeze({
+    clientMessageId: null,
+    conversationCursor: input.conversationCursor,
+    draft: "",
+    failure: null,
+    messages: Object.freeze([...input.messages]),
+    status: "idle",
+  });
 }
 
 export function staffReplyReducer(state: StaffReplyState, action: StaffReplyAction): StaffReplyState {
@@ -51,6 +63,7 @@ export function staffReplyReducer(state: StaffReplyState, action: StaffReplyActi
       });
     case "submission_succeeded":
       return Object.freeze({
+        ...state,
         clientMessageId: null,
         draft: "",
         failure: null,
@@ -58,6 +71,15 @@ export function staffReplyReducer(state: StaffReplyState, action: StaffReplyActi
           ? state.messages
           : Object.freeze([...state.messages, Object.freeze(action.message)]),
         status: "success",
+      });
+    case "conversation_message_received":
+      if (action.cursor <= state.conversationCursor) return state;
+      return Object.freeze({
+        ...state,
+        conversationCursor: action.cursor,
+        messages: state.messages.some(({id}) => id === action.message.id)
+          ? state.messages
+          : Object.freeze([...state.messages, Object.freeze(action.message)]),
       });
   }
 }

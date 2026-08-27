@@ -15,6 +15,10 @@ const persistedMessage: StaffConversationMessageDto = Object.freeze({
 });
 
 describe("Staff Reply state", () => {
+  const initial = (messages: readonly StaffConversationMessageDto[] = [], conversationCursor = messages.length - 1) => (
+    createInitialStaffReplyState({conversationCursor, messages})
+  );
+
   it("rejects blank and oversized drafts without truncating valid multiline text", () => {
     const oversized = "x".repeat(messageBodyMaxLength + 1);
     expect(staffReplyDraftFailure(" \n ")).toBe("required");
@@ -24,7 +28,7 @@ describe("Staff Reply state", () => {
   });
 
   it("preserves the draft and client ID for an uncertain retry", () => {
-    let state = createInitialStaffReplyState([]);
+    let state = initial();
     state = staffReplyReducer(state, {type: "draft_changed", value: persistedMessage.body});
     state = staffReplyReducer(state, {type: "submission_started", clientMessageId: "logical-message-1"});
     state = staffReplyReducer(state, {type: "submission_failed", failure: "service_unavailable"});
@@ -35,7 +39,7 @@ describe("Staff Reply state", () => {
   });
 
   it("treats an edited failed draft and a retry conflict as a new logical message", () => {
-    let state = staffReplyReducer(createInitialStaffReplyState([]), {type: "draft_changed", value: "First reply"});
+    let state = staffReplyReducer(initial(), {type: "draft_changed", value: "First reply"});
     state = staffReplyReducer(state, {type: "submission_started", clientMessageId: "logical-message-1"});
     state = staffReplyReducer(state, {type: "submission_failed", failure: "service_unavailable"});
     state = staffReplyReducer(state, {type: "draft_changed", value: "Changed reply"});
@@ -48,7 +52,7 @@ describe("Staff Reply state", () => {
   });
 
   it("clears a successful draft, deduplicates by message ID, and resets the next-message key", () => {
-    let state = staffReplyReducer(createInitialStaffReplyState([persistedMessage]), {type: "draft_changed", value: persistedMessage.body});
+    let state = staffReplyReducer(initial([persistedMessage]), {type: "draft_changed", value: persistedMessage.body});
     state = staffReplyReducer(state, {type: "submission_started", clientMessageId: "logical-message-1"});
     state = staffReplyReducer(state, {type: "submission_succeeded", message: persistedMessage});
     expect(state).toMatchObject({draft: "", clientMessageId: null, status: "success"});
@@ -58,5 +62,24 @@ describe("Staff Reply state", () => {
     const cryptoProvider = {randomUUID: () => ids.shift() ?? "missing", getRandomValues: undefined};
     expect(createStaffClientMessageId(cryptoProvider)).toBe("next-logical-message-1");
     expect(createStaffClientMessageId(cryptoProvider)).toBe("next-logical-message-2");
+  });
+
+  it("appends resumable realtime messages once by cursor and stable message ID", () => {
+    const customerMessage = Object.freeze({...persistedMessage, id: "customer-message-2", senderType: "CUSTOMER" as const, actorReference: null});
+    let state = initial([persistedMessage], 0);
+
+    state = staffReplyReducer(state, {type: "conversation_message_received", cursor: 1, message: customerMessage});
+    state = staffReplyReducer(state, {type: "conversation_message_received", cursor: 1, message: customerMessage});
+    expect(state.conversationCursor).toBe(1);
+    expect(state.messages.map(({id}) => id)).toEqual([persistedMessage.id, customerMessage.id]);
+  });
+
+  it("reconciles a locally appended Staff reply without rendering its SSE echo twice", () => {
+    let state = initial([], -1);
+    state = staffReplyReducer(state, {type: "submission_succeeded", message: persistedMessage});
+    state = staffReplyReducer(state, {type: "conversation_message_received", cursor: 0, message: persistedMessage});
+
+    expect(state.conversationCursor).toBe(0);
+    expect(state.messages).toEqual([persistedMessage]);
   });
 });

@@ -6,11 +6,12 @@ import {
   getConversationTypingRegistry,
   getConversationTypingUpdater,
 } from "@/composition/inquiries/conversation-typing";
+import {getStaffConversationStreamer} from "@/composition/inquiries/staff-conversation-stream";
 import {getStaffAuthentication} from "@/composition/staff-authentication/staff-authentication";
 import {ConversationTypingRateLimiter, parseConversationTypingRateLimitConfig} from "@/features/inquiries/infrastructure/http/conversation-typing-rate-limiter";
 import {createCustomerConversationTypingRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-typing-request-handler";
 import {createStaffConversationTypingRequestHandler} from "@/features/inquiries/infrastructure/http/staff-conversation-typing-request-handler";
-import {createStaffConversationTypingStreamRequestHandler} from "@/features/inquiries/infrastructure/http/staff-conversation-typing-stream-request-handler";
+import {createStaffConversationStreamRequestHandler} from "@/features/inquiries/infrastructure/http/staff-conversation-stream-request-handler";
 import {getApprovedDevelopmentOrigins, type DevelopmentOriginEnvironment} from "@/shared/config/inquiry-development";
 
 const customerRateLimiter = new ConversationTypingRateLimiter(parseConversationTypingRateLimitConfig());
@@ -33,9 +34,10 @@ export const handleStaffConversationTyping = createStaffConversationTypingReques
   {...getConversationTypingHttpOptions(), rateLimiter: staffRateLimiter},
 );
 
-export const handleStaffConversationTypingStream = createStaffConversationTypingStreamRequestHandler(
+export const handleStaffConversationStream = createStaffConversationStreamRequestHandler(
   getStaffAuthentication,
   getConversationForInquiryResolver,
+  getStaffConversationStreamer,
   getConversationTypingRegistry,
   getConversationTypingHttpOptions(),
 );

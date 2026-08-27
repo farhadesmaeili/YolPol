@@ -20,6 +20,10 @@ export interface ConversationMessageReader {
 
 export type PositionedConversationMessage = Readonly<{position: number; message: Message}>;
 
+export interface PositionedConversationMessageReader {
+  findPositionedForInquiry(inquiryId: string): Promise<readonly PositionedConversationMessage[] | null>;
+}
+
 export interface ConversationMessageUpdateReader {
   findAfterPositionForInquiry(inquiryId: string, afterPosition: number, limit: number): Promise<readonly PositionedConversationMessage[] | null>;
 }

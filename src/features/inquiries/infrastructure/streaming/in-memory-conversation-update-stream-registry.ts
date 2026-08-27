@@ -1,15 +1,16 @@
+import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 import type {ConversationMessageUpdate, ConversationUpdateStreamRegistry} from "@/features/inquiries/application/ports/conversation-stream-ports";
 
-type ActiveStream = {
+type ActiveStream<TMessage extends ConversationMessageDto> = {
   cursor: number;
   readonly conversationId: string;
-  readonly listener: (update: ConversationMessageUpdate) => void;
+  readonly listener: (update: ConversationMessageUpdate<TMessage>) => void;
 };
 
 export const defaultMaximumActiveConversationStreams = 100;
 
-export class InMemoryConversationUpdateStreamRegistry implements ConversationUpdateStreamRegistry {
-  private readonly activeStreams = new Map<number, ActiveStream>();
+export class InMemoryConversationUpdateStreamRegistry<TMessage extends ConversationMessageDto> implements ConversationUpdateStreamRegistry<TMessage> {
+  private readonly activeStreams = new Map<number, ActiveStream<TMessage>>();
   private nextRegistrationId = 1;
 
   constructor(private readonly maximumActiveStreams = defaultMaximumActiveConversationStreams) {
@@ -23,7 +24,7 @@ export class InMemoryConversationUpdateStreamRegistry implements ConversationUpd
     let closed = false;
 
     return Object.freeze({
-      publish: (updates: readonly ConversationMessageUpdate[]) => {
+      publish: (updates: readonly ConversationMessageUpdate<TMessage>[]) => {
         if (closed) return;
         const stream = this.activeStreams.get(registrationId);
         if (!stream) return;

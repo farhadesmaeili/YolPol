@@ -5,7 +5,7 @@ import type {
   TeamInquiryDetailDto,
   TeamInquiryListItemDto,
 } from "@/features/inquiries/application/dto/team-operations-dto";
-import type {ConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
+import type {PositionedConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {InquiryWorkflowHistoryReader} from "@/features/inquiries/application/ports/inquiry-workflow-ports";
 import type {
   TeamInquiryDetailSnapshot,
@@ -94,8 +94,8 @@ function workflowReader(events: Awaited<ReturnType<InquiryWorkflowHistoryReader[
   return {readHistory: vi.fn().mockResolvedValue(events)};
 }
 
-function conversationReader(messages: Awaited<ReturnType<ConversationMessageReader["findForInquiry"]>> = []): ConversationMessageReader {
-  return {findForInquiry: vi.fn().mockResolvedValue(messages)};
+function conversationReader(messages: readonly Message[] | null = []): PositionedConversationMessageReader {
+  return {findPositionedForInquiry: vi.fn().mockResolvedValue(messages?.map((message, position) => ({position, message})) ?? null)};
 }
 
 function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
@@ -187,6 +187,7 @@ describe("GetTeamInquiryDetail", () => {
     expect(result).toMatchObject({status: "found", detail: {
       assignment,
       workflowHistory: [{id: "1"}, {id: "2"}],
+      conversationCursor: 1,
       conversationMessages: [{id: "message-1", actorReference: null}, {id: "message-2", actorReference: "staff:member-1"}],
     }});
   });
@@ -196,13 +197,13 @@ describe("GetTeamInquiryDetail", () => {
     const messages = conversationReader();
     await expect(new GetTeamInquiryDetail(new FakeTeamOperationsReader(), history, messages).execute({inquiryId: "missing-inquiry"})).resolves.toEqual({status: "inquiry_not_found"});
     expect(history.readHistory).not.toHaveBeenCalled();
-    expect(messages.findForInquiry).not.toHaveBeenCalled();
+    expect(messages.findPositionedForInquiry).not.toHaveBeenCalled();
   });
 
   it("supports a valid Inquiry with no Conversation", async () => {
     const reader = new FakeTeamOperationsReader();
     reader.detail = detailSnapshot();
-    await expect(new GetTeamInquiryDetail(reader, workflowReader(), conversationReader(null)).execute({inquiryId: "inquiry-detail"})).resolves.toMatchObject({status: "found", detail: {conversationMessages: []}});
+    await expect(new GetTeamInquiryDetail(reader, workflowReader(), conversationReader(null)).execute({inquiryId: "inquiry-detail"})).resolves.toMatchObject({status: "found", detail: {conversationCursor: -1, conversationMessages: []}});
   });
 
   it("does not expose credentials, access digests, Outbox data, secrets, or internal prices", async () => {

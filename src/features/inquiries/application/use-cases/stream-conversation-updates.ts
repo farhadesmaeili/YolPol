@@ -1,3 +1,4 @@
+import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 import type {ConversationMessageUpdate, ConversationPollingDelay, ConversationUpdateListener, ConversationUpdateStreamRegistry} from "@/features/inquiries/application/ports/conversation-stream-ports";
 import type {StreamConversationUpdatesResult} from "@/features/inquiries/application/results/stream-conversation-updates-result";
 import type {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
@@ -9,10 +10,10 @@ import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 
 export const conversationUpdatePollingIntervalMs = 1_500;
 
-export class StreamConversationUpdates {
+export class StreamConversationUpdates<TMessage extends ConversationMessageDto> {
   constructor(
-    private readonly readNewMessages: Pick<ReadNewConversationMessages, "execute">,
-    private readonly streams: ConversationUpdateStreamRegistry,
+    private readonly readNewMessages: Pick<ReadNewConversationMessages<TMessage>, "execute">,
+    private readonly streams: ConversationUpdateStreamRegistry<TMessage>,
     private readonly delay: ConversationPollingDelay,
   ) {}
 
@@ -21,7 +22,7 @@ export class StreamConversationUpdates {
     inquiryId: string;
     afterCursor: number;
     signal: AbortSignal;
-    onUpdate: ConversationUpdateListener;
+    onUpdate: ConversationUpdateListener<TMessage>;
     onUnavailable: () => void;
   }>): StreamConversationUpdatesResult {
     let conversationId: string;
@@ -61,7 +62,7 @@ export class StreamConversationUpdates {
     inquiryId: string;
     afterCursor: number;
     signal: AbortSignal;
-    publish: (updates: readonly ConversationMessageUpdate[]) => void;
+    publish: (updates: readonly ConversationMessageUpdate<TMessage>[]) => void;
   }>): Promise<void> {
     let afterCursor = input.afterCursor;
     while (!input.signal.aborted) {

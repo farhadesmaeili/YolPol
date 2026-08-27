@@ -1,15 +1,19 @@
-import {toConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
+import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 import type {ConversationMessageUpdateReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {ReadNewConversationMessagesResult} from "@/features/inquiries/application/results/read-new-conversation-messages-result";
+import type {Message} from "@/features/inquiries/domain/entities/message";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 
 export const conversationMessageReadBatchLimit = 100;
 
-export class ReadNewConversationMessages {
-  constructor(private readonly messages: ConversationMessageUpdateReader) {}
+export class ReadNewConversationMessages<TMessage extends ConversationMessageDto> {
+  constructor(
+    private readonly messages: ConversationMessageUpdateReader,
+    private readonly toDto: (message: Message) => TMessage,
+  ) {}
 
-  async execute(input: Readonly<{inquiryId: string; afterCursor: number; limit?: number}>): Promise<ReadNewConversationMessagesResult> {
+  async execute(input: Readonly<{inquiryId: string; afterCursor: number; limit?: number}>): Promise<ReadNewConversationMessagesResult<TMessage>> {
     let inquiryId: string;
     try { inquiryId = InquiryId.create(input.inquiryId).value; }
     catch (error) {
@@ -27,7 +31,7 @@ export class ReadNewConversationMessages {
       if (messages === null) return {status: "conversation_not_found"};
       return Object.freeze({
         status: "found",
-        updates: Object.freeze(messages.map(({position, message}) => Object.freeze({cursor: position, message: toConversationMessageDto(message)}))),
+        updates: Object.freeze(messages.map(({position, message}) => Object.freeze({cursor: position, message: this.toDto(message)}))),
       });
     } catch {
       return {status: "persistence_failed"};

@@ -6,7 +6,7 @@ import type {StaffConversationMessageDto} from "@/features/inquiries/application
 import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/message-input-validation";
 import {ConversationTypingHeartbeat, sendStaffConversationTyping} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import {createStaffClientMessageId, sendStaffConversationReply, type StaffConversationReplyFailure} from "@/features/inquiries/presentation/clients/staff-conversation-reply-client";
-import {subscribeToStaffConversationTyping} from "@/features/inquiries/presentation/clients/staff-conversation-typing-stream-client";
+import {subscribeToStaffConversation} from "@/features/inquiries/presentation/clients/staff-conversation-stream-client";
 import {ConversationTypingIndicator} from "@/features/inquiries/presentation/components/conversation-typing-indicator";
 import {StaffConversationMessageList, type StaffConversationLabels} from "@/features/inquiries/presentation/components/staff/staff-conversation-message-list";
 import {createInitialStaffReplyState, staffReplyDraftFailure, staffReplyReducer, type StaffReplyDraftFailure} from "@/features/inquiries/presentation/state/staff-reply-reducer";
@@ -31,6 +31,7 @@ function errorMessage(failure: StaffReplyDraftFailure | StaffConversationReplyFa
 
 export function StaffReplyComposer({
   customerDisplayName,
+  initialConversationCursor,
   initialMessages,
   inquiryId,
   labels,
@@ -38,6 +39,7 @@ export function StaffReplyComposer({
   teamMemberNames,
 }: Readonly<{
   customerDisplayName: string;
+  initialConversationCursor: number;
   initialMessages: readonly StaffConversationMessageDto[];
   inquiryId: string;
   labels: StaffReplyComposerLabels;
@@ -54,7 +56,11 @@ export function StaffReplyComposer({
   const mounted = useRef(true);
   const typingHeartbeat = useRef<ConversationTypingHeartbeat | null>(null);
   const [customerTyping, setCustomerTyping] = useState(false);
-  const [state, dispatch] = useReducer(staffReplyReducer, initialMessages, createInitialStaffReplyState);
+  const [state, dispatch] = useReducer(
+    staffReplyReducer,
+    {conversationCursor: initialConversationCursor, messages: initialMessages},
+    createInitialStaffReplyState,
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -67,9 +73,14 @@ export function StaffReplyComposer({
   }, []);
 
   useEffect(() => {
-    const subscription = subscribeToStaffConversationTyping(inquiryId, setCustomerTyping);
+    const subscription = subscribeToStaffConversation({
+      inquiryId,
+      afterCursor: initialConversationCursor,
+      onCustomerTyping: setCustomerTyping,
+      onMessage: ({cursor, message}) => dispatch({type: "conversation_message_received", cursor, message}),
+    });
     return () => subscription?.close();
-  }, [inquiryId]);
+  }, [inquiryId, initialConversationCursor]);
 
   useEffect(() => {
     const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendStaffConversationTyping(inquiryId, isTyping));

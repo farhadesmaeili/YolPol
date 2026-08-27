@@ -1,5 +1,5 @@
 import {toStaffConversationMessageDto} from "@/features/inquiries/application/mappers/conversation-message-dto-mapper";
-import type {ConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
+import type {PositionedConversationMessageReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {InquiryWorkflowHistoryReader} from "@/features/inquiries/application/ports/inquiry-workflow-ports";
 import type {TeamOperationsReadRepository} from "@/features/inquiries/application/ports/team-operations-read-port";
 import type {GetTeamInquiryDetailResult} from "@/features/inquiries/application/results/team-operations-results";
@@ -9,7 +9,7 @@ export class GetTeamInquiryDetail {
   constructor(
     private readonly reader: TeamOperationsReadRepository,
     private readonly workflowHistory: InquiryWorkflowHistoryReader,
-    private readonly conversationMessages: ConversationMessageReader,
+    private readonly conversationMessages: PositionedConversationMessageReader,
   ) {}
 
   async execute(input: Readonly<{inquiryId: string}>): Promise<GetTeamInquiryDetailResult> {
@@ -22,7 +22,7 @@ export class GetTeamInquiryDetail {
       if (!snapshot) return {status: "inquiry_not_found"};
       const [workflowHistory, conversationMessages] = await Promise.all([
         this.workflowHistory.readHistory(inquiryId),
-        this.conversationMessages.findForInquiry(inquiryId),
+        this.conversationMessages.findPositionedForInquiry(inquiryId),
       ]);
       return Object.freeze({
         status: "found",
@@ -30,7 +30,8 @@ export class GetTeamInquiryDetail {
           inquiry: snapshot.inquiry,
           assignment: snapshot.assignment,
           workflowHistory: Object.freeze([...workflowHistory]),
-          conversationMessages: Object.freeze((conversationMessages ?? []).map(toStaffConversationMessageDto)),
+          conversationCursor: conversationMessages?.at(-1)?.position ?? -1,
+          conversationMessages: Object.freeze((conversationMessages ?? []).map(({message}) => toStaffConversationMessageDto(message))),
         }),
       });
     } catch { return {status: "persistence_failed"}; }

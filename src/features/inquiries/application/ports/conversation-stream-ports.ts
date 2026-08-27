@@ -1,23 +1,25 @@
 import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 
-export type ConversationMessageUpdate = Readonly<{
+export type ConversationMessageUpdate<TMessage extends ConversationMessageDto = ConversationMessageDto> = Readonly<{
   cursor: number;
-  message: ConversationMessageDto;
+  message: TMessage;
 }>;
 
-export type ConversationUpdateListener = (update: ConversationMessageUpdate) => void;
+export type ConversationUpdateListener<TMessage extends ConversationMessageDto = ConversationMessageDto> = (
+  update: ConversationMessageUpdate<TMessage>,
+) => void;
 
-export interface ConversationUpdateRegistration {
-  publish(updates: readonly ConversationMessageUpdate[]): void;
+export interface ConversationUpdateRegistration<TMessage extends ConversationMessageDto = ConversationMessageDto> {
+  publish(updates: readonly ConversationMessageUpdate<TMessage>[]): void;
   close(): void;
 }
 
-export interface ConversationUpdateStreamRegistry {
+export interface ConversationUpdateStreamRegistry<TMessage extends ConversationMessageDto = ConversationMessageDto> {
   register(input: Readonly<{
     conversationId: string;
     afterCursor: number;
-    listener: ConversationUpdateListener;
-  }>): ConversationUpdateRegistration | null;
+    listener: ConversationUpdateListener<TMessage>;
+  }>): ConversationUpdateRegistration<TMessage> | null;
 }
 
 export interface ConversationPollingDelay {
