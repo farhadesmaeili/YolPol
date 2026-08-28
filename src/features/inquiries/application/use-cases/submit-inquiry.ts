@@ -11,6 +11,7 @@ import {createInquiryProductSnapshot} from "@/features/inquiries/domain/value-ob
 import type {CreateConversationAccess} from "@/features/inquiries/application/use-cases/create-conversation-access";
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import {normalizeInquiryQuantity} from "@/features/inquiries/domain/validation/inquiry-input-validation";
+import {customerConversationResumeLifetimeMs} from "@/features/inquiries/application/config/customer-conversation-access-policy";
 
 function isRecord(value: unknown): value is Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) return false; const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; }
 function validCatalogProduct(value: unknown, requestedId: string): value is NonNullable<Awaited<ReturnType<InquiryProductCatalog["findById"]>>> & {packaging: {unitsPerPallet: number; grossPalletWeightGrams: number}} {
@@ -59,10 +60,11 @@ export class SubmitInquiry {
     }
     const conversation = Conversation.start({id: inquiry.id.value, inquiryId: inquiry.id.value, channel: "WEBSITE", createdAt: inquiry.createdAt});
     if (inquiry.message) conversation.addMessage({id: `${inquiry.id.value}-initial`, senderType: "CUSTOMER", channel: "WEBSITE", body: inquiry.message, createdAt: inquiry.createdAt});
-    const access = this.createAccess.execute({conversationId: conversation.id.value, createdAt: inquiry.createdAt});
+    const conversationAccessExpiresAt = new Date(inquiry.createdAt.getTime() + customerConversationResumeLifetimeMs);
+    const access = this.createAccess.execute({conversationId: conversation.id.value, createdAt: inquiry.createdAt, expiresAt: conversationAccessExpiresAt});
     if (access.status === "dependency_failed") return {status: "dependency_failed", dependency: "access_token"};
     try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation, access.credential); }
     catch (error) { return error instanceof DuplicateInquiryIdError ? {status: "duplicate_inquiry"} : {status: "persistence_failed"}; }
-    return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry), conversationAccessToken: access.token};
+    return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry), conversationAccessToken: access.token, conversationAccessExpiresAt: conversationAccessExpiresAt.toISOString()};
   }
 }

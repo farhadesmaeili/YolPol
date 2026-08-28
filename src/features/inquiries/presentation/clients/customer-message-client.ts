@@ -1,7 +1,7 @@
 import {conversationChannels, messageSenderTypes} from "@/features/inquiries/domain/types/conversation-types";
 import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
-export type SendCustomerMessageInput = Readonly<{accessToken: string; message: string}>;
+export type SendCustomerMessageInput = Readonly<{message: string}>;
 export type SendCustomerMessageResult =
   | Readonly<{status: "created"; messageId: string}>
   | Readonly<{status: "validation_error"}>
@@ -10,11 +10,11 @@ export type SendCustomerMessageResult =
   | Readonly<{status: "unavailable"}>;
 export type LoadCustomerMessageHistoryResult =
   | Readonly<{status: "loaded"; messages: readonly CustomerChatMessage[]}>
+  | Readonly<{status: "unauthorized"}>
   | Readonly<{status: "rate_limited"}>
   | Readonly<{status: "network_error"}>
   | Readonly<{status: "unavailable"}>;
 
-export const conversationAccessTokenPattern = /^ypc_[A-Za-z0-9_-]{43}$/u;
 const messageIdPattern = /^[A-Za-z0-9_-]{1,160}$/u;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -44,6 +44,7 @@ export function parseCustomerChatMessage(value: unknown): CustomerChatMessage | 
 }
 
 async function parseCustomerMessageHistoryResponse(response: Response): Promise<LoadCustomerMessageHistoryResult> {
+  if (response.status === 401) return {status: "unauthorized"};
   if (response.status === 429) return {status: "rate_limited"};
   if (response.status !== 200 || response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") return {status: "unavailable"};
 
@@ -80,10 +81,8 @@ export async function sendCustomerMessage(
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<SendCustomerMessageResult> {
-  if (!conversationAccessTokenPattern.test(input.accessToken)) return {status: "unavailable"};
-
   try {
-    const response = await fetcher(`/api/conversations/${encodeURIComponent(input.accessToken)}/messages`, {
+    const response = await fetcher("/api/customer/conversation/messages", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({message: input.message}),
@@ -96,14 +95,11 @@ export async function sendCustomerMessage(
 }
 
 export async function loadCustomerMessageHistory(
-  accessToken: string,
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<LoadCustomerMessageHistoryResult> {
-  if (!conversationAccessTokenPattern.test(accessToken)) return {status: "unavailable"};
-
   try {
-    const response = await fetcher(`/api/conversations/${encodeURIComponent(accessToken)}/messages`, {
+    const response = await fetcher("/api/customer/conversation", {
       method: "GET",
       headers: {Accept: "application/json"},
       signal,

@@ -13,8 +13,7 @@ const labels: CustomerChatLabels = {...enMessages.CustomerChat, teamTyping: enMe
 
 describe("Customer chat presentation", () => {
   it("renders an accessible responsive chat foundation without exposing the inquiry path", () => {
-    const accessToken = `ypc_${"A".repeat(43)}`;
-    const html = renderToStaticMarkup(<CustomerChat accessToken={accessToken} labels={labels} />);
+    const html = renderToStaticMarkup(<CustomerChat labels={labels} />);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
@@ -22,7 +21,7 @@ describe("Customer chat presentation", () => {
     expect(html).toContain('required=""');
     expect(html).toContain(labels.loadingHistory);
     expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).not.toContain(accessToken);
+    expect(html).not.toContain("ypc_");
   });
 
   it("renders loaded customer and support history at logical ends", () => {
@@ -31,6 +30,12 @@ describe("Customer chat presentation", () => {
     expect(html).toContain("justify-start");
     expect(html).toContain("Customer message");
     expect(html).toContain("Support reply");
+  });
+
+  it("renders restored history immediately without a second loading state", () => {
+    const html = renderToStaticMarkup(<CustomerChat labels={labels} initialMessages={[{id: "restored-1", body: "Restored after refresh", sender: "customer"}]} />);
+    expect(html).toContain("Restored after refresh");
+    expect(html).not.toContain(labels.loadingHistory);
   });
 
   it.each([

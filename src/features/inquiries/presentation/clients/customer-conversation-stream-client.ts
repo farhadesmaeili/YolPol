@@ -1,4 +1,4 @@
-import {conversationAccessTokenPattern, parseCustomerChatMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
+import {parseCustomerChatMessage} from "@/features/inquiries/presentation/clients/customer-message-client";
 import {parseConversationTypingEvent} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
@@ -10,15 +10,12 @@ export interface CustomerConversationEventSource {
 export type CustomerConversationStreamSubscription = Readonly<{close(): void}>;
 
 export function subscribeToCustomerConversation(
-  accessToken: string,
   onMessage: (message: CustomerChatMessage) => void,
   createEventSource: (url: string) => CustomerConversationEventSource = (url) => new EventSource(url),
   onStaffTyping?: (isTyping: boolean) => void,
 ): CustomerConversationStreamSubscription | null {
-  if (!conversationAccessTokenPattern.test(accessToken)) return null;
-
   let source: CustomerConversationEventSource;
-  try { source = createEventSource(`/api/conversations/${encodeURIComponent(accessToken)}/stream`); }
+  try { source = createEventSource("/api/customer/conversation/stream"); }
   catch { return null; }
 
   source.addEventListener("message", (event) => {

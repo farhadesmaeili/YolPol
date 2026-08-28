@@ -3,8 +3,10 @@ import type {ReceiveCustomerMessageInput} from "@/features/inquiries/application
 import type {ReceiveCustomerMessageResult} from "@/features/inquiries/application/results/receive-customer-message-result";
 import type {ResolveConversationByAccessTokenResult} from "@/features/inquiries/application/results/resolve-conversation-by-access-token-result";
 import type {InquiryRateLimiter} from "@/features/inquiries/infrastructure/http/inquiry-rate-limiter";
+import {readCustomerConversationCookie, type CustomerConversationCookieEnvironment} from "@/features/inquiries/infrastructure/http/customer-conversation-cookie";
 import {originAllowed, readBoundedJsonBody} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
 import {parseCustomerMessagePayload} from "@/features/inquiries/infrastructure/validation/customer-message-payload";
+import {strictOriginAllowed} from "@/shared/infrastructure/http/strict-origin";
 
 type AccessResolver = Readonly<{execute(input: Readonly<{token: string}>): Promise<ResolveConversationByAccessTokenResult>}>;
 type CustomerMessageReceiver = Readonly<{execute(input: ReceiveCustomerMessageInput): Promise<ReceiveCustomerMessageResult>}>;
@@ -87,5 +89,35 @@ export function createCustomerConversationHistoryRequestHandler(getResolver: () 
       case "validation_failed":
       case "persistence_failed": return failure("service_unavailable", 503);
     }
+  };
+}
+
+export function createCustomerResumeMessageRequestHandler(
+  getResolver: () => AccessResolver,
+  getReceiver: () => CustomerMessageReceiver,
+  options: CustomerConversationHttpOptions = {},
+  environment: CustomerConversationCookieEnvironment = process.env,
+) {
+  const handleTokenRequest = createCustomerConversationMessageRequestHandler(getResolver, getReceiver, options);
+  return async function handle(request: Request): Promise<Response> {
+    if (!strictOriginAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const token = readCustomerConversationCookie(request, environment);
+    if (!token) return failure("unauthorized", 401);
+    return handleTokenRequest(request, {params: Promise.resolve({token})});
+  };
+}
+
+export function createCustomerResumeHistoryRequestHandler(
+  getResolver: () => AccessResolver,
+  getHistory: () => CustomerMessageHistory,
+  options: CustomerConversationHttpOptions = {},
+  environment: CustomerConversationCookieEnvironment = process.env,
+) {
+  const handleTokenRequest = createCustomerConversationHistoryRequestHandler(getResolver, getHistory, options);
+  return async function handle(request: Request): Promise<Response> {
+    if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const token = readCustomerConversationCookie(request, environment);
+    if (!token) return failure("unauthorized", 401);
+    return handleTokenRequest(request, {params: Promise.resolve({token})});
   };
 }

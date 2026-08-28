@@ -26,8 +26,16 @@ export type CustomerChatAction =
   | Readonly<{type: "submission_succeeded"; message: CustomerChatMessage}>
   | Readonly<{type: "realtime_message_received"; message: CustomerChatMessage}>;
 
-export function createInitialCustomerChatState(): CustomerChatState {
-  return Object.freeze({draft: "", messages: Object.freeze([]), status: "idle", historyStatus: "loading", historyFailure: null, failure: null, sentAnnouncement: false});
+export function createInitialCustomerChatState(initialMessages?: readonly CustomerChatMessage[]): CustomerChatState {
+  return Object.freeze({
+    draft: "",
+    messages: Object.freeze(initialMessages ? [...initialMessages] : []),
+    status: "idle",
+    historyStatus: initialMessages ? "loaded" : "loading",
+    historyFailure: null,
+    failure: null,
+    sentAnnouncement: false,
+  });
 }
 
 export function customerMessageDraftFailure(draft: string): "required" | "too_long" | null {

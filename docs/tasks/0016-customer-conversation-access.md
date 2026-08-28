@@ -1,5 +1,7 @@
 # Customer Conversation Access
 
+> Current browser transition: `docs/tasks/0028-customer-chat-resume.md` moves normal Customer traffic to tokenless, HttpOnly-cookie-authenticated routes. The token-in-path routes documented below remain a legacy compatibility surface.
+
 ## Decision
 
 New customer chat traffic uses `GET` and `POST /api/conversations/{token}/messages`. The token is an opaque capability credential returned once by a successful Inquiry submission. The existing `/api/inquiries/{inquiryId}/messages` endpoints remain available as a legacy migration surface, but the customer UI no longer uses an Inquiry identifier for authorization.

@@ -1,7 +1,7 @@
 import {describe, expect, it, vi} from "vitest";
 
 import type {ConversationMessageUpdate} from "@/features/inquiries/application/ports/conversation-stream-ports";
-import {createCustomerConversationStreamRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-stream-request-handler";
+import {createCustomerConversationStreamRequestHandler, createCustomerResumeStreamRequestHandler} from "@/features/inquiries/infrastructure/http/customer-conversation-stream-request-handler";
 
 const token = `ypc_${"A".repeat(43)}`;
 const request = (signal?: AbortSignal, lastEventId?: string) => new Request(`https://yolpol.com/api/conversations/${token}/stream`, {headers: {Origin: "https://yolpol.com", ...(lastEventId ? {"Last-Event-ID": lastEventId} : {})}, signal});
@@ -99,5 +99,22 @@ describe("Customer conversation stream request handler", () => {
     const response = await createCustomerConversationStreamRequestHandler(() => ({execute: resolve}), () => ({open: vi.fn()}))(new Request(`https://yolpol.com/api/conversations/${token}/stream`, {headers: {Origin: "https://attacker.example"}}), context());
     expect(response.status).toBe(403);
     expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("opens the same SSE flow from a tokenless cookie-authenticated URL", async () => {
+    const resolve = vi.fn().mockResolvedValue(resolved);
+    const close = vi.fn();
+    const open = vi.fn(() => ({status: "opened", session: {close, completed: new Promise<void>(() => undefined)}} as const));
+    const response = await createCustomerResumeStreamRequestHandler(
+      () => ({execute: resolve}),
+      () => ({open}),
+      {heartbeatIntervalMs: 60_000},
+      undefined,
+      {NODE_ENV: "production"},
+    )(new Request("https://yolpol.com/api/customer/conversation/stream", {headers: {Origin: "https://yolpol.com", Cookie: `__Host-yolpol_customer_conversation=${token}`}}));
+    expect(response.status).toBe(200);
+    expect(resolve).toHaveBeenCalledWith({token});
+    expect(response.url).not.toContain(token);
+    await response.body!.cancel();
   });
 });

@@ -5,13 +5,12 @@ import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inqu
 
 const json=(value:unknown,status=201,contentType="application/json")=>new Response(value===undefined?undefined:JSON.stringify(value),{status,headers:{"Content-Type":contentType}});
 const input={} as SubmitInquiryInput;
-const conversationAccessToken=`ypc_${"A".repeat(43)}`;
 
 describe("Inquiry success response contract",()=>{
-  it("accepts only the exact 201 closed contract",async()=>expect(await parseInquirySubmissionResponse(json({status:"created",inquiryId:"valid_id-1",conversationAccessToken}))).toEqual({status:"created",inquiryId:"valid_id-1",conversationAccessToken}));
+  it("accepts only the exact safe 201 contract",async()=>expect(await parseInquirySubmissionResponse(json({status:"created",inquiryId:"valid_id-1"}))).toEqual({status:"created",inquiryId:"valid_id-1"}));
   it.each([
     json({status:"created",inquiryId:"id"},200),new Response(null,{status:204}),new Response("ok",{status:201,headers:{"Content-Type":"text/plain"}}),
-    json(undefined),json({status:"accepted",inquiryId:"id",conversationAccessToken}),json({status:"created"}),json({status:"created",inquiryId:"bad/id",conversationAccessToken}),json({status:"created",inquiryId:"id",conversationAccessToken:"bad/token"}),json({status:"created",inquiryId:"id",conversationAccessToken,extra:true}),
+    json(undefined),json({status:"accepted",inquiryId:"id"}),json({status:"created"}),json({status:"created",inquiryId:"bad/id"}),json({status:"created",inquiryId:"id",conversationAccessToken:`ypc_${"A".repeat(43)}`}),json({status:"created",inquiryId:"id",extra:true}),
   ])("rejects invalid success responses",async response=>expect((await parseInquirySubmissionResponse(response.clone())).status).toBe("rejected"));
   it("treats a safe 403 origin rejection as a failed submission, never success",async()=>expect(await parseInquirySubmissionResponse(json({status:"error",code:"invalid_origin"},403))).toEqual({status:"rejected",code:"invalid_origin",field:undefined}));
 });
