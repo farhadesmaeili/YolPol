@@ -14,7 +14,7 @@ type StaffSessionResolver = Readonly<{
 }>;
 
 type TeamOperationsAuthorization = Readonly<{
-  mayPerformTeamOperations(principal: StaffPrincipal): boolean;
+  mayViewInquiries(principal: StaffPrincipal): boolean;
 }>;
 
 type StaffTeamOperationsAccess = Readonly<{
@@ -72,7 +72,7 @@ async function authorize(
   }
 
   try {
-    if (!access.authorization.mayPerformTeamOperations(result.principal)) {
+    if (!access.authorization.mayViewInquiries(result.principal)) {
       return {status: "rejected", response: failure("forbidden", 403)};
     }
   } catch {

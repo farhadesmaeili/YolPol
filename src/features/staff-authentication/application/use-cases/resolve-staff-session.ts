@@ -11,12 +11,12 @@ export class ResolveStaffSession {
     private readonly clock: StaffClock,
   ) {}
 
-  async execute(input: Readonly<{sessionCredential: string}>): Promise<ResolveStaffSessionResult> {
+  async execute(input: Readonly<{sessionCredential: string; signal?: AbortSignal}>): Promise<ResolveStaffSessionResult> {
     const presented = this.tokens.inspect(input.sessionCredential);
     if (!presented) return {status: "unauthorized"};
 
     let stored: Awaited<ReturnType<StaffSessionRepository["findByLookup"]>>;
-    try { stored = await this.sessions.findByLookup(presented.lookup); }
+    try { stored = await this.sessions.findByLookup(presented.lookup, input.signal ? {signal: input.signal} : undefined); }
     catch { return {status: "persistence_failed"}; }
 
     let digestMatches: boolean;

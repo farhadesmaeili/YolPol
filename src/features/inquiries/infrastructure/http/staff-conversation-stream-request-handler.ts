@@ -9,8 +9,8 @@ import {readStaffSessionCookie} from "@/features/staff-authentication/infrastruc
 import {originAllowed} from "@/shared/infrastructure/http/strict-origin";
 
 type StaffAccess = Readonly<{
-  resolveSession: Readonly<{execute(input: Readonly<{sessionCredential: string}>): Promise<ResolveStaffSessionResult>}>;
-  authorization: Readonly<{mayReplyToCustomerConversation(principal: StaffPrincipal): boolean}>;
+  resolveSession: Readonly<{execute(input: Readonly<{sessionCredential: string; signal?: AbortSignal}>): Promise<ResolveStaffSessionResult>}>;
+  authorization: Readonly<{mayViewCustomerConversation(principal: StaffPrincipal): boolean}>;
 }>;
 type ConversationResolver = Readonly<{execute(input: Readonly<{inquiryId: string}>): Promise<ResolveConversationForInquiryResult>}>;
 type ConversationStreamer = Readonly<{open(input: Readonly<{
@@ -22,12 +22,15 @@ type ConversationStreamer = Readonly<{open(input: Readonly<{
   onUnavailable: () => void;
 }>): StreamConversationUpdatesResult}>;
 type Environment = Readonly<{NODE_ENV?: string}>;
-type Options = Readonly<{approvedDevelopmentOrigins?: ReadonlySet<string>; environment?: Environment; heartbeatIntervalMs?: number}>;
+type Options = Readonly<{approvedDevelopmentOrigins?: ReadonlySet<string>; environment?: Environment; heartbeatIntervalMs?: number; reauthorizationIntervalMs?: number; reauthorizationTimeoutMs?: number}>;
 type RouteContext = Readonly<{params: Promise<Readonly<{inquiryId: string}>>}>;
 type ErrorCode = "forbidden" | "invalid_origin" | "invalid_request" | "not_found" | "service_unavailable" | "unauthorized";
 
 const encoder = new TextEncoder();
 const maximumConversationCursor = 2_147_483_647;
+export const staffStreamAuthorizationRevalidationIntervalMs = 5_000;
+export const staffStreamAuthorizationCheckTimeoutMs = 5_000;
+export const staffStreamMaximumAuthorizationPropagationDelayMs = staffStreamAuthorizationRevalidationIntervalMs + staffStreamAuthorizationCheckTimeoutMs;
 const json = (body: Readonly<Record<string, unknown>>, status: number) => Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
 const failure = (code: ErrorCode, status: number, field?: string) => json({status: "error", code, ...(field ? {field} : {})}, status);
 const typingFrame = (isTyping: boolean) => encoder.encode(`event: typing\ndata: ${JSON.stringify({participant: "CUSTOMER", isTyping})}\n\n`);
@@ -62,12 +65,13 @@ export function createStaffConversationStreamRequestHandler(
     const credential = readStaffSessionCookie(request, options.environment);
     if (!credential) return failure("unauthorized", 401);
 
+    let access: StaffAccess;
     try {
-      const access = getAccess();
-      const session = await access.resolveSession.execute({sessionCredential: credential});
+      access = getAccess();
+      const session = await access.resolveSession.execute({sessionCredential: credential, signal: request.signal});
       if (session.status === "unauthorized") return failure("unauthorized", 401);
       if (session.status !== "authenticated") return failure("service_unavailable", 503);
-      if (!access.authorization.mayReplyToCustomerConversation(session.principal)) return failure("forbidden", 403);
+      if (!access.authorization.mayViewCustomerConversation(session.principal)) return failure("forbidden", 403);
     } catch {
       return failure("service_unavailable", 503);
     }
@@ -93,19 +97,32 @@ export function createStaffConversationStreamRequestHandler(
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     let typingSubscription: ConversationTypingSubscription | null = null;
     let closeSession: (() => void) | null = null;
+    let reauthorization: ReturnType<typeof setInterval> | null = null;
+    let reauthorizationTimeout: ReturnType<typeof setTimeout> | null = null;
+    let reauthorizationController: AbortController | null = null;
+    let reauthorizationInFlight = false;
     let finished = false;
     const pending: Uint8Array[] = [];
-    const cleanup = () => {
+    const finish = (closeConversationSession: boolean) => {
       if (finished) return;
       finished = true;
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = null;
       typingSubscription?.close();
       typingSubscription = null;
-      closeSession?.();
+      if (reauthorization) clearInterval(reauthorization);
+      if (reauthorizationTimeout) clearTimeout(reauthorizationTimeout);
+      reauthorization = null;
+      reauthorizationTimeout = null;
+      const authorizationController = reauthorizationController;
+      reauthorizationController = null;
+      reauthorizationInFlight = false;
+      authorizationController?.abort();
+      if (closeConversationSession) closeSession?.();
       request.signal.removeEventListener("abort", cleanup);
       try { controller?.close(); } catch { /* Cancellation may already have closed the HTTP stream. */ }
     };
+    const cleanup = () => finish(true);
     const enqueue = (value: Uint8Array) => {
       if (finished) return;
       if (!controller) { pending.push(value); return; }
@@ -159,15 +176,27 @@ export function createStaffConversationStreamRequestHandler(
         enqueue(encoder.encode(": connected\nretry: 3000\n\n"));
         for (const frame of pending.splice(0)) enqueue(frame);
         heartbeat = setInterval(() => enqueue(encoder.encode(": keep-alive\n\n")), options.heartbeatIntervalMs ?? 15_000);
+        reauthorization = setInterval(() => {
+          if (finished || reauthorizationInFlight) return;
+          const authorizationController = new AbortController();
+          reauthorizationController = authorizationController;
+          reauthorizationInFlight = true;
+          reauthorizationTimeout = setTimeout(cleanup, options.reauthorizationTimeoutMs ?? staffStreamAuthorizationCheckTimeoutMs);
+          void access.resolveSession.execute({sessionCredential: credential, signal: authorizationController.signal}).then((session) => {
+            if (finished || reauthorizationController !== authorizationController) return;
+            if (session.status !== "authenticated" || !access.authorization.mayViewCustomerConversation(session.principal)) cleanup();
+          }).catch(() => {
+            if (!finished && reauthorizationController === authorizationController) cleanup();
+          }).finally(() => {
+            if (reauthorizationController !== authorizationController) return;
+            if (reauthorizationTimeout) clearTimeout(reauthorizationTimeout);
+            reauthorizationTimeout = null;
+            reauthorizationController = null;
+            reauthorizationInFlight = false;
+          });
+        }, options.reauthorizationIntervalMs ?? staffStreamAuthorizationRevalidationIntervalMs);
         void opened.session.completed.finally(() => {
-          if (finished) return;
-          finished = true;
-          if (heartbeat) clearInterval(heartbeat);
-          heartbeat = null;
-          typingSubscription?.close();
-          typingSubscription = null;
-          request.signal.removeEventListener("abort", cleanup);
-          try { streamController.close(); } catch { /* Cancellation may already have closed the HTTP stream. */ }
+          finish(false);
         });
       },
       cancel() { cleanup(); },

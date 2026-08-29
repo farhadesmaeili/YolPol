@@ -1,10 +1,11 @@
 import type {StaffAccountAuthenticationRecord, StaffAccountRepository, PasswordHasher, StaffSessionRepository, StaffSessionTokenService} from "@/features/staff-authentication/application/ports/staff-authentication-ports";
 import {StaffAccount} from "@/features/staff-authentication/domain/entities/staff-account";
 import type {StaffSession} from "@/features/staff-authentication/domain/entities/staff-session";
+import type {StaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 
 const baseTime = new Date("2026-08-25T08:00:00.000Z");
 
-export function staffAuthenticationRecord(overrides: Partial<Readonly<{accountActive: boolean; teamMemberActive: boolean; role: "ADMIN" | "SALES"}>> = {}): StaffAccountAuthenticationRecord {
+export function staffAuthenticationRecord(overrides: Partial<Readonly<{accountActive: boolean; teamMemberActive: boolean; role: StaffRole}>> = {}): StaffAccountAuthenticationRecord {
   return Object.freeze({
     account: StaffAccount.reconstitute({
       id: "account-1",
@@ -21,7 +22,7 @@ export function staffAuthenticationRecord(overrides: Partial<Readonly<{accountAc
   });
 }
 
-export function staffSessionAuthorizationRecord(overrides: Partial<Readonly<{accountActive: boolean; teamMemberActive: boolean; role: "ADMIN" | "SALES"}>> = {}) {
+export function staffSessionAuthorizationRecord(overrides: Partial<Readonly<{accountActive: boolean; teamMemberActive: boolean; role: StaffRole}>> = {}) {
   const authentication = staffAuthenticationRecord(overrides);
   return Object.freeze({
     staffAccountId: authentication.account.id,
@@ -36,6 +37,17 @@ export function staffSessionAuthorizationRecord(overrides: Partial<Readonly<{acc
 export class FakeStaffAccountRepository implements StaffAccountRepository {
   constructor(public record: StaffAccountAuthenticationRecord | null = staffAuthenticationRecord()) {}
   async findByNormalizedEmail(normalizedEmail: string) { return normalizedEmail === "staff@example.com" ? this.record : null; }
+  async findAuthorizationByTeamMemberId(teamMemberId: string) {
+    if (!this.record || this.record.account.teamMemberId !== teamMemberId) return null;
+    return {
+      staffAccountId: this.record.account.id,
+      teamMemberId: this.record.account.teamMemberId,
+      role: this.record.account.role,
+      staffAccountActive: this.record.account.active,
+      teamMemberActive: this.record.teamMemberActive,
+      teamMemberDisplayName: this.record.teamMemberDisplayName,
+    };
+  }
 }
 
 export class FakePasswordHasher implements PasswordHasher {

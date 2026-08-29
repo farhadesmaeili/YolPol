@@ -22,7 +22,7 @@ type StaffProvisioningPreview = Readonly<{
   teamMemberId: string;
   displayName: string;
   normalizedEmail: string;
-  role: "ADMIN" | "SALES";
+  role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER";
 }>;
 
 function createPreview(input: ProvisionStaffAccountInput): StaffProvisioningPreview | null {

@@ -6,6 +6,7 @@ import {getInquiryPostgresPool} from "@/features/inquiries/infrastructure/databa
 import {PostgresCommunicationRecipientRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-communication-recipient-repository";
 import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
 import {PostgresTelegramDeliveryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-telegram-delivery-repository";
+import {getStaffAuthentication} from "@/composition/staff-authentication/staff-authentication";
 
 let gateway: ReceiveTelegramReply | undefined;
 
@@ -14,6 +15,7 @@ export function getTelegramReplyGateway(): ReceiveTelegramReply {
   const pool = getInquiryPostgresPool();
   gateway = new ReceiveTelegramReply(
     new PostgresCommunicationRecipientRepository(pool),
+    getStaffAuthentication().resolveConversationActor,
     new PostgresTelegramDeliveryRepository(pool),
     new PostgresConversationMessageRepository(pool),
     {now: () => new Date()},

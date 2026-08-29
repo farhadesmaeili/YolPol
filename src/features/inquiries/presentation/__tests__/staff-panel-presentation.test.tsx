@@ -101,7 +101,7 @@ describe("Staff Inquiry presentation", () => {
   });
 
   it("renders detail text safely with items, workflow, conversation, and empty assignment", async () => {
-    const html = renderToStaticMarkup(await StaffInquiryDetail({detail, locale: "en"}));
+    const html = renderToStaticMarkup(await StaffInquiryDetail({detail, locale: "en", canReply: true}));
     expect(html).toContain("Products / Inquiry items");
     expect(html).toContain("Workflow history");
     expect(html).toContain("Conversation messages");
@@ -114,7 +114,7 @@ describe("Staff Inquiry presentation", () => {
   it("renders localized empty queue and empty conversation states", async () => {
     const filters = parseStaffInquiryFilters({}, new Set());
     const emptyList = renderToStaticMarkup(await StaffInquiryList({locale: "en", filters, inquiries: [], nextCursor: null, teamMembers: []}));
-    const emptyDetail = renderToStaticMarkup(await StaffInquiryDetail({...{detail: {...detail, workflowHistory: [], conversationMessages: []}}, locale: "en"}));
+    const emptyDetail = renderToStaticMarkup(await StaffInquiryDetail({...{detail: {...detail, workflowHistory: [], conversationMessages: []}}, locale: "en", canReply: true}));
     expect(emptyList).toContain("No Inquiries");
     expect(emptyDetail).toContain("No workflow events");
     expect(emptyDetail).toContain("No conversation messages");

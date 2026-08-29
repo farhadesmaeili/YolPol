@@ -34,7 +34,7 @@ function request(input: Readonly<{
 
 function access(allowed = true) {
   const authorization = new StaffAuthorizationPolicy();
-  if (!allowed) authorization.mayReplyToCustomerConversation = () => false;
+  if (!allowed) authorization.mayViewCustomerConversation = () => false;
   return {resolveSession: {execute: vi.fn().mockResolvedValue({status: "authenticated", principal})}, authorization};
 }
 
@@ -129,6 +129,138 @@ describe("GET /api/staff/inquiries/[inquiryId]/stream", () => {
     expect(frame).toContain("id: 5\nevent: message");
     expect(frame).toContain('"channel":"TELEGRAM"');
     await reader.cancel();
+  });
+
+  it("allows a Viewer to receive read-only realtime conversation updates", async () => {
+    const deps = dependencies();
+    const viewer = {...principal, role: "VIEWER" as const};
+    const staffAccess = {
+      resolveSession: {execute: vi.fn().mockResolvedValue({status: "authenticated", principal: viewer})},
+      authorization: new StaffAuthorizationPolicy(),
+    };
+    const response = await createStaffConversationStreamRequestHandler(
+      () => staffAccess,
+      () => ({execute: vi.fn().mockResolvedValue({status: "resolved", conversationId: "conversation-1"})}),
+      () => ({open: deps.open}),
+      () => deps.registry,
+      {heartbeatIntervalMs: 60_000},
+    )(request(), context());
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    await reader.read();
+    deps.streamInput!.onUpdate({cursor: 0, message: message()});
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain("event: message");
+    await reader.cancel();
+  });
+
+  it("closes an open stream after bounded reauthorization detects deactivation", async () => {
+    vi.useFakeTimers();
+    const deps = dependencies();
+    const resolveSession = vi.fn()
+      .mockResolvedValueOnce({status: "authenticated", principal})
+      .mockResolvedValue({status: "unauthorized"});
+    const response = await createStaffConversationStreamRequestHandler(
+      () => ({resolveSession: {execute: resolveSession}, authorization: new StaffAuthorizationPolicy()}),
+      () => ({execute: vi.fn().mockResolvedValue({status: "resolved", conversationId: "conversation-1"})}),
+      () => ({open: deps.open}),
+      () => deps.registry,
+      {heartbeatIntervalMs: 60_000, reauthorizationIntervalMs: 25, reauthorizationTimeoutMs: 25},
+    )(request(), context());
+    const reader = response.body!.getReader();
+    await reader.read();
+    await vi.advanceTimersByTimeAsync(25);
+    expect(resolveSession).toHaveBeenCalledTimes(2);
+    expect(deps.closeStream).toHaveBeenCalledOnce();
+    expect(deps.closeTyping).toHaveBeenCalledOnce();
+    await expect(reader.read()).resolves.toMatchObject({done: true});
+  });
+
+  it("keeps the stream open after successful reauthorization and a Sales-to-Viewer downgrade", async () => {
+    vi.useFakeTimers();
+    const deps = dependencies();
+    const viewer = {...principal, role: "VIEWER" as const};
+    const resolveSession = vi.fn()
+      .mockResolvedValueOnce({status: "authenticated", principal})
+      .mockResolvedValueOnce({status: "authenticated", principal: viewer});
+    const response = await createStaffConversationStreamRequestHandler(
+      () => ({resolveSession: {execute: resolveSession}, authorization: new StaffAuthorizationPolicy()}),
+      () => ({execute: vi.fn().mockResolvedValue({status: "resolved", conversationId: "conversation-1"})}),
+      () => ({open: deps.open}),
+      () => deps.registry,
+      {heartbeatIntervalMs: 60_000, reauthorizationIntervalMs: 20, reauthorizationTimeoutMs: 50},
+    )(request(), context());
+    const reader = response.body!.getReader();
+    await reader.read();
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(resolveSession).toHaveBeenCalledTimes(2);
+    expect(resolveSession.mock.calls[1]?.[0].signal).toBeInstanceOf(AbortSignal);
+    expect(resolveSession.mock.calls[1]?.[0].signal.aborted).toBe(false);
+    expect(deps.closeStream).not.toHaveBeenCalled();
+    expect(deps.closeTyping).not.toHaveBeenCalled();
+    await reader.cancel();
+  });
+
+  it("does not overlap polls, aborts a stalled authorization at timeout, and ignores its late result", async () => {
+    vi.useFakeTimers();
+    const deps = dependencies();
+    let resolveLate: ((value: {status: "authenticated"; principal: StaffPrincipal}) => void) | undefined;
+    const resolveSession = vi.fn()
+      .mockResolvedValueOnce({status: "authenticated", principal})
+      .mockImplementation(() => new Promise((resolve) => { resolveLate = resolve; }));
+    const response = await createStaffConversationStreamRequestHandler(
+      () => ({resolveSession: {execute: resolveSession}, authorization: new StaffAuthorizationPolicy()}),
+      () => ({execute: vi.fn().mockResolvedValue({status: "resolved", conversationId: "conversation-1"})}),
+      () => ({open: deps.open}),
+      () => deps.registry,
+      {heartbeatIntervalMs: 60_000, reauthorizationIntervalMs: 20, reauthorizationTimeoutMs: 50},
+    )(request(), context());
+    const reader = response.body!.getReader();
+    await reader.read();
+    await vi.advanceTimersByTimeAsync(70);
+    expect(resolveSession).toHaveBeenCalledTimes(2);
+    const authorizationSignal = resolveSession.mock.calls[1]?.[0].signal as AbortSignal;
+    expect(authorizationSignal.aborted).toBe(true);
+    expect(deps.closeStream).toHaveBeenCalledOnce();
+    expect(deps.closeTyping).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    resolveLate?.({status: "authenticated", principal});
+    await Promise.resolve();
+    expect(resolveSession).toHaveBeenCalledTimes(2);
+    expect(deps.closeStream).toHaveBeenCalledOnce();
+    await expect(reader.read()).resolves.toMatchObject({done: true});
+  });
+
+  it("aborts an in-flight authorization when the client request aborts", async () => {
+    vi.useFakeTimers();
+    const requestAbort = new AbortController();
+    const deps = dependencies();
+    let resolveLate: ((value: {status: "authenticated"; principal: StaffPrincipal}) => void) | undefined;
+    const resolveSession = vi.fn()
+      .mockResolvedValueOnce({status: "authenticated", principal})
+      .mockImplementation(() => new Promise((resolve) => { resolveLate = resolve; }));
+    const response = await createStaffConversationStreamRequestHandler(
+      () => ({resolveSession: {execute: resolveSession}, authorization: new StaffAuthorizationPolicy()}),
+      () => ({execute: vi.fn().mockResolvedValue({status: "resolved", conversationId: "conversation-1"})}),
+      () => ({open: deps.open}),
+      () => deps.registry,
+      {heartbeatIntervalMs: 60_000, reauthorizationIntervalMs: 20, reauthorizationTimeoutMs: 100},
+    )(request({signal: requestAbort.signal}), context());
+    const reader = response.body!.getReader();
+    await reader.read();
+    await vi.advanceTimersByTimeAsync(20);
+    const authorizationSignal = resolveSession.mock.calls[1]?.[0].signal as AbortSignal;
+    expect(authorizationSignal.aborted).toBe(false);
+
+    requestAbort.abort();
+    expect(authorizationSignal.aborted).toBe(true);
+    expect(deps.closeStream).toHaveBeenCalledOnce();
+    expect(deps.closeTyping).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    resolveLate?.({status: "authenticated", principal});
+    await Promise.resolve();
+    expect(deps.closeStream).toHaveBeenCalledOnce();
+    await expect(reader.read()).resolves.toMatchObject({done: true});
   });
 
   it.each([

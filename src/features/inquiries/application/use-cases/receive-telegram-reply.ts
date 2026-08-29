@@ -19,6 +19,7 @@ function safeId(value: string, pattern: RegExp): number | null {
 export class ReceiveTelegramReply {
   constructor(
     private readonly recipients: CommunicationRecipientRepository,
+    private readonly staffActors: Readonly<{execute(input: Readonly<{teamMemberId: string}>): Promise<string | null>}>,
     private readonly deliveries: TelegramDeliveryRepository,
     private readonly messages: CorrelatedConversationMessageWriter,
     private readonly clock: Clock,
@@ -32,7 +33,9 @@ export class ReceiveTelegramReply {
 
     try {
       const sender = await this.recipients.findAuthorizedTeamMember("TELEGRAM", reply.senderExternalId);
-      if (!sender) return {status: "unauthorized"};
+      if (!sender?.teamMemberId || sender.teamMemberActive !== true) return {status: "unauthorized"};
+      const actorReference = await this.staffActors.execute({teamMemberId: sender.teamMemberId});
+      if (!actorReference) return {status: "unauthorized"};
       const binding = await this.deliveries.findConversationByProviderMessage({telegramChatId, telegramMessageId});
       if (!binding) return {status: "conversation_not_found"};
 
@@ -40,7 +43,7 @@ export class ReceiveTelegramReply {
         id: `telegram_update_${reply.externalUpdateId}`,
         senderType: "INTERNAL_USER",
         channel: "TELEGRAM",
-        actorReference: sender.teamMemberId && sender.teamMemberActive === true ? `staff:${sender.teamMemberId}` : null,
+        actorReference,
         body: reply.body,
         createdAt: this.clock.now(),
       });

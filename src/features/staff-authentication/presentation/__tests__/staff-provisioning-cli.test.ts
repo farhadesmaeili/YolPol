@@ -1,6 +1,7 @@
 import {describe, expect, it, vi} from "vitest";
 
 import type {ProvisionStaffAccountResult} from "@/features/staff-authentication/application/results/staff-provisioning-results";
+import {runStaffBootstrapSuperAdminCli} from "@/features/staff-authentication/presentation/cli/staff-bootstrap-super-admin-cli";
 import {runStaffProvisioningCli, type StaffProvisioningExecutor, type StaffProvisioningTerminal} from "@/features/staff-authentication/presentation/cli/staff-provisioning-cli";
 
 class FakeTerminal implements StaffProvisioningTerminal {
@@ -71,5 +72,70 @@ describe("staff provisioning CLI", () => {
     const abortExecutor = executor();
     await expect(runStaffProvisioningCli({terminal: abortTerminal, provision: abortExecutor, arguments: []})).rejects.toBe(abort);
     expect(abortExecutor.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("first Super Admin bootstrap CLI", () => {
+  it("refuses non-TTY execution and command-line arguments without invoking bootstrap", async () => {
+    for (const input of [
+      {terminal: new FakeTerminal([], false), arguments: []},
+      {terminal: new FakeTerminal(), arguments: ["--account=secret"]},
+    ]) {
+      const bootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+      await expect(runStaffBootstrapSuperAdminCli({...input, bootstrap})).resolves.toBe(1);
+      expect(bootstrap.execute).not.toHaveBeenCalled();
+      expect(input.terminal.errors.join("")).not.toContain("secret");
+    }
+  });
+
+  it.each(["", "not a valid id", "a".repeat(129)])("rejects a blank or invalid account ID without invoking bootstrap", async (staffAccountId) => {
+    const terminal = new FakeTerminal([staffAccountId]);
+    const bootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+
+    await expect(runStaffBootstrapSuperAdminCli({terminal, bootstrap, arguments: []})).resolves.toBe(1);
+    expect(bootstrap.execute).not.toHaveBeenCalled();
+    expect(terminal.errors.join("")).toContain("invalid");
+  });
+
+  it.each(["", "n", "no", "proceed"])("treats confirmation %j as cancellation without invoking bootstrap", async (confirmation) => {
+    const terminal = new FakeTerminal(["account-admin", confirmation]);
+    const bootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+
+    await expect(runStaffBootstrapSuperAdminCli({terminal, bootstrap, arguments: []})).resolves.toBe(0);
+    expect(bootstrap.execute).not.toHaveBeenCalled();
+    expect(terminal.output.join("")).toContain("cancelled");
+  });
+
+  it.each(["y", "yes", " Y ", " YES "])("accepts only the normalized y/yes confirmation form %j", async (confirmation) => {
+    const terminal = new FakeTerminal(["account-admin", confirmation]);
+    const bootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+
+    await expect(runStaffBootstrapSuperAdminCli({terminal, bootstrap, arguments: []})).resolves.toBe(0);
+    expect(bootstrap.execute).toHaveBeenCalledExactlyOnceWith({staffAccountId: "account-admin"});
+  });
+
+  it("requires explicit confirmation and prints no account credentials", async () => {
+    const declined = new FakeTerminal(["account-admin", "n"]);
+    const declinedBootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+    await expect(runStaffBootstrapSuperAdminCli({terminal: declined, bootstrap: declinedBootstrap, arguments: []})).resolves.toBe(0);
+    expect(declinedBootstrap.execute).not.toHaveBeenCalled();
+
+    const terminal = new FakeTerminal(["account-admin", "yes"]);
+    const bootstrap = {execute: vi.fn().mockResolvedValue({status: "promoted"})};
+    await expect(runStaffBootstrapSuperAdminCli({terminal, bootstrap, arguments: []})).resolves.toBe(0);
+    expect(bootstrap.execute).toHaveBeenCalledWith({staffAccountId: "account-admin"});
+    const visible = [...terminal.output, ...terminal.errors].join("");
+    expect(visible).toContain("completed successfully");
+    expect(visible).not.toContain("account-admin");
+    expect(visible).not.toMatch(/password|token|credential/iu);
+  });
+
+  it("reports ineligible and already-bootstrapped outcomes without raw persistence details", async () => {
+    for (const status of ["ineligible", "already_bootstrapped", "persistence_failed"] as const) {
+      const terminal = new FakeTerminal(["account-admin", "y"]);
+      const bootstrap = {execute: vi.fn().mockResolvedValue({status})};
+      await expect(runStaffBootstrapSuperAdminCli({terminal, bootstrap, arguments: []})).resolves.toBe(1);
+      expect(terminal.errors.join("")).not.toMatch(/postgres|database url|secret/iu);
+    }
   });
 });

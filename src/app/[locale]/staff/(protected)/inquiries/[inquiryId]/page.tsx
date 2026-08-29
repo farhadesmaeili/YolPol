@@ -37,5 +37,5 @@ export default async function StaffInquiryDetailPage({params}: StaffInquiryDetai
       : []),
     [access.principal.teamMemberId, access.principal.displayName] as const,
   ]));
-  return <StaffInquiryDetail detail={result.detail} locale={locale} teamMemberNames={teamMemberNames} />;
+  return <StaffInquiryDetail detail={result.detail} locale={locale} teamMemberNames={teamMemberNames} canReply={access.capabilities.mayReplyToCustomerConversation} />;
 }

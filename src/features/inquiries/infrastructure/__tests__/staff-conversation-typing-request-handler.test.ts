@@ -43,9 +43,8 @@ describe("POST /api/staff/inquiries/[inquiryId]/typing", () => {
     expect(updater.execute).not.toHaveBeenCalled();
   });
 
-  it("returns 403 when the existing reply capability denies access", async () => {
-    const staffAccess = access();
-    staffAccess.authorization.mayReplyToCustomerConversation = () => false;
+  it("returns 403 when a Viewer directly attempts Staff typing publication", async () => {
+    const staffAccess = access({status: "authenticated", principal: {...principal, role: "VIEWER"}});
     const response = await createStaffConversationTypingRequestHandler(() => staffAccess, () => ({execute: vi.fn()}), () => ({execute: vi.fn()}))(request(), context());
     expect(response.status).toBe(403);
   });

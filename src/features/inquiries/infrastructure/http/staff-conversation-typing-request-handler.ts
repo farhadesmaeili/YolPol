@@ -11,7 +11,7 @@ import {strictOriginAllowed} from "@/shared/infrastructure/http/strict-origin";
 
 type StaffAccess = Readonly<{
   resolveSession: Readonly<{execute(input: Readonly<{sessionCredential: string}>): Promise<ResolveStaffSessionResult>}>;
-  authorization: Readonly<{mayReplyToCustomerConversation(principal: StaffPrincipal): boolean}>;
+  authorization: Readonly<{mayPublishStaffTyping(principal: StaffPrincipal): boolean}>;
 }>;
 type ConversationResolver = Readonly<{execute(input: Readonly<{inquiryId: string}>): Promise<ResolveConversationForInquiryResult>}>;
 type TypingUpdater = Readonly<{execute(input: Readonly<{
@@ -46,7 +46,7 @@ export function createStaffConversationTypingRequestHandler(
       if (session.status === "unauthorized") return failure("unauthorized", 401);
       if (session.status !== "authenticated") return failure("service_unavailable", 503);
       principal = session.principal;
-      if (!access.authorization.mayReplyToCustomerConversation(principal)) return failure("forbidden", 403);
+      if (!access.authorization.mayPublishStaffTyping(principal)) return failure("forbidden", 403);
     } catch {
       return failure("service_unavailable", 503);
     }

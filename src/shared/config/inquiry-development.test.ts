@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 
-import {getApprovedDevelopmentOrigins, getDevelopmentOrigin, parseDevelopmentOrigin} from "@/shared/config/inquiry-development";
+import {getAllowedNextDevelopmentHosts, getApprovedDevelopmentOrigins, getDevelopmentOrigin, parseDevelopmentOrigin} from "@/shared/config/inquiry-development";
 
 describe("development Origin configuration", () => {
   it.each([
@@ -35,9 +35,16 @@ describe("development Origin configuration", () => {
     expect(getDevelopmentOrigin({NODE_ENV: "development"})).toBeUndefined();
   });
 
+  it("keeps exact loopback hosts available to Next development assets alongside the configured host", () => {
+    expect(getAllowedNextDevelopmentHosts({NODE_ENV: "development"})).toEqual(["localhost", "127.0.0.1"]);
+    expect(getAllowedNextDevelopmentHosts({NODE_ENV: "development", YOLPOL_DEV_ORIGIN: "http://192.168.1.100:3000"})).toEqual(["localhost", "127.0.0.1", "192.168.1.100"]);
+    expect(getAllowedNextDevelopmentHosts({NODE_ENV: "development", YOLPOL_DEV_ORIGIN: "http://localhost:3000"})).toEqual(["localhost", "127.0.0.1"]);
+  });
+
   it.each(["production", "test", undefined])("does not evaluate development configuration in NODE_ENV=%s", (NODE_ENV) => {
     const environment = {NODE_ENV, YOLPOL_DEV_ORIGIN: "malformed URL"};
     expect(getDevelopmentOrigin(environment)).toBeUndefined();
     expect([...getApprovedDevelopmentOrigins(environment)]).toEqual([]);
+    expect(getAllowedNextDevelopmentHosts(environment)).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import type {StaffPrincipal} from "@/features/staff-authentication/application/d
 import type {StaffAccount} from "@/features/staff-authentication/domain/entities/staff-account";
 import type {StaffSession} from "@/features/staff-authentication/domain/entities/staff-session";
 import type {StaffRole} from "@/features/staff-authentication/domain/types/staff-role";
+import type {StaffCapabilities} from "@/features/staff-authentication/application/dto/staff-capabilities";
 
 export type StaffAccountAuthenticationRecord = Readonly<{
   account: StaffAccount;
@@ -19,6 +20,8 @@ export type StoredStaffSession = Readonly<{
   teamMemberDisplayName: string;
 }>;
 
+export type CurrentStaffAuthorizationRecord = Omit<StoredStaffSession, "session">;
+
 export type IssuedStaffSessionToken = Readonly<{
   sessionId: string;
   credential: string;
@@ -30,11 +33,12 @@ export type PresentedStaffSessionToken = Readonly<{lookup: string; verification:
 
 export interface StaffAccountRepository {
   findByNormalizedEmail(normalizedEmail: string): Promise<StaffAccountAuthenticationRecord | null>;
+  findAuthorizationByTeamMemberId(teamMemberId: string): Promise<CurrentStaffAuthorizationRecord | null>;
 }
 
 export interface StaffSessionRepository {
   create(session: StaffSession): Promise<void>;
-  findByLookup(lookup: string): Promise<StoredStaffSession | null>;
+  findByLookup(lookup: string, options?: Readonly<{signal?: AbortSignal}>): Promise<StoredStaffSession | null>;
   revokeById(sessionId: string, revokedAt: Date): Promise<void>;
 }
 
@@ -54,7 +58,19 @@ export interface StaffClock {
 }
 
 export interface StaffAuthorization {
-  mayPerformTeamOperations(principal: StaffPrincipal): boolean;
+  capabilitiesFor(principal: StaffPrincipal): StaffCapabilities;
+  mayAccessStaffPanel(principal: StaffPrincipal): boolean;
+  mayViewInquiries(principal: StaffPrincipal): boolean;
+  mayViewCustomerConversation(principal: StaffPrincipal): boolean;
   mayReplyToCustomerConversation(principal: StaffPrincipal): boolean;
+  mayPublishStaffTyping(principal: StaffPrincipal): boolean;
+  mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean;
+  mayManageTeam(principal: StaffPrincipal): boolean;
+  mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean;
+  mayDeactivateStaffMember(principal: StaffPrincipal, target: Readonly<{staffAccountId: string; role: StaffRole; active: boolean}>): boolean;
+  mayReactivateStaffMember(principal: StaffPrincipal, target: Readonly<{staffAccountId: string; role: StaffRole; active: boolean}>): boolean;
+  mayChangeStaffRole(principal: StaffPrincipal, target: Readonly<{staffAccountId: string; role: StaffRole; active: boolean}>, newRole: StaffRole): boolean;
+  mayAssignAdminRole(principal: StaffPrincipal): boolean;
+  mayAssignSuperAdminRole(principal: StaffPrincipal): boolean;
   actorReferenceFor(principal: StaffPrincipal): string;
 }

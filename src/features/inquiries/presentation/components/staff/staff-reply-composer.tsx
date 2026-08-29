@@ -37,6 +37,7 @@ export function StaffReplyComposer({
   labels,
   locale,
   teamMemberNames,
+  canReply,
 }: Readonly<{
   customerDisplayName: string;
   initialConversationCursor: number;
@@ -45,6 +46,7 @@ export function StaffReplyComposer({
   labels: StaffReplyComposerLabels;
   locale: Locale;
   teamMemberNames: Readonly<Record<string, string>>;
+  canReply: boolean;
 }>) {
   const router = useRouter();
   const textareaId = useId();
@@ -83,13 +85,14 @@ export function StaffReplyComposer({
   }, [inquiryId, initialConversationCursor]);
 
   useEffect(() => {
+    if (!canReply) return;
     const heartbeat = new ConversationTypingHeartbeat((isTyping) => sendStaffConversationTyping(inquiryId, isTyping));
     typingHeartbeat.current = heartbeat;
     return () => {
       heartbeat.dispose();
       if (typingHeartbeat.current === heartbeat) typingHeartbeat.current = null;
     };
-  }, [inquiryId]);
+  }, [canReply, inquiryId]);
 
   async function submit() {
     if (submissionInFlight.current) return;
@@ -172,9 +175,9 @@ export function StaffReplyComposer({
 
       <ConversationTypingIndicator active={customerTyping} label={labels.customerTyping} />
 
-      <div className="my-5 border-t border-stone-200" />
+      {canReply ? <div className="my-5 border-t border-stone-200" /> : null}
 
-      <form onSubmit={handleSubmit} noValidate className="min-w-0">
+      {canReply ? <form onSubmit={handleSubmit} noValidate className="min-w-0">
         <h3 className="text-base font-bold text-stone-950">{labels.replyToCustomer}</h3>
         <label htmlFor={textareaId} className="mt-4 block text-sm font-semibold text-stone-800">{labels.writeReply}</label>
         <textarea
@@ -207,7 +210,7 @@ export function StaffReplyComposer({
         >
           {sending ? labels.sending : labels.sendReply}
         </button>
-      </form>
+      </form> : null}
     </div>
   );
 }

@@ -15,10 +15,29 @@ const principal: StaffPrincipal = Object.freeze({
   actorReference: "staff:member-1",
 });
 
+const capabilities = Object.freeze({
+  mayAccessStaffPanel: true,
+  mayViewInquiries: true,
+  mayViewCustomerConversation: true,
+  mayReplyToCustomerConversation: true,
+  mayPublishStaffTyping: true,
+  mayUpdateInquiryWorkflow: true,
+  mayManageTeam: true,
+  mayCreateStaffInvitation: true,
+  mayDeactivateStaffMember: true,
+  mayReactivateStaffMember: true,
+  mayChangeStaffRole: true,
+  mayAssignAdminRole: false,
+  mayAssignSuperAdminRole: false,
+});
+
 function authentication(result: Readonly<Record<string, unknown>>, authorized = true) {
   return {
     resolveSession: {execute: vi.fn().mockResolvedValue(result)},
-    authorization: {mayPerformTeamOperations: vi.fn().mockReturnValue(authorized)},
+    authorization: {
+      mayAccessStaffPanel: vi.fn().mockReturnValue(authorized),
+      capabilitiesFor: vi.fn().mockReturnValue(capabilities),
+    },
   };
 }
 
@@ -31,9 +50,10 @@ describe("Staff panel authentication boundary", () => {
 
   it("authorizes only a server-resolved principal permitted by the existing policy", async () => {
     const access = authentication({status: "authenticated", principal});
-    await expect(resolveStaffPanelPrincipal("opaque-cookie-value", access)).resolves.toEqual({status: "authorized", principal});
+    await expect(resolveStaffPanelPrincipal("opaque-cookie-value", access)).resolves.toEqual({status: "authorized", principal, capabilities});
     expect(access.resolveSession.execute).toHaveBeenCalledWith({sessionCredential: "opaque-cookie-value"});
-    expect(access.authorization.mayPerformTeamOperations).toHaveBeenCalledWith(principal);
+    expect(access.authorization.mayAccessStaffPanel).toHaveBeenCalledWith(principal);
+    expect(access.authorization.capabilitiesFor).toHaveBeenCalledWith(principal);
   });
 
   it("separates unauthenticated, forbidden, and dependency failure states", async () => {

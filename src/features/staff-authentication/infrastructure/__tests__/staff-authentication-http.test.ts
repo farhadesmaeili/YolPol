@@ -3,6 +3,7 @@ import {describe, expect, it, vi} from "vitest";
 import {createStaffLoginRequestHandler, createStaffLogoutRequestHandler, createStaffSessionRequestHandler, staffLoginRequestSizeLimit} from "@/features/staff-authentication/infrastructure/http/staff-authentication-request-handlers";
 import {StaffLoginRateLimiter, parseStaffLoginRateLimitConfig} from "@/features/staff-authentication/infrastructure/http/staff-login-rate-limiter";
 import {readStaffSessionCookie, serializeClearedStaffSessionCookie, serializeStaffSessionCookie, staffSessionCookieName} from "@/features/staff-authentication/infrastructure/http/staff-session-cookie";
+import {supportedLocales} from "@/shared/types/locale";
 
 const credential = `yps_${"A".repeat(43)}`;
 const expiresAt = new Date("2026-08-25T18:00:00.000Z");
@@ -11,6 +12,10 @@ const production = {NODE_ENV: "production"};
 
 function loginRequest(body: BodyInit = JSON.stringify({email: "staff@example.com", password: "password"}), headers: HeadersInit = {}): Request {
   return new Request("https://yolpol.com/api/staff/auth/login", {method: "POST", body, headers: {Origin: "https://yolpol.com", "Content-Type": "application/json", ...headers}});
+}
+
+function formLoginRequest(body = "email=staff%40example.com&password=password", headers: HeadersInit = {}): Request {
+  return new Request("https://yolpol.com/api/staff/auth/login", {method: "POST", body, headers: {Origin: "https://yolpol.com", "Content-Type": "application/x-www-form-urlencoded", ...headers}});
 }
 
 describe("Staff login HTTP boundary", () => {
@@ -32,6 +37,50 @@ describe("Staff login HTTP boundary", () => {
     expect(JSON.parse(body)).toEqual({status: "authenticated", principal: {staffAccountId: "account-1", teamMemberId: "member-1", role: "SALES", displayName: "Staff Member"}});
   });
 
+  it("normalizes a native URL-encoded POST into the same login input, cookie, and safe browser redirect", async () => {
+    const execute = vi.fn().mockResolvedValue({status: "authenticated", principal, sessionCredential: credential, expiresAt});
+    const response = await createStaffLoginRequestHandler(() => ({execute}), {environment: production})(formLoginRequest());
+    expect(execute).toHaveBeenCalledWith({email: "staff@example.com", password: "password"});
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/staff");
+    expect(response.headers.get("Location")).not.toMatch(/[?#]/u);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Set-Cookie")).toContain(`__Host-yolpol_staff_session=${credential}`);
+    expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
+    expect(await response.text()).toBe("");
+  });
+
+  it.each(supportedLocales)("preserves the supported %s locale in a same-origin native login redirect", async (locale) => {
+    const execute = vi.fn().mockResolvedValue({status: "authenticated", principal, sessionCredential: credential, expiresAt});
+    const response = await createStaffLoginRequestHandler(() => ({execute}), {environment: production})(
+      formLoginRequest(`email=staff%40example.com&password=password&locale=${locale}`),
+    );
+    expect(execute).toHaveBeenCalledWith({email: "staff@example.com", password: "password"});
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(`/${locale}/staff`);
+    expect(response.headers.get("Location")).not.toMatch(/[?#]|^\/\//u);
+    expect(response.headers.get("Set-Cookie")).toContain(`__Host-yolpol_staff_session=${credential}`);
+  });
+
+  it.each(["unknown", "*", "%2F%2Fevil.example", "https%3A%2F%2Fevil.example"])("falls back to the safe default Staff route for invalid native locale input: %s", async (locale) => {
+    const execute = vi.fn().mockResolvedValue({status: "authenticated", principal, sessionCredential: credential, expiresAt});
+    const response = await createStaffLoginRequestHandler(() => ({execute}), {environment: production})(
+      formLoginRequest(`email=staff%40example.com&password=password&locale=${locale}`),
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/staff");
+    expect(response.headers.get("Location")).not.toMatch(/[?#]|^\/\//u);
+  });
+
+  it("does not authenticate GET requests", async () => {
+    const execute = vi.fn();
+    const response = await createStaffLoginRequestHandler(() => ({execute}))(new Request("https://yolpol.com/api/staff/auth/login", {headers: {Origin: "https://yolpol.com"}}));
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe("POST");
+    expect(await response.json()).toEqual({status: "error", code: "method_not_allowed"});
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("returns the same neutral failure for unknown, wrong, inactive, and unauthorized identities", async () => {
     for (const internalReason of ["unknown", "wrong_password", "inactive_account", "inactive_team_member"]) {
       const execute = vi.fn().mockResolvedValue({status: "authentication_failed", internalReason});
@@ -45,7 +94,8 @@ describe("Staff login HTTP boundary", () => {
   it.each([
     ["missing Origin", loginRequest(undefined, {Origin: ""}), 403, "invalid_origin"],
     ["invalid Origin", loginRequest(undefined, {Origin: "https://evil.test"}), 403, "invalid_origin"],
-    ["wrong content type", loginRequest("email=x", {"Content-Type": "application/x-www-form-urlencoded"}), 415, "unsupported_media_type"],
+    ["wrong content type", loginRequest("email=x", {"Content-Type": "text/plain"}), 415, "unsupported_media_type"],
+    ["unneeded multipart content type", loginRequest("", {"Content-Type": "multipart/form-data; boundary=test"}), 415, "unsupported_media_type"],
     ["malformed JSON", loginRequest("{"), 400, "invalid_request"],
     ["unexpected fields", loginRequest(JSON.stringify({email: "staff@example.com", password: "password", actorReference: "browser:override"})), 400, "invalid_request"],
     ["non-object JSON", loginRequest("[]"), 400, "invalid_request"],
@@ -58,10 +108,38 @@ describe("Staff login HTTP boundary", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["missing password", "email=staff%40example.com"],
+    ["duplicate email", "email=staff%40example.com&email=other%40example.com&password=password"],
+    ["duplicate locale", "email=staff%40example.com&password=password&locale=en&locale=fa"],
+    ["unexpected field", "email=staff%40example.com&password=password&role=ADMIN"],
+    ["malformed percent encoding", "email=staff%ZZexample.com&password=password"],
+  ])("rejects malformed URL-encoded input: %s", async (_label, body) => {
+    const execute = vi.fn();
+    const response = await createStaffLoginRequestHandler(() => ({execute}))(formLoginRequest(body));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({status: "error", code: "invalid_request"});
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects an oversized body even when Content-Length understates it", async () => {
     const response = await createStaffLoginRequestHandler(() => ({execute: vi.fn()}))(loginRequest(JSON.stringify({email: "a", password: "x".repeat(staffLoginRequestSizeLimit)}), {"Content-Length": "1"}));
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({status: "error", code: "payload_too_large"});
+  });
+
+  it("applies the same byte limit to URL-encoded login bodies", async () => {
+    const response = await createStaffLoginRequestHandler(() => ({execute: vi.fn()}))(formLoginRequest(`email=a%40b.test&password=${"x".repeat(staffLoginRequestSizeLimit)}`, {"Content-Length": "1"}));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({status: "error", code: "payload_too_large"});
+  });
+
+  it("keeps invalid URL-encoded credentials neutral and cookie-free", async () => {
+    const execute = vi.fn().mockResolvedValue({status: "authentication_failed", internalReason: "wrong_password"});
+    const response = await createStaffLoginRequestHandler(() => ({execute}))(formLoginRequest());
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({status: "error", code: "authentication_failed"});
+    expect(response.headers.get("Set-Cookie")).toBeNull();
   });
 
   it("uses a dedicated bounded process-local limiter with Retry-After", async () => {

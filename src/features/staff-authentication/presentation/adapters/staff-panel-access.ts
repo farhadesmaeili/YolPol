@@ -1,8 +1,9 @@
 import type {StaffPrincipal} from "@/features/staff-authentication/application/dto/staff-principal";
 import type {ResolveStaffSessionResult} from "@/features/staff-authentication/application/results/staff-authentication-results";
+import type {StaffCapabilities} from "@/features/staff-authentication/application/dto/staff-capabilities";
 
 export type StaffPanelAccess =
-  | Readonly<{status: "authorized"; principal: StaffPrincipal}>
+  | Readonly<{status: "authorized"; principal: StaffPrincipal; capabilities: StaffCapabilities}>
   | Readonly<{status: "unauthorized" | "forbidden" | "service_unavailable"}>;
 
 type StaffPanelAuthentication = Readonly<{
@@ -10,7 +11,8 @@ type StaffPanelAuthentication = Readonly<{
     execute(input: Readonly<{sessionCredential: string}>): Promise<ResolveStaffSessionResult>;
   }>;
   authorization: Readonly<{
-    mayPerformTeamOperations(principal: StaffPrincipal): boolean;
+    mayAccessStaffPanel(principal: StaffPrincipal): boolean;
+    capabilitiesFor(principal: StaffPrincipal): StaffCapabilities;
   }>;
 }>;
 
@@ -23,8 +25,8 @@ export async function resolveStaffPanelPrincipal(
     const result = await authentication.resolveSession.execute({sessionCredential});
     if (result.status === "unauthorized") return {status: "unauthorized"};
     if (result.status !== "authenticated") return {status: "service_unavailable"};
-    if (!authentication.authorization.mayPerformTeamOperations(result.principal)) return {status: "forbidden"};
-    return Object.freeze({status: "authorized", principal: result.principal});
+    if (!authentication.authorization.mayAccessStaffPanel(result.principal)) return {status: "forbidden"};
+    return Object.freeze({status: "authorized", principal: result.principal, capabilities: authentication.authorization.capabilitiesFor(result.principal)});
   } catch {
     return {status: "service_unavailable"};
   }

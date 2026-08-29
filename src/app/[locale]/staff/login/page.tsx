@@ -39,7 +39,7 @@ export default async function StaffLoginPage({params}: StaffLoginPageProps) {
         <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-emerald-800">{t("login.eyebrow")}</p>
         <h1 id="staff-login-title" className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{t("login.title")}</h1>
         <p className="mt-3 text-sm leading-6 text-stone-600">{access.status === "service_unavailable" ? t("states.serviceUnavailableDescription") : t("login.description")}</p>
-        <StaffLoginForm labels={{email: t("login.email"), emailPlaceholder: t("login.emailPlaceholder"), password: t("login.password"), showPassword: t("login.showPassword"), hidePassword: t("login.hidePassword"), signIn: t("login.signIn"), signingIn: t("login.signingIn"), error: t("login.error")}} />
+        <StaffLoginForm locale={locale} labels={{email: t("login.email"), emailPlaceholder: t("login.emailPlaceholder"), password: t("login.password"), showPassword: t("login.showPassword"), hidePassword: t("login.hidePassword"), signIn: t("login.signIn"), signingIn: t("login.signingIn"), error: t("login.error")}} />
       </section>
     </main>
   );

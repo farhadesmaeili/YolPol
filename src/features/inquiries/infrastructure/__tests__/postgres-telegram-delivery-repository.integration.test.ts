@@ -27,7 +27,7 @@ let messageRepository: PostgresConversationMessageRepository;
 const now = new Date("2026-08-26T10:00:00.000Z");
 
 async function cleanTables() {
-  await pool.query("truncate table staff_sessions, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 async function seedInquiry(id: string) {
@@ -113,7 +113,13 @@ describe("PostgresTelegramDeliveryRepository", () => {
     await deliveryRepository.markDelivered({delivery: retry[0]!, telegramChatId: 102, telegramMessageId: 7003, deliveredAt: retryAt});
     await expect(deliveryRepository.summarizeEvent(event.eventId)).resolves.toMatchObject({automaticWorkRemaining: 0, delivered: 3});
 
-    const receive = new ReceiveTelegramReply(recipientRepository, deliveryRepository, messageRepository, {now: () => new Date(now.getTime() + 60_000)});
+    const receive = new ReceiveTelegramReply(
+      recipientRepository,
+      {execute: async ({teamMemberId}: Readonly<{teamMemberId: string}>) => `staff:${teamMemberId}`},
+      deliveryRepository,
+      messageRepository,
+      {now: () => new Date(now.getTime() + 60_000)},
+    );
     const incoming = {
       externalUpdateId: "9001",
       externalMessageId: "-100900:8001",
@@ -131,16 +137,15 @@ describe("PostgresTelegramDeliveryRepository", () => {
     await expect(receive.execute(privateIncoming)).resolves.toEqual({status: "created"});
     await pool.query("update inquiry_team_members set active=false,updated_at=$1 where id='member-a'", [new Date(now.getTime() + 30_000)]);
     const inactiveMappedIncoming = {...privateIncoming, externalUpdateId: "9003", externalMessageId: "101:8003", body: "Authorized identity after operational deactivation."} as const;
-    await expect(receive.execute(inactiveMappedIncoming)).resolves.toEqual({status: "created"});
+    await expect(receive.execute(inactiveMappedIncoming)).resolves.toEqual({status: "unauthorized"});
 
     const storedActors = await pool.query<{actor_reference: string | null}>("select actor_reference from conversation_messages order by position");
-    expect(storedActors.rows).toEqual([{actor_reference: "staff:member-a"}, {actor_reference: "staff:member-a"}, {actor_reference: null}]);
+    expect(storedActors.rows).toEqual([{actor_reference: "staff:member-a"}, {actor_reference: "staff:member-a"}]);
 
     const customerUpdates = await new ReadNewConversationMessages(messageRepository, toConversationMessageDto).execute({inquiryId: inquiry.id.value, afterCursor: -1});
     expect(customerUpdates).toMatchObject({status: "found", updates: [
       {cursor: 0, message: {senderType: "INTERNAL_USER", channel: "TELEGRAM", body: incoming.body}},
       {cursor: 1, message: {senderType: "INTERNAL_USER", channel: "TELEGRAM", body: privateIncoming.body}},
-      {cursor: 2, message: {senderType: "INTERNAL_USER", channel: "TELEGRAM", body: inactiveMappedIncoming.body}},
     ]});
     expect(JSON.stringify(customerUpdates)).not.toMatch(/actorReference|staff:member-a|telegram-member-a|7001|-100900/u);
   });

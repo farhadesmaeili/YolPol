@@ -42,3 +42,9 @@ export function getApprovedDevelopmentOrigins(environment: DevelopmentOriginEnvi
   const developmentOrigin = getDevelopmentOrigin(environment);
   return new Set(developmentOrigin ? [developmentOrigin.origin] : []);
 }
+
+export function getAllowedNextDevelopmentHosts(environment: DevelopmentOriginEnvironment = process.env): readonly string[] {
+  if (environment.NODE_ENV !== "development") return Object.freeze([]);
+  const configuredHost = getDevelopmentOrigin(environment)?.host;
+  return Object.freeze([...new Set(["localhost", "127.0.0.1", ...(configuredHost ? [configuredHost] : [])])]);
+}

@@ -1,6 +1,7 @@
 import {describe, expect, it} from "vitest";
 
 import {StaffAccount} from "@/features/staff-authentication/domain/entities/staff-account";
+import {StaffInvitation} from "@/features/staff-authentication/domain/entities/staff-invitation";
 import {StaffSession} from "@/features/staff-authentication/domain/entities/staff-session";
 import {parseStaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 import {StaffEmail} from "@/features/staff-authentication/domain/value-objects/staff-email";
@@ -18,7 +19,9 @@ describe("Staff authentication domain", () => {
   it("accepts only the deliberately small role set", () => {
     expect(parseStaffRole("ADMIN")).toBe("ADMIN");
     expect(parseStaffRole("SALES")).toBe("SALES");
-    expect(() => parseStaffRole("SUPER_ADMIN")).toThrow();
+    expect(parseStaffRole("SUPER_ADMIN")).toBe("SUPER_ADMIN");
+    expect(parseStaffRole("VIEWER")).toBe("VIEWER");
+    expect(() => parseStaffRole("OWNER")).toThrow();
   });
 
   it("reconstitutes normalized accounts and rejects invalid persisted state", () => {
@@ -35,5 +38,13 @@ describe("Staff authentication domain", () => {
     expect(session.isRevoked()).toBe(false);
     expect(() => StaffSession.reconstitute({id: "session-1", staffAccountId: "account-1", tokenLookup: "a".repeat(64), tokenVerification: "b".repeat(64), createdAt, expiresAt: createdAt})).toThrow();
   });
-});
 
+  it("keeps invitations digest-only, non-Super-Admin, finite, and single-terminal-state", () => {
+    const base = {id: "invitation-1", normalizedEmail: "staff@example.com", displayName: "Staff", targetRole: "VIEWER", tokenLookup: "a".repeat(64), tokenVerification: "b".repeat(64), createdByStaffAccountId: "account-1", createdAt, expiresAt: new Date(createdAt.getTime() + 1_000)} as const;
+    expect(StaffInvitation.create(base).isAvailable(new Date(createdAt.getTime() + 999))).toBe(true);
+    expect(StaffInvitation.create(base).isAvailable(new Date(createdAt.getTime() + 1_000))).toBe(false);
+    expect(() => StaffInvitation.create({...base, targetRole: "SUPER_ADMIN"})).toThrow();
+    expect(() => StaffInvitation.reconstitute({...base, consumedAt: createdAt, revokedAt: createdAt})).toThrow();
+    expect(() => StaffInvitation.create({...base, tokenLookup: "raw-activation-code"})).toThrow();
+  });
+});
