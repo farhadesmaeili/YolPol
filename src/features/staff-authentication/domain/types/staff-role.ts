@@ -1,6 +1,6 @@
 import {StaffAuthenticationValidationError} from "@/features/staff-authentication/domain/errors/staff-authentication-errors";
 
-export const staffRoles = ["ADMIN", "SALES"] as const;
+export const staffRoles = ["SUPER_ADMIN", "ADMIN", "SALES", "VIEWER"] as const;
 export type StaffRole = (typeof staffRoles)[number];
 
 export function parseStaffRole(value: unknown): StaffRole {
@@ -9,4 +9,3 @@ export function parseStaffRole(value: unknown): StaffRole {
   }
   return value as StaffRole;
 }
-

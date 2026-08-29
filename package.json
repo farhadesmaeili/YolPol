@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio",
     "retention:inquiries": "node tooling/retention/delete-expired-inquiries.mjs",
     "staff:provision": "pnpm exec tsx tooling/staff-provisioning/index.ts",
+    "staff:bootstrap-super-admin": "pnpm exec tsx tooling/staff-provisioning/bootstrap-super-admin.ts",
     "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts",
     "dev:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications-dev.ts",
     "telegram:webhook:set": "pnpm exec tsx tooling/telegram/set-telegram-webhook.ts",

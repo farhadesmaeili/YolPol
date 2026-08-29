@@ -7,7 +7,7 @@ export type ProvisionStaffAccountResult =
       teamMemberId: string;
       displayName: string;
       normalizedEmail: string;
-      role: "ADMIN" | "SALES";
+      role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER";
     }>
   | Readonly<{status: "validation_failed"; field: StaffProvisioningValidationField}>
   | Readonly<{status: "inactive_team_member" | "team_member_conflict" | "already_provisioned" | "email_conflict"}>

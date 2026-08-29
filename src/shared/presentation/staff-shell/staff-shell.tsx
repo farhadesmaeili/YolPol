@@ -1,6 +1,7 @@
 import type {ReactNode} from "react";
 
 import type {StaffPrincipal} from "@/features/staff-authentication/application/dto/staff-principal";
+import type {StaffCapabilities} from "@/features/staff-authentication/application/dto/staff-capabilities";
 import {StaffLogoutButton} from "@/features/staff-authentication/presentation/components/staff-logout-button";
 import {Link} from "@/i18n/navigation";
 import {siteConfig} from "@/shared/config/site";
@@ -19,14 +20,15 @@ export type StaffShellLabels = Readonly<{
   changeLanguage: string;
   operations: string;
   role: string;
-  roles: Readonly<{ADMIN: string; SALES: string}>;
+  roles: Readonly<Record<StaffPrincipal["role"], string>>;
   signedInAs: string;
   skipToContent: string;
   team: string;
 }>;
 
-export function StaffShell({children, labels, locale, principal}: Readonly<{
+export function StaffShell({children, labels, locale, principal, capabilities}: Readonly<{
   children: ReactNode;
+  capabilities: StaffCapabilities;
   labels: StaffShellLabels;
   locale: Locale;
   principal: StaffPrincipal;
@@ -34,7 +36,7 @@ export function StaffShell({children, labels, locale, principal}: Readonly<{
   const navigation = [
     {href: "/staff" as const, label: labels.dashboard},
     {href: "/staff/inquiries" as const, label: labels.inquiries},
-    {href: "/staff/team" as const, label: labels.team},
+    ...(capabilities.mayManageTeam ? [{href: "/staff/team" as const, label: labels.team}] : []),
   ];
 
   return (

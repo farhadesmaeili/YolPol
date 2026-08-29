@@ -16,10 +16,11 @@ function DetailValue({children, label, ltr = false}: Readonly<{children: React.R
   return <div className="min-w-0"><dt className="text-xs font-medium text-stone-500">{label}</dt><dd className={`mt-1 break-words text-sm font-semibold text-stone-900 ${ltr ? "font-mono text-xs" : ""}`}>{ltr ? <LtrIsolate>{children}</LtrIsolate> : children}</dd></div>;
 }
 
-export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}: Readonly<{
+export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply}: Readonly<{
   detail: TeamInquiryDetailDto;
   locale: Locale;
   teamMemberNames?: Readonly<Record<string, string>>;
+  canReply: boolean;
 }>) {
   const [t, typing] = await Promise.all([
     getTranslations({locale, namespace: "Staff"}),
@@ -115,6 +116,7 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}}:
               inquiryId={inquiry.id}
               locale={locale}
               teamMemberNames={teamMemberNames}
+              canReply={canReply}
               labels={{
                 aiAgent: t("senders.AI_AGENT"),
                 customer: t("senders.CUSTOMER"),

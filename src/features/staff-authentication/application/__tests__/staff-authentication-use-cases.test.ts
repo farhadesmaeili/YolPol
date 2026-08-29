@@ -1,4 +1,4 @@
-import {describe, expect, it} from "vitest";
+import {describe, expect, it, vi} from "vitest";
 
 import {StaffAuthorizationPolicy, deriveStaffActorReference} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
 import {AuthenticateStaff, staffSessionLifetimeMs} from "@/features/staff-authentication/application/use-cases/authenticate-staff";
@@ -88,6 +88,17 @@ describe("staff session use cases", () => {
     }
   });
 
+  it("passes cancellation through to the Staff session repository", async () => {
+    const tokens = new FakeStaffSessionTokenService();
+    const sessions = new FakeStaffSessionRepository();
+    sessions.sessions.push(storedSession());
+    const findByLookup = vi.spyOn(sessions, "findByLookup");
+    const abort = new AbortController();
+
+    await expect(new ResolveStaffSession(sessions, tokens, clock).execute({sessionCredential: `yps_${"A".repeat(43)}`, signal: abort.signal})).resolves.toMatchObject({status: "authenticated"});
+    expect(findByLookup).toHaveBeenCalledWith("a".repeat(64), {signal: abort.signal});
+  });
+
   it("revokes logout server-side and remains idempotent", async () => {
     const sessions = new FakeStaffSessionRepository();
     sessions.sessions.push(storedSession());
@@ -100,14 +111,64 @@ describe("staff session use cases", () => {
 });
 
 describe("StaffAuthorizationPolicy", () => {
-  it("accepts known roles and derives a deterministic non-secret actor reference", () => {
-    const principal = {staffAccountId: "account-1", teamMemberId: "member-1", role: "ADMIN" as const, displayName: "Staff", actorReference: deriveStaffActorReference("member-1")};
+  const principal = (role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER") => ({staffAccountId: "account-1", teamMemberId: "member-1", role, displayName: "Staff", actorReference: deriveStaffActorReference("member-1")});
+
+  it.each([
+    ["SUPER_ADMIN", true, true, true],
+    ["ADMIN", true, true, true],
+    ["SALES", true, true, false],
+    ["VIEWER", true, false, false],
+  ] as const)("maps %s to the centralized capabilities", (role, mayView, mayWrite, mayManageTeam) => {
     const policy = new StaffAuthorizationPolicy();
-    expect(policy.mayPerformTeamOperations(principal)).toBe(true);
-    expect(policy.mayReplyToCustomerConversation(principal)).toBe(true);
-    expect(policy.actorReferenceFor(principal)).toBe("staff:member-1");
-    expect(policy.mayPerformTeamOperations({...principal, role: "OWNER" as never})).toBe(false);
-    expect(policy.mayReplyToCustomerConversation({...principal, role: "OWNER" as never})).toBe(false);
-    expect(policy.mayPerformTeamOperations({...principal, actorReference: "browser:override"})).toBe(false);
+    const capabilities = policy.capabilitiesFor(principal(role));
+    expect(capabilities).toEqual({
+      mayAccessStaffPanel: true,
+      mayViewInquiries: mayView,
+      mayViewCustomerConversation: mayView,
+      mayReplyToCustomerConversation: mayWrite,
+      mayPublishStaffTyping: mayWrite,
+      mayUpdateInquiryWorkflow: mayWrite,
+      mayManageTeam,
+      mayCreateStaffInvitation: mayManageTeam,
+      mayDeactivateStaffMember: mayManageTeam,
+      mayReactivateStaffMember: mayManageTeam,
+      mayChangeStaffRole: mayManageTeam,
+      mayAssignAdminRole: role === "SUPER_ADMIN",
+      mayAssignSuperAdminRole: role === "SUPER_ADMIN",
+    });
+  });
+
+  it("enforces invitation, target-role, self-target, and active Super Admin promotion rules", () => {
+    const policy = new StaffAuthorizationPolicy();
+    const superAdmin = principal("SUPER_ADMIN");
+    const admin = principal("ADMIN");
+    const salesTarget = {staffAccountId: "account-2", role: "SALES" as const, active: true};
+    expect(policy.mayCreateStaffInvitation(superAdmin, "ADMIN")).toBe(true);
+    expect(policy.mayCreateStaffInvitation(superAdmin, "SUPER_ADMIN")).toBe(false);
+    expect(policy.mayCreateStaffInvitation(admin, "SALES")).toBe(true);
+    expect(policy.mayCreateStaffInvitation(admin, "ADMIN")).toBe(false);
+    expect(policy.mayChangeStaffRole(superAdmin, salesTarget, "SUPER_ADMIN")).toBe(true);
+    expect(policy.mayChangeStaffRole(superAdmin, {...salesTarget, active: false}, "SUPER_ADMIN")).toBe(false);
+    expect(policy.mayChangeStaffRole(admin, salesTarget, "VIEWER")).toBe(true);
+    expect(policy.mayChangeStaffRole(admin, salesTarget, "ADMIN")).toBe(false);
+    expect(policy.mayChangeStaffRole(admin, {...salesTarget, role: "ADMIN"}, "SALES")).toBe(false);
+    expect(policy.mayChangeStaffRole(admin, {...salesTarget, role: "SUPER_ADMIN"}, "SALES")).toBe(false);
+    expect(policy.mayDeactivateStaffMember(admin, {...salesTarget, staffAccountId: admin.staffAccountId})).toBe(false);
+    expect(policy.mayReactivateStaffMember(admin, {...salesTarget, staffAccountId: admin.staffAccountId, active: false})).toBe(false);
+    expect(policy.mayChangeStaffRole(admin, {...salesTarget, staffAccountId: admin.staffAccountId}, "VIEWER")).toBe(false);
+    expect(policy.mayDeactivateStaffMember(admin, {...salesTarget, role: "ADMIN"})).toBe(false);
+    expect(policy.mayDeactivateStaffMember(admin, {...salesTarget, role: "SUPER_ADMIN"})).toBe(false);
+    expect(policy.mayChangeStaffRole(superAdmin, {...salesTarget, role: "SUPER_ADMIN"}, "ADMIN")).toBe(true);
+    expect(policy.mayChangeStaffRole(superAdmin, {...salesTarget, role: "ADMIN"}, "SALES")).toBe(true);
+    expect(policy.mayChangeStaffRole(superAdmin, {...salesTarget, role: "VIEWER"}, "SALES")).toBe(true);
+  });
+
+  it("derives actor identity and rejects malformed or client-forged principals", () => {
+    const policy = new StaffAuthorizationPolicy();
+    const admin = principal("ADMIN");
+    expect(policy.actorReferenceFor(admin)).toBe("staff:member-1");
+    expect(policy.mayAccessStaffPanel({...admin, role: "OWNER" as never})).toBe(false);
+    expect(policy.mayReplyToCustomerConversation({...admin, role: "OWNER" as never})).toBe(false);
+    expect(policy.mayAccessStaffPanel({...admin, actorReference: "browser:override"})).toBe(false);
   });
 });

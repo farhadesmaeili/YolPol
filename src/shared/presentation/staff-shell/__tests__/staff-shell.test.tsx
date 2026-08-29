@@ -41,22 +41,38 @@ const labels: StaffShellLabels = {
   navigation: "Staff navigation",
   operations: "Staff operations",
   role: "Role",
-  roles: {ADMIN: "Administrator", SALES: "Sales"},
+  roles: {SUPER_ADMIN: "Super Administrator", ADMIN: "Administrator", SALES: "Sales", VIEWER: "Viewer"},
   signedInAs: "Signed in as",
   skipToContent: "Skip to content",
   team: "Team",
 };
 
+const capabilities = {
+  mayAccessStaffPanel: true,
+  mayViewInquiries: true,
+  mayViewCustomerConversation: true,
+  mayReplyToCustomerConversation: true,
+  mayPublishStaffTyping: true,
+  mayUpdateInquiryWorkflow: true,
+  mayManageTeam: true,
+  mayCreateStaffInvitation: true,
+  mayDeactivateStaffMember: true,
+  mayReactivateStaffMember: true,
+  mayChangeStaffRole: true,
+  mayAssignAdminRole: false,
+  mayAssignSuperAdminRole: false,
+} as const;
+
 describe("StaffShell logout surfaces", () => {
   it("uses the dark variant in the desktop sidebar and the light variant in the mobile header", () => {
-    const html = renderToStaticMarkup(<StaffShell principal={principal} labels={labels} locale="en"><p>Content</p></StaffShell>);
+    const html = renderToStaticMarkup(<StaffShell principal={principal} capabilities={capabilities} labels={labels} locale="en"><p>Content</p></StaffShell>);
     expect(html.match(/data-logout-variant="dark"/gu)).toHaveLength(1);
     expect(html.match(/data-logout-variant="light"/gu)).toHaveLength(1);
     expect(html.indexOf('data-logout-variant="dark"')).toBeLessThan(html.indexOf('data-logout-variant="light"'));
   });
 
   it("renders persistent desktop and mobile language switching without displacing mobile logout", () => {
-    const html = renderToStaticMarkup(<StaffShell principal={principal} labels={labels} locale="fa"><p>Content</p></StaffShell>);
+    const html = renderToStaticMarkup(<StaffShell principal={principal} capabilities={capabilities} labels={labels} locale="fa"><p>Content</p></StaffShell>);
     expect(html.match(/data-language-variant="dark"/gu)).toHaveLength(1);
     expect(html.match(/data-language-variant="light"/gu)).toHaveLength(1);
     expect(html.match(/data-language-locale="fa"/gu)).toHaveLength(2);

@@ -4,6 +4,7 @@ import type {Pool} from "pg";
 
 import type {StaffAccountRepository} from "@/features/staff-authentication/application/ports/staff-authentication-ports";
 import {StaffAccount} from "@/features/staff-authentication/domain/entities/staff-account";
+import {parseStaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 import {StaffAuthenticationPersistenceError} from "@/features/staff-authentication/infrastructure/errors/staff-authentication-persistence-error";
 import {staffAccounts, staffAuthenticationPostgresSchema} from "@/features/staff-authentication/infrastructure/persistence/postgres/schema/staff-authentication-schema";
 import {inquiryTeamMembers} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
@@ -43,5 +44,25 @@ export class PostgresStaffAccountRepository implements StaffAccountRepository {
       throw new StaffAuthenticationPersistenceError();
     }
   }
-}
 
+  async findAuthorizationByTeamMemberId(teamMemberId: string) {
+    try {
+      const [row] = await this.database.select({
+        staffAccountId: staffAccounts.id,
+        teamMemberId: staffAccounts.teamMemberId,
+        role: staffAccounts.role,
+        staffAccountActive: staffAccounts.active,
+        teamMemberActive: inquiryTeamMembers.active,
+        teamMemberDisplayName: inquiryTeamMembers.displayName,
+      })
+        .from(staffAccounts)
+        .innerJoin(inquiryTeamMembers, eq(inquiryTeamMembers.id, staffAccounts.teamMemberId))
+        .where(eq(staffAccounts.teamMemberId, teamMemberId))
+        .limit(1);
+      if (!row) return null;
+      return Object.freeze({...row, role: parseStaffRole(row.role)});
+    } catch {
+      throw new StaffAuthenticationPersistenceError();
+    }
+  }
+}

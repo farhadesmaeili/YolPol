@@ -4,6 +4,7 @@ import {useState, type FormEvent} from "react";
 
 import {useRouter} from "@/i18n/navigation";
 import {submitStaffLogin} from "@/features/staff-authentication/presentation/clients/staff-auth-client";
+import type {Locale} from "@/shared/types/locale";
 
 export type StaffLoginLabels = Readonly<{
   email: string;
@@ -79,7 +80,7 @@ export function StaffPasswordField({
   );
 }
 
-export function StaffLoginForm({labels}: Readonly<{labels: StaffLoginLabels}>) {
+export function StaffLoginForm({labels, locale}: Readonly<{labels: StaffLoginLabels; locale: Locale}>) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -117,7 +118,8 @@ export function StaffLoginForm({labels}: Readonly<{labels: StaffLoginLabels}>) {
   }
 
   return (
-    <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate={false}>
+    <form method="post" action="/api/staff/auth/login" encType="application/x-www-form-urlencoded" className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate={false}>
+      <input type="hidden" name="locale" value={locale} />
       <div>
         <label htmlFor="staff-email" className="mb-2 block text-sm font-semibold text-stone-800">
           {labels.email}

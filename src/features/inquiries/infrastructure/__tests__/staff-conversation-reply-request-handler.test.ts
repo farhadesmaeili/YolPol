@@ -147,12 +147,7 @@ describe("POST /api/staff/inquiries/[inquiryId]/messages", () => {
   });
 
   it("returns 403 when the authenticated principal lacks the reply capability", async () => {
-    const staffAccess = access();
-    staffAccess.authorization = {
-      mayPerformTeamOperations: () => false,
-      mayReplyToCustomerConversation: () => false,
-      actorReferenceFor: () => { throw new Error("must not be called"); },
-    } as StaffAuthorizationPolicy;
+    const staffAccess = access({status: "authenticated", principal: {...principal, role: "VIEWER"}});
     const replySender = sender();
     const response = await createStaffConversationReplyRequestHandler(() => staffAccess, () => replySender)(request(), context());
     expect(response.status).toBe(403);

@@ -1,6 +1,7 @@
 export type BoundedJsonBodyResult = Readonly<{status: "success"; value: unknown}> | Readonly<{status: "invalid"}> | Readonly<{status: "too_large"}>;
+export type BoundedTextBodyResult = Readonly<{status: "success"; value: string}> | Readonly<{status: "invalid"}> | Readonly<{status: "too_large"}>;
 
-export async function readJsonBodyWithinLimit(request: Request, sizeLimit: number, cancellationReason = "Request body exceeds limit."): Promise<BoundedJsonBodyResult> {
+export async function readTextBodyWithinLimit(request: Request, sizeLimit: number, cancellationReason = "Request body exceeds limit."): Promise<BoundedTextBodyResult> {
   if (!Number.isSafeInteger(sizeLimit) || sizeLimit < 1) throw new Error("Request size limit must be a positive safe integer.");
   const declared = request.headers.get("content-length");
   if (declared !== null) {
@@ -31,6 +32,11 @@ export async function readJsonBodyWithinLimit(request: Request, sizeLimit: numbe
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let text: string;
   try { text = new TextDecoder("utf-8", {fatal: true}).decode(bytes); } catch { return {status: "invalid"}; }
-  try { return {status: "success", value: JSON.parse(text)}; } catch { return {status: "invalid"}; }
+  return {status: "success", value: text};
 }
 
+export async function readJsonBodyWithinLimit(request: Request, sizeLimit: number, cancellationReason = "Request body exceeds limit."): Promise<BoundedJsonBodyResult> {
+  const body = await readTextBodyWithinLimit(request, sizeLimit, cancellationReason);
+  if (body.status !== "success") return body;
+  try { return {status: "success", value: JSON.parse(body.value)}; } catch { return {status: "invalid"}; }
+}

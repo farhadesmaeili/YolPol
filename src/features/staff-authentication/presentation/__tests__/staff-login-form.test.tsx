@@ -9,6 +9,7 @@ import {
   togglePasswordVisibility,
   type StaffLoginLabels,
 } from "@/features/staff-authentication/presentation/components/staff-login-form";
+import {supportedLocales} from "@/shared/types/locale";
 
 vi.mock("@/i18n/navigation", () => ({
   useRouter: () => ({replace: vi.fn(), refresh: vi.fn()}),
@@ -32,8 +33,20 @@ function renderPasswordField(passwordVisible: boolean): string {
 }
 
 describe("Staff Login password visibility", () => {
+  it.each(supportedLocales)("uses a locale-preserving POST fallback for %s without placing credentials in the URL", (locale) => {
+    const html = renderToStaticMarkup(<StaffLoginForm labels={labels} locale={locale} />);
+    expect(html).toContain('method="post"');
+    expect(html).toContain('action="/api/staff/auth/login"');
+    expect(html).toContain('encType="application/x-www-form-urlencoded"');
+    expect(html).toContain(`<input type="hidden" name="locale" value="${locale}"/>`);
+    const action = html.match(/<form[^>]* action="([^"]+)"/u)?.[1];
+    expect(action).toBe("/api/staff/auth/login");
+    expect(action).not.toMatch(/[?#]/u);
+    expect(action).not.toMatch(/email|password/iu);
+  });
+
   it("starts hidden with an accessible non-submit Show password control", () => {
-    const html = renderToStaticMarkup(<StaffLoginForm labels={labels} />);
+    const html = renderToStaticMarkup(<StaffLoginForm labels={labels} locale="en" />);
     expect(html).toContain('id="staff-password"');
     expect(html).toContain('type="password"');
     expect(html).toContain('type="button"');

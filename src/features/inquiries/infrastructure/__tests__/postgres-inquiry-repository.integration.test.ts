@@ -51,7 +51,7 @@ const item = (position: number, unit: InquiryItemInput["unit"]): InquiryItemInpu
 
 async function cleanInquiryIntegrationTables() {
   // Staff Auth tables are explicit because their FK chain references Inquiry Team Members.
-  await pool.query("truncate table staff_sessions, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 beforeAll(async () => {
@@ -418,7 +418,7 @@ describe("PostgresInquiryRepository", () => {
     const result = await pool.query<{table_name: string}>("select table_name from information_schema.tables where table_schema = 'public' and table_name in ('communication_recipients','conversation_access','conversation_messages','conversations','inquiries','inquiry_assignments','inquiry_items','inquiry_outbox','inquiry_team_members','inquiry_workflow_events','telegram_inquiry_deliveries') order by table_name");
     expect(result.rows.map(({table_name}) => table_name)).toEqual(["communication_recipients", "conversation_access", "conversation_messages", "conversations", "inquiries", "inquiry_assignments", "inquiry_items", "inquiry_outbox", "inquiry_team_members", "inquiry_workflow_events", "telegram_inquiry_deliveries"]);
     const migrations = await pool.query<{count: string}>("select count(*) from drizzle.__drizzle_migrations");
-    expect(migrations.rows[0]?.count).toBe("11");
+    expect(migrations.rows[0]?.count).toBe("13");
     const outboxEventTypeConstraint = await pool.query<{definition: string}>(`
       select pg_get_constraintdef(oid) as definition
       from pg_constraint

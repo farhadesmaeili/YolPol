@@ -42,6 +42,7 @@ function validate(input: ProvisionStaffAccountInput): ValidationResult {
   let role: StaffRole;
   try { role = parseStaffRole(input.role); }
   catch { return {field: "role"}; }
+  if (role === "SUPER_ADMIN" || role === "VIEWER") return {field: "role"};
 
   let password: string;
   try { password = StaffPassword.create(input.password).value; }

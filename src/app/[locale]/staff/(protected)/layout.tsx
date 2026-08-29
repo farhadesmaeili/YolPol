@@ -33,6 +33,7 @@ export default async function ProtectedStaffLayout({children, params}: Protected
     <StaffShell
       locale={locale}
       principal={access.principal}
+      capabilities={access.capabilities}
       labels={{
         dashboard: t("navigation.dashboard"),
         inquiries: t("navigation.inquiries"),
@@ -43,7 +44,7 @@ export default async function ProtectedStaffLayout({children, params}: Protected
         operations: t("common.operations"),
         signedInAs: t("common.signedInAs"),
         role: t("common.role"),
-        roles: {ADMIN: t("roles.ADMIN"), SALES: t("roles.SALES")},
+        roles: {SUPER_ADMIN: t("roles.SUPER_ADMIN"), ADMIN: t("roles.ADMIN"), SALES: t("roles.SALES"), VIEWER: t("roles.VIEWER")},
         logout: t("logout.button"),
         loggingOut: t("logout.loggingOut"),
         logoutError: t("logout.error"),

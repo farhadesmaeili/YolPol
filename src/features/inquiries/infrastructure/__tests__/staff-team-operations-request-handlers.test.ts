@@ -202,7 +202,7 @@ describe("Staff Team Operations authentication and authorization", () => {
     },
   );
 
-  it.each(["ADMIN", "SALES"] as const)("allows the existing %s Team Operations capability", async (role) => {
+  it.each(["SUPER_ADMIN", "ADMIN", "SALES", "VIEWER"] as const)("allows %s to view Team Operations", async (role) => {
     const access = authenticatedAccess({...principal, role});
     const reads = operations();
     const response = await createStaffInquiryListRequestHandler(() => access, () => reads)(request("/api/staff/inquiries"));
@@ -213,7 +213,7 @@ describe("Staff Team Operations authentication and authorization", () => {
   it("returns 403 for an authenticated principal without the Team Operations capability", async () => {
     const access = {
       resolveSession: {execute: vi.fn().mockResolvedValue({status: "authenticated", principal} as const)},
-      authorization: {mayPerformTeamOperations: vi.fn().mockReturnValue(false)},
+      authorization: {mayViewInquiries: vi.fn().mockReturnValue(false)},
     };
     const reads = operations();
     const response = await createStaffInquiryListRequestHandler(() => access, () => reads)(request("/api/staff/inquiries"));
