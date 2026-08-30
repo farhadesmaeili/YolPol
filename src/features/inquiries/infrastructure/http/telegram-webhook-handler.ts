@@ -3,11 +3,13 @@ import {createHash, timingSafeEqual} from "node:crypto";
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
 import type {ReceiveTelegramReplyResult} from "@/features/inquiries/application/results/receive-telegram-reply-result";
 import {classifyTelegramUpdate} from "@/features/inquiries/infrastructure/communication/telegram/telegram-update-parser";
+import type {TelegramStartCommand} from "@/features/telegram-staff-onboarding/application/dto/telegram-start-command";
 
 export const telegramWebhookRequestSizeLimit = 64 * 1024;
 const telegramSecretHeader = "x-telegram-bot-api-secret-token";
 
 type TelegramReplyGateway = Readonly<{execute(reply: ExternalChannelReply): Promise<ReceiveTelegramReplyResult>}>;
+type TelegramStartGateway = Readonly<{execute(command: TelegramStartCommand): Promise<void>}>;
 type ErrorCode = "invalid_secret" | "invalid_request" | "invalid_update" | "payload_too_large" | "unsupported_media_type" | "service_unavailable";
 
 const json = (body: Readonly<Record<string, unknown>>, status: number) => Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
@@ -65,7 +67,8 @@ async function readBody(request: Request): Promise<BodyReadResult> {
 }
 
 export function createTelegramWebhookHandler(
-  getGateway: () => TelegramReplyGateway,
+  getReplyGateway: () => TelegramReplyGateway,
+  getStartGateway: () => TelegramStartGateway,
   getWebhookSecret: () => string,
 ) {
   return async function handle(request: Request): Promise<Response> {
@@ -81,9 +84,14 @@ export function createTelegramWebhookHandler(
     const update = classifyTelegramUpdate(body.value);
     if (update.status === "invalid") return failure("invalid_update", 400);
     if (update.status === "ignored") return accepted();
+    if (update.status === "staff_connection_start") {
+      try { await getStartGateway().execute(update.command); }
+      catch { return failure("service_unavailable", 503); }
+      return accepted();
+    }
 
     let result: ReceiveTelegramReplyResult;
-    try { result = await getGateway().execute(update.reply); } catch { return failure("service_unavailable", 503); }
+    try { result = await getReplyGateway().execute(update.reply); } catch { return failure("service_unavailable", 503); }
     switch (result.status) {
       case "created":
       case "duplicate":

@@ -23,7 +23,7 @@ const team: StaffTeamManagementViewModel = Object.freeze({
     active: true,
     createdAt: "2026-08-29T00:00:00.000Z",
     telegramLinked: false,
-    actions: Object.freeze({allowedRoles: Object.freeze(["VIEWER"] as const), mayDeactivate: false, mayReactivate: false}),
+    actions: Object.freeze({allowedRoles: Object.freeze(["VIEWER"] as const), mayDeactivate: false, mayReactivate: false, mayForceDisconnectTelegram: false, mayRevokeTelegramRequest: false}),
   })]),
   invitations: Object.freeze([]),
 });
@@ -62,6 +62,8 @@ function labels(locale: Locale): StaffTeamManagementLabels {
     changeRole: staff.teamManagement.changeRole,
     deactivate: staff.teamManagement.deactivate,
     reactivate: staff.teamManagement.reactivate,
+    forceDisconnectTelegram: staff.teamManagement.forceDisconnectTelegram,
+    revokeTelegramRequest: staff.teamManagement.revokeTelegramRequest,
     revoke: staff.teamManagement.revoke,
     working: staff.teamManagement.working,
     error: staff.teamManagement.error,
@@ -78,5 +80,13 @@ describe("Staff Team Management accessibility", () => {
     expect(label?.[2]).toBe(`${localizedMessages[locale].common.role}: Visible Staff Name`);
     expect(html).toContain(`<select id="${label?.[1]}" name="role"`);
     expect(label?.[2]).not.toContain("internal-account-id");
+  });
+
+  it("renders localized Telegram manager actions without exposing target IDs", () => {
+    const managed = {...team, accounts: [{...team.accounts[0]!, telegramLinked: true, actions: {...team.accounts[0]!.actions, mayForceDisconnectTelegram: true, mayRevokeTelegramRequest: true}}]};
+    const html = renderToStaticMarkup(<StaffTeamManagement locale="en" labels={labels("en")} team={managed} />);
+    expect(html).toContain(enMessages.Staff.teamManagement.forceDisconnectTelegram);
+    expect(html).toContain(enMessages.Staff.teamManagement.revokeTelegramRequest);
+    expect(html).not.toContain("internal-account-id");
   });
 });

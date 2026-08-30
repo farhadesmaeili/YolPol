@@ -12,6 +12,8 @@ export type StaffTeamAccountViewModel = Readonly<{
     allowedRoles: readonly StaffRole[];
     mayDeactivate: boolean;
     mayReactivate: boolean;
+    mayForceDisconnectTelegram: boolean;
+    mayRevokeTelegramRequest: boolean;
   }>;
 }>;
 

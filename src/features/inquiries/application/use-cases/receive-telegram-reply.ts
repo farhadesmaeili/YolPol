@@ -1,5 +1,5 @@
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
-import type {CommunicationRecipientRepository, TelegramDeliveryRepository} from "@/features/inquiries/application/ports/communication-ports";
+import type {TelegramDeliveryRepository} from "@/features/inquiries/application/ports/communication-ports";
 import type {CorrelatedConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import type {Clock} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {ReceiveTelegramReplyResult} from "@/features/inquiries/application/results/receive-telegram-reply-result";
@@ -16,10 +16,16 @@ function safeId(value: string, pattern: RegExp): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+type TelegramStaffActorResolver = Readonly<{
+  execute(input: Readonly<{telegramUserId: unknown}>): Promise<
+    | Readonly<{status: "resolved"; actor: Readonly<{principal: Readonly<{actorReference: string}>; capabilities: Readonly<{mayReplyToCustomerConversation: boolean}>}>}>
+    | Readonly<{status: "unresolved"}>
+  >;
+}>;
+
 export class ReceiveTelegramReply {
   constructor(
-    private readonly recipients: CommunicationRecipientRepository,
-    private readonly staffActors: Readonly<{execute(input: Readonly<{teamMemberId: string}>): Promise<string | null>}>,
+    private readonly staffActors: TelegramStaffActorResolver,
     private readonly deliveries: TelegramDeliveryRepository,
     private readonly messages: CorrelatedConversationMessageWriter,
     private readonly clock: Clock,
@@ -32,10 +38,8 @@ export class ReceiveTelegramReply {
     if (telegramChatId === null || telegramMessageId === null) return {status: "invalid_reply"};
 
     try {
-      const sender = await this.recipients.findAuthorizedTeamMember("TELEGRAM", reply.senderExternalId);
-      if (!sender?.teamMemberId || sender.teamMemberActive !== true) return {status: "unauthorized"};
-      const actorReference = await this.staffActors.execute({teamMemberId: sender.teamMemberId});
-      if (!actorReference) return {status: "unauthorized"};
+      const actor = await this.staffActors.execute({telegramUserId: reply.senderExternalId});
+      if (actor.status !== "resolved" || !actor.actor.capabilities.mayReplyToCustomerConversation) return {status: "unauthorized"};
       const binding = await this.deliveries.findConversationByProviderMessage({telegramChatId, telegramMessageId});
       if (!binding) return {status: "conversation_not_found"};
 
@@ -43,7 +47,7 @@ export class ReceiveTelegramReply {
         id: `telegram_update_${reply.externalUpdateId}`,
         senderType: "INTERNAL_USER",
         channel: "TELEGRAM",
-        actorReference,
+        actorReference: actor.actor.principal.actorReference,
         body: reply.body,
         createdAt: this.clock.now(),
       });

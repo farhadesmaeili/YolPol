@@ -18,7 +18,7 @@ let pool: Pool;
 let repository: PostgresStaffManagementRepository;
 
 async function cleanTables() {
-  await pool.query("truncate table staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
+  await pool.query("truncate table telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
 }
 
 async function seedAccount(id: string, role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER", active = true) {
@@ -44,6 +44,20 @@ afterEach(cleanTables);
 afterAll(async () => { if (pool) await pool.end(); });
 
 describe("PostgresStaffManagementRepository", () => {
+  it("derives Team Telegram status only from an active canonical Staff link", async () => {
+    const linkedMember = await seedAccount("linked", "SALES");
+    const legacyOnlyMember = await seedAccount("legacy-only", "VIEWER");
+    const disconnectedMember = await seedAccount("disconnected", "ADMIN");
+    await pool.query("insert into communication_recipients (id,channel,kind,external_id,display_name,team_member_id,authorized,notifications_enabled,created_at,updated_at) values ('legacy','TELEGRAM','TEAM_MEMBER','900','Legacy',$1,true,true,$2,$2)", [legacyOnlyMember, now]);
+    await pool.query("insert into telegram_staff_links (id,team_member_id,telegram_user_id,private_chat_id,first_linked_at,connected_at,disconnected_at,updated_at) values ('active-link',$1,901,901,$3,$3,null,$3),('old-link',$2,902,902,$3,$3,$3,$3)", [linkedMember, disconnectedMember, now]);
+    const accounts = await repository.listAccounts();
+    expect(accounts.map(({id, telegramLinked}) => ({id, telegramLinked})).sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      {id: "disconnected", telegramLinked: false},
+      {id: "legacy-only", telegramLinked: false},
+      {id: "linked", telegramLinked: true},
+    ]);
+  });
+
   it("atomically activates one invitation and rejects replay without partial identity rows", async () => {
     await seedAccount("creator", "SUPER_ADMIN");
     const invitation = StaffInvitation.create({
