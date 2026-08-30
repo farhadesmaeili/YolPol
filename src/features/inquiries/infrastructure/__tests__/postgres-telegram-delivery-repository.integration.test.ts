@@ -10,24 +10,25 @@ import {ReceiveTelegramReply} from "@/features/inquiries/application/use-cases/r
 import {Conversation} from "@/features/inquiries/domain/entities/conversation";
 import {createInquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import {createPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
-import {PostgresCommunicationRecipientRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-communication-recipient-repository";
 import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
 import {PostgresTelegramDeliveryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-telegram-delivery-repository";
 import {inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 import {InquiryTestBuilder} from "@/features/inquiries/testing/builders/inquiry-test-builder";
 import {safeIntegrationPoolConfig} from "@/features/inquiries/testing/integration/postgres-test-database";
+import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
+import {ResolveTelegramStaffActor} from "@/features/telegram-staff-onboarding/application/use-cases/resolve-telegram-staff-actor";
+import {PostgresTelegramStaffOnboardingRepository} from "@/features/telegram-staff-onboarding/infrastructure/persistence/postgres/repositories/postgres-telegram-staff-onboarding-repository";
 
 let pool: Pool;
 let inquiryRepository: PostgresInquiryRepository;
 let deliveryRepository: PostgresTelegramDeliveryRepository;
-let recipientRepository: PostgresCommunicationRecipientRepository;
 let messageRepository: PostgresConversationMessageRepository;
 
 const now = new Date("2026-08-26T10:00:00.000Z");
 
 async function cleanTables() {
-  await pool.query("truncate table staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 async function seedInquiry(id: string) {
@@ -57,7 +58,6 @@ beforeAll(async () => {
   await migrate(drizzle(pool, {schema: inquiryPostgresSchema}), {migrationsFolder: resolve("drizzle")});
   inquiryRepository = new PostgresInquiryRepository(pool);
   deliveryRepository = new PostgresTelegramDeliveryRepository(pool);
-  recipientRepository = new PostgresCommunicationRecipientRepository(pool);
   messageRepository = new PostgresConversationMessageRepository(pool);
 });
 
@@ -113,9 +113,11 @@ describe("PostgresTelegramDeliveryRepository", () => {
     await deliveryRepository.markDelivered({delivery: retry[0]!, telegramChatId: 102, telegramMessageId: 7003, deliveredAt: retryAt});
     await expect(deliveryRepository.summarizeEvent(event.eventId)).resolves.toMatchObject({automaticWorkRemaining: 0, delivered: 3});
 
+    await pool.query("insert into staff_accounts (id,team_member_id,normalized_email,password_hash,role,active,created_at,updated_at) values ('account-a','member-a','member-a@example.test','stored-hash','SALES',true,$1,$1),('account-b','member-b','member-b@example.test','stored-hash','SALES',true,$1,$1)", [now]);
+    await pool.query("insert into telegram_staff_links (id,team_member_id,telegram_user_id,private_chat_id,first_linked_at,connected_at,updated_at) values ('link-a','member-a',101,101,$1,$1,$1)", [now]);
+
     const receive = new ReceiveTelegramReply(
-      recipientRepository,
-      {execute: async ({teamMemberId}: Readonly<{teamMemberId: string}>) => `staff:${teamMemberId}`},
+      new ResolveTelegramStaffActor(new PostgresTelegramStaffOnboardingRepository(pool), new StaffAuthorizationPolicy()),
       deliveryRepository,
       messageRepository,
       {now: () => new Date(now.getTime() + 60_000)},
@@ -129,12 +131,16 @@ describe("PostgresTelegramDeliveryRepository", () => {
       body: "Production is available for this request.",
     } as const;
     await expect(receive.execute({...incoming, externalUpdateId: "8999", senderExternalId: "-100999"})).resolves.toEqual({status: "unauthorized"});
+    await expect(receive.execute({...incoming, externalUpdateId: "8998", senderExternalId: "102"})).resolves.toEqual({status: "unauthorized"});
     await expect(receive.execute({...incoming, externalUpdateId: "9000", repliedMessageId: "7999"})).resolves.toEqual({status: "conversation_not_found"});
     await expect(receive.execute(incoming)).resolves.toEqual({status: "created"});
     await expect(receive.execute(incoming)).resolves.toEqual({status: "duplicate"});
 
     const privateIncoming = {...incoming, externalUpdateId: "9002", externalMessageId: "101:8002", externalRecipientId: "101", repliedMessageId: "7002", body: "Private follow-up from the mapped member."} as const;
     await expect(receive.execute(privateIncoming)).resolves.toEqual({status: "created"});
+    await pool.query("update staff_accounts set role='VIEWER',updated_at=$1 where id='account-a'", [new Date(now.getTime() + 20_000)]);
+    await expect(receive.execute({...privateIncoming, externalUpdateId: "90025"})).resolves.toEqual({status: "unauthorized"});
+    await pool.query("update staff_accounts set role='SALES',updated_at=$1 where id='account-a'", [new Date(now.getTime() + 25_000)]);
     await pool.query("update inquiry_team_members set active=false,updated_at=$1 where id='member-a'", [new Date(now.getTime() + 30_000)]);
     const inactiveMappedIncoming = {...privateIncoming, externalUpdateId: "9003", externalMessageId: "101:8003", body: "Authorized identity after operational deactivation."} as const;
     await expect(receive.execute(inactiveMappedIncoming)).resolves.toEqual({status: "unauthorized"});

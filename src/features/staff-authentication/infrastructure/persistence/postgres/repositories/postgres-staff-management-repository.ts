@@ -242,8 +242,8 @@ export class PostgresStaffManagementRepository implements StaffManagementReposit
         select sa.id, tm.display_name as "displayName", sa.normalized_email as "normalizedEmail", sa.role,
           sa.active as "accountActive", tm.active as "teamMemberActive", sa.created_at as "createdAt",
           exists (
-            select 1 from communication_recipients cr
-            where cr.team_member_id = tm.id and cr.channel = 'TELEGRAM' and cr.kind = 'TEAM_MEMBER'
+            select 1 from telegram_staff_links tsl
+            where tsl.team_member_id = tm.id and tsl.disconnected_at is null
           ) as "telegramLinked"
         from staff_accounts sa
         join inquiry_team_members tm on tm.id = sa.team_member_id

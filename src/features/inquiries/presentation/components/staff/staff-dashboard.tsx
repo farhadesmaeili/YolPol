@@ -2,15 +2,18 @@ import {getTranslations} from "next-intl/server";
 
 import type {StaffPrincipal} from "@/features/staff-authentication/application/dto/staff-principal";
 import type {TeamInquiryListItemDto} from "@/features/inquiries/application/dto/team-operations-dto";
+import {StaffTelegramConnection} from "@/features/telegram-staff-onboarding/presentation/components/staff-telegram-connection";
+import type {TelegramConnectionViewModel} from "@/features/telegram-staff-onboarding/presentation/view-models/telegram-connection-view-model";
 import {Link} from "@/i18n/navigation";
 import {LtrIsolate, formatHumanNumber} from "@/shared/presentation/bidi/bidi-isolate";
 import type {Locale} from "@/shared/types/locale";
 import {StaffDateTime, StaffPageHeader, StaffPanel, StaffState, StaffStatusBadge} from "@/features/inquiries/presentation/components/staff/staff-ui";
 
-export async function StaffDashboard({locale, principal, recent}: Readonly<{
+export async function StaffDashboard({locale, principal, recent, telegramConnection}: Readonly<{
   locale: Locale;
   principal: StaffPrincipal;
   recent: readonly TeamInquiryListItemDto[];
+  telegramConnection: TelegramConnectionViewModel | null;
 }>) {
   const t = await getTranslations({locale, namespace: "Staff"});
   return (
@@ -41,14 +44,23 @@ export async function StaffDashboard({locale, principal, recent}: Readonly<{
             </ul>
           )}
         </StaffPanel>
-        <StaffPanel title={t("dashboard.sessionTitle")}>
-          <dl className="space-y-4 text-sm">
-            <div><dt className="text-stone-500">{t("common.displayName")}</dt><dd className="mt-1 break-words font-semibold">{principal.displayName}</dd></div>
-            <div><dt className="text-stone-500">{t("common.role")}</dt><dd className="mt-1 font-semibold">{t(`roles.${principal.role}`)}</dd></div>
-            <div><dt className="text-stone-500">{t("common.teamMemberId")}</dt><dd className="mt-1 break-all font-mono text-xs"><LtrIsolate>{principal.teamMemberId}</LtrIsolate></dd></div>
-            <div><dt className="text-stone-500">{t("dashboard.previewCount")}</dt><dd className="mt-1 font-semibold">{formatHumanNumber(locale, recent.length)}</dd></div>
-          </dl>
-        </StaffPanel>
+        <div className="space-y-4">
+          <StaffPanel title={t("dashboard.sessionTitle")}>
+            <dl className="space-y-4 text-sm">
+              <div><dt className="text-stone-500">{t("common.displayName")}</dt><dd className="mt-1 break-words font-semibold">{principal.displayName}</dd></div>
+              <div><dt className="text-stone-500">{t("common.role")}</dt><dd className="mt-1 font-semibold">{t(`roles.${principal.role}`)}</dd></div>
+              <div><dt className="text-stone-500">{t("common.teamMemberId")}</dt><dd className="mt-1 break-all font-mono text-xs"><LtrIsolate>{principal.teamMemberId}</LtrIsolate></dd></div>
+              <div><dt className="text-stone-500">{t("dashboard.previewCount")}</dt><dd className="mt-1 font-semibold">{formatHumanNumber(locale, recent.length)}</dd></div>
+            </dl>
+          </StaffPanel>
+          <StaffTelegramConnection locale={locale} initialConnection={telegramConnection} labels={{
+            title: t("telegramConnection.title"), description: t("telegramConnection.description"), status: t("common.status"),
+            notConnected: t("telegramConnection.notConnected"), pending: t("telegramConnection.pending"), connected: t("telegramConnection.connected"),
+            pendingDescription: t("telegramConnection.pendingDescription"), pendingReloadDescription: t("telegramConnection.pendingReloadDescription"), expiresAt: t("teamManagement.expiresAt"),
+            connect: t("telegramConnection.connect"), createFresh: t("telegramConnection.createFresh"), openBot: t("telegramConnection.openBot"), cancel: t("telegramConnection.cancel"),
+            disconnect: t("telegramConnection.disconnect"), refresh: t("telegramConnection.refresh"), working: t("teamManagement.working"), error: t("telegramConnection.error"),
+          }} />
+        </div>
       </div>
     </>
   );

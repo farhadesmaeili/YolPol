@@ -4,6 +4,7 @@ import {useId, useState, type FormEvent} from "react";
 
 import type {StaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 import {changeStaffRole, createStaffInvitation, revokeStaffInvitation, setStaffActive} from "@/features/staff-authentication/presentation/clients/staff-management-client";
+import {forceDisconnectStaffTelegram, revokeStaffTelegramConnectionRequest} from "@/features/telegram-staff-onboarding/presentation/clients/telegram-staff-onboarding-client";
 import type {StaffTeamManagementViewModel} from "@/features/staff-authentication/presentation/view-models/staff-team-management-view-model";
 import {useRouter} from "@/i18n/navigation";
 import type {Locale} from "@/shared/types/locale";
@@ -33,6 +34,8 @@ export type StaffTeamManagementLabels = Readonly<{
   changeRole: string;
   deactivate: string;
   reactivate: string;
+  forceDisconnectTelegram: string;
+  revokeTelegramRequest: string;
   revoke: string;
   working: string;
   error: string;
@@ -126,6 +129,8 @@ export function StaffTeamManagement({locale, labels, team}: Readonly<{locale: Lo
                     {account.actions.allowedRoles.length > 0 ? <RoleForm currentRole={account.role} roles={account.actions.allowedRoles} labels={labels} staffMemberName={account.displayName} disabled={working} onSubmit={(role) => refreshAfter(() => changeStaffRole(fetch, account.id, role))} /> : null}
                     {account.actions.mayDeactivate ? <button disabled={working} className={secondaryButtonClass} onClick={() => void refreshAfter(() => setStaffActive(fetch, account.id, false))}>{labels.deactivate}</button> : null}
                     {account.actions.mayReactivate ? <button disabled={working} className={secondaryButtonClass} onClick={() => void refreshAfter(() => setStaffActive(fetch, account.id, true))}>{labels.reactivate}</button> : null}
+                    {account.actions.mayForceDisconnectTelegram ? <button disabled={working} className={secondaryButtonClass} onClick={() => void refreshAfter(async () => await forceDisconnectStaffTelegram(fetch, account.id) ? "completed" : "failed")}>{labels.forceDisconnectTelegram}</button> : null}
+                    {account.actions.mayRevokeTelegramRequest ? <button disabled={working} className={secondaryButtonClass} onClick={() => void refreshAfter(async () => await revokeStaffTelegramConnectionRequest(fetch, account.id) ? "completed" : "failed")}>{labels.revokeTelegramRequest}</button> : null}
                   </div>
                 </Cell>
               </tr>

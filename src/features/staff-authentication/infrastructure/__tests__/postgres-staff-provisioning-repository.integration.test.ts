@@ -27,7 +27,7 @@ function account(id: string, teamMemberId: string, email: string) {
 }
 
 async function cleanProvisioningTables() {
-  await pool.query("truncate table staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
+  await pool.query("truncate table telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
 }
 
 beforeAll(async () => {

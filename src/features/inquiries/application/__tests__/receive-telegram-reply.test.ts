@@ -1,27 +1,16 @@
 import {describe, expect, it, vi} from "vitest";
 
 import type {ExternalChannelReply} from "@/features/inquiries/application/dto/notification-message";
-import type {CommunicationRecipientRepository, TelegramDeliveryRepository} from "@/features/inquiries/application/ports/communication-ports";
+import type {TelegramDeliveryRepository} from "@/features/inquiries/application/ports/communication-ports";
 import type {CorrelatedConversationMessageWriter} from "@/features/inquiries/application/ports/conversation-ports";
 import {ReceiveTelegramReply} from "@/features/inquiries/application/use-cases/receive-telegram-reply";
+import type {StaffCapabilities} from "@/features/staff-authentication/application/dto/staff-capabilities";
+import type {StaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 
 const reply: ExternalChannelReply = {
-  externalUpdateId: "987654",
-  externalMessageId: "-100123:45",
-  externalRecipientId: "-100123",
-  senderExternalId: "456",
-  body: "Please tell the customer production is available.",
-  repliedMessageId: "44",
+  externalUpdateId: "987654", externalMessageId: "-100123:45", externalRecipientId: "-100123",
+  senderExternalId: "456", body: "Please tell the customer production is available.", repliedMessageId: "44",
 };
-
-function recipientRepository(teamMemberId: string | null = null, authorized = true, teamMemberActive: boolean | null = teamMemberId ? true : null): CommunicationRecipientRepository {
-  return {
-    async findAuthorizedNotificationRecipients() { return []; },
-    async findAuthorizedTeamMember() {
-      return authorized ? {id: "member-recipient", channel: "TELEGRAM", kind: "TEAM_MEMBER", externalId: "456", displayName: "Team member", teamMemberId, teamMemberActive} : null;
-    },
-  };
-}
 
 function deliveryRepository(conversationId: string | null = "conversation-1"): TelegramDeliveryRepository {
   return {
@@ -30,72 +19,76 @@ function deliveryRepository(conversationId: string | null = "conversation-1"): T
   };
 }
 
-function actorResolver(actorReference: string | null = "staff:member-1") {
-  return {execute: vi.fn().mockResolvedValue(actorReference)};
+function capabilities(mayReplyToCustomerConversation: boolean): StaffCapabilities {
+  return {
+    mayAccessStaffPanel: true, mayViewInquiries: true, mayViewCustomerConversation: true, mayReplyToCustomerConversation,
+    mayPublishStaffTyping: mayReplyToCustomerConversation, mayUpdateInquiryWorkflow: mayReplyToCustomerConversation,
+    mayManageTeam: false, mayCreateStaffInvitation: false, mayDeactivateStaffMember: false,
+    mayReactivateStaffMember: false, mayChangeStaffRole: false, mayAssignAdminRole: false, mayAssignSuperAdminRole: false,
+  };
+}
+
+function actorResolver(input: Readonly<{resolved?: boolean; canReply?: boolean; role?: StaffRole}> = {}) {
+  const {resolved = true, canReply = true, role = "SALES"} = input;
+  return {execute: vi.fn().mockResolvedValue(resolved ? {
+    status: "resolved",
+    actor: {
+      principal: {staffAccountId: "account-1", teamMemberId: "member-1", role, displayName: "Staff", actorReference: "staff:member-1"},
+      capabilities: capabilities(canReply),
+    },
+  } : {status: "unresolved"})};
 }
 
 describe("ReceiveTelegramReply", () => {
-  it("uses provider binding and stores a mapped Staff actor", async () => {
+  it("uses the verified Telegram User ID actor and preserves provider delivery correlation", async () => {
     const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
     const deliveries = deliveryRepository();
     const actors = actorResolver();
-    const useCase = new ReceiveTelegramReply(recipientRepository("member-1"), actors, deliveries, {appendForConversation}, {now: () => new Date("2026-08-25T01:02:03.000Z")});
+    const useCase = new ReceiveTelegramReply(actors, deliveries, {appendForConversation}, {now: () => new Date("2026-08-25T01:02:03.000Z")});
     await expect(useCase.execute(reply)).resolves.toEqual({status: "created"});
+    expect(actors.execute).toHaveBeenCalledWith({telegramUserId: "456"});
     expect(deliveries.findConversationByProviderMessage).toHaveBeenCalledWith({telegramChatId: -100123, telegramMessageId: 44});
-    expect(actors.execute).toHaveBeenCalledWith({teamMemberId: "member-1"});
-    expect(appendForConversation).toHaveBeenCalledWith("conversation-1", expect.objectContaining({senderType: "INTERNAL_USER", channel: "TELEGRAM", body: reply.body}));
     const stored = appendForConversation.mock.calls[0]?.[1];
     expect(stored?.id.value).toBe("telegram_update_987654");
     expect(stored?.actorReference?.value).toBe("staff:member-1");
   });
 
-  it("rejects an authorized recipient without a mapped active Staff identity", async () => {
-    const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
-    await expect(new ReceiveTelegramReply(recipientRepository(null), actorResolver(), deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "unauthorized"});
-    expect(appendForConversation).not.toHaveBeenCalled();
-  });
-
-  it("rejects an inactive mapped Team Member", async () => {
-    const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
-    await expect(new ReceiveTelegramReply(recipientRepository("member-1", true, false), actorResolver(), deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "unauthorized"});
-    expect(appendForConversation).not.toHaveBeenCalled();
-  });
-
-  it("rejects a mapped Team Member whose linked Staff Account is inactive or lacks reply capability", async () => {
-    const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>();
-    await expect(new ReceiveTelegramReply(recipientRepository("member-1"), actorResolver(null), deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "unauthorized"});
-    expect(appendForConversation).not.toHaveBeenCalled();
-  });
-
-  it("uses the private chat binding independently from stable sender authorization", async () => {
+  it("rejects a sender without an active verified Staff link before delivery correlation", async () => {
     const deliveries = deliveryRepository();
-    const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
-    await expect(new ReceiveTelegramReply(recipientRepository("member-1"), actorResolver(), deliveries, {appendForConversation}, {now: () => new Date()}).execute({...reply, externalRecipientId: "456", externalMessageId: "456:45"})).resolves.toEqual({status: "created"});
-    expect(deliveries.findConversationByProviderMessage).toHaveBeenCalledWith({telegramChatId: 456, telegramMessageId: 44});
-  });
-
-  it("rejects an unauthorized sender before correlation or persistence", async () => {
     const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>();
-    const deliveries = deliveryRepository();
-    await expect(new ReceiveTelegramReply(recipientRepository(null, false), actorResolver(), deliveries, {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "unauthorized"});
+    await expect(new ReceiveTelegramReply(actorResolver({resolved: false}), deliveries, {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "unauthorized"});
     expect(deliveries.findConversationByProviderMessage).not.toHaveBeenCalled();
-    expect(appendForConversation).not.toHaveBeenCalled();
+  });
+
+  it("denies Viewer and permits every current reply-capable role", async () => {
+    for (const [role, canReply] of [["VIEWER", false], ["SALES", true], ["ADMIN", true], ["SUPER_ADMIN", true]] as const) {
+      const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
+      await expect(new ReceiveTelegramReply(actorResolver({role, canReply}), deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute(reply))
+        .resolves.toEqual({status: canReply ? "created" : "unauthorized"});
+    }
+  });
+
+  it("uses the replied-to private or group chat binding independently from sender identity", async () => {
+    const deliveries = deliveryRepository();
+    const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>().mockResolvedValue("created");
+    await expect(new ReceiveTelegramReply(actorResolver(), deliveries, {appendForConversation}, {now: () => new Date()}).execute({...reply, externalRecipientId: "456", externalMessageId: "456:45"})).resolves.toEqual({status: "created"});
+    expect(deliveries.findConversationByProviderMessage).toHaveBeenCalledWith({telegramChatId: 456, telegramMessageId: 44});
   });
 
   it("rejects an unknown provider binding without persistence", async () => {
     const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>();
-    await expect(new ReceiveTelegramReply(recipientRepository("member-1"), actorResolver(), deliveryRepository(null), {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "conversation_not_found"});
-    expect(appendForConversation).not.toHaveBeenCalled();
+    await expect(new ReceiveTelegramReply(actorResolver(), deliveryRepository(null), {appendForConversation}, {now: () => new Date()}).execute(reply)).resolves.toEqual({status: "conversation_not_found"});
   });
 
-  it("rejects invalid provider identifiers without persistence", async () => {
+  it("rejects invalid provider identifiers before actor resolution", async () => {
+    const actors = actorResolver();
     const appendForConversation = vi.fn<CorrelatedConversationMessageWriter["appendForConversation"]>();
-    await expect(new ReceiveTelegramReply(recipientRepository("member-1"), actorResolver(), deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute({...reply, externalRecipientId: "not-numeric"})).resolves.toEqual({status: "invalid_reply"});
-    expect(appendForConversation).not.toHaveBeenCalled();
+    await expect(new ReceiveTelegramReply(actors, deliveryRepository(), {appendForConversation}, {now: () => new Date()}).execute({...reply, externalRecipientId: "not-numeric"})).resolves.toEqual({status: "invalid_reply"});
+    expect(actors.execute).not.toHaveBeenCalled();
   });
 
   it.each(["duplicate", "conversation_not_found"] as const)("preserves the %s persistence outcome", async (status) => {
-    const useCase = new ReceiveTelegramReply(recipientRepository("member-1"), actorResolver(), deliveryRepository(), {async appendForConversation() { return status; }}, {now: () => new Date()});
+    const useCase = new ReceiveTelegramReply(actorResolver(), deliveryRepository(), {async appendForConversation() { return status; }}, {now: () => new Date()});
     await expect(useCase.execute(reply)).resolves.toEqual({status});
   });
 });

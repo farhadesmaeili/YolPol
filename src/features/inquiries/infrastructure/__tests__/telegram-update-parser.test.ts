@@ -44,13 +44,30 @@ describe("parseTelegramUpdate", () => {
   ])("rejects unsupported or uncorrelatable Telegram updates", (input) => expect(parseTelegramUpdate(input)).toBeNull());
 
   it.each([
-    {update_id: 1, message: {message_id: 1, from: {id: 101}, chat: {id: 101}, text: "/start"}},
     {update_id: 2, message: {message_id: 2, from: {id: 101}, chat: {id: 101}, text: "Hello"}},
     {update_id: 3, message: {message_id: 3, from: {id: 101}, chat: {id: -100123}, text: "Group chatter"}},
     {update_id: 4, callback_query: {id: "callback-1", from: {id: 101}}},
     {...update(), update_id: 5, message: {...update().message, reply_to_message: undefined}},
   ])("classifies valid non-actionable Telegram traffic as ignored", (input) => {
     expect(classifyTelegramUpdate(input)).toEqual({status: "ignored"});
+  });
+
+  it.each([
+    ["plain private start", "/start", "private", null, false],
+    ["private token", "/start ypt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "private", "ypt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", false],
+    ["addressed group command", "/start@YolpolBot", "supergroup", null, false],
+    ["malformed payload", "/start token extra", "private", null, true],
+  ] as const)("classifies %s before inquiry replies", (_name, text, chatType, connectionToken, malformed) => {
+    const input = {...update(), message: {...update().message, from: {id: 456, is_bot: false, language_code: "fa-IR"}, chat: {id: chatType === "private" ? 456 : -100123, type: chatType}, text}};
+    expect(classifyTelegramUpdate(input)).toEqual({status: "staff_connection_start", command: {
+      externalUpdateId: "987654", telegramUserId: "456", chatId: chatType === "private" ? "456" : "-100123",
+      chatType, languageCode: "fa-IR", connectionToken, malformed, senderEligible: true,
+    }});
+  });
+
+  it("never routes /start with reply_to_message into an inquiry conversation", () => {
+    const input = {...update(), message: {...update().message, chat: {id: 456, type: "private"}, text: "/start ypt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}};
+    expect(classifyTelegramUpdate(input).status).toBe("staff_connection_start");
   });
 
   it("classifies a supported correlated reply as actionable", () => {

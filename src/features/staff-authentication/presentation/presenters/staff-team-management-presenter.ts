@@ -10,6 +10,7 @@ export function presentStaffTeamManagement(team: StaffTeamManagementDto, princip
     allowedInvitationRoles: Object.freeze(invitationRoles),
     accounts: Object.freeze(team.accounts.map((account) => {
       const target = {staffAccountId: account.id, role: account.role, active: account.active};
+      const mayManageTelegram = authorization.mayDeactivateStaffMember(principal, target);
       return Object.freeze({
         id: account.id,
         displayName: account.displayName,
@@ -20,8 +21,10 @@ export function presentStaffTeamManagement(team: StaffTeamManagementDto, princip
         telegramLinked: account.telegramLinked,
         actions: Object.freeze({
           allowedRoles: Object.freeze(staffRoles.filter((role) => authorization.mayChangeStaffRole(principal, target, role))),
-          mayDeactivate: account.active && authorization.mayDeactivateStaffMember(principal, target),
+          mayDeactivate: account.active && mayManageTelegram,
           mayReactivate: !account.active && authorization.mayReactivateStaffMember(principal, target),
+          mayForceDisconnectTelegram: account.telegramLinked && mayManageTelegram,
+          mayRevokeTelegramRequest: mayManageTelegram,
         }),
       });
     })),
