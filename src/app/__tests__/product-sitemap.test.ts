@@ -40,7 +40,7 @@ describe("verified Product static routes", () => {
       "/products/beverage",
       "/about",
       "/contact",
-      "/export-logistics",
+      "/wholesale-process",
       "/inquiry",
       "/privacy",
     ] as const;
@@ -52,6 +52,8 @@ describe("verified Product static routes", () => {
     expect(urls.size).toBe(76);
     expect(entries.filter(({url}) => url.endsWith("/inquiry"))).toHaveLength(4);
     expect(entries.filter(({url}) => url.endsWith("/privacy"))).toHaveLength(4);
+    expect(entries.filter(({url}) => url.endsWith("/wholesale-process"))).toHaveLength(4);
+    expect(entries.some(({url}) => url.endsWith("/export-logistics"))).toBe(false);
     expect(urls).toEqual(new Set([...expectedStaticUrls, ...expectedProductUrls]));
     expect(expectedProductUrls).toHaveLength(36);
     expect(

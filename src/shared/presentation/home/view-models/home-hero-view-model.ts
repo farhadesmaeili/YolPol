@@ -7,9 +7,10 @@ export type HomeHeroViewModel = Readonly<{
   eyebrow: string;
   heading: string;
   description: string;
+  catalog: string;
   imageAlt: string;
-  productCta: string;
-  contactCta: string;
+  inquiryCta: string;
+  productsCta: string;
   glassExport: string;
   exportPlanning: string;
   referenceConfiguration: string;
@@ -23,6 +24,7 @@ export type HomeHeroViewModel = Readonly<{
   capacitySummary: string;
   kilograms: string;
   planningLimit: string;
+  transportationNote: string;
   networkLabel: string;
   technicalIndex: string;
   palletCount: number;

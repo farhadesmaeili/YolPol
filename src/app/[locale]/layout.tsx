@@ -51,7 +51,10 @@ export default async function LocaleLayout({
   }
 
   setRequestLocale(locale);
-  const messages = await getMessages();
+  const [messages, siteShell] = await Promise.all([
+    getMessages(),
+    getTranslations({locale, namespace: "SiteShell"}),
+  ]);
 
   return (
     <html
@@ -65,6 +68,7 @@ export default async function LocaleLayout({
           <PublicSiteFrame
             header={<SiteHeader locale={locale as Locale} />}
             footer={<SiteFooter locale={locale as Locale} />}
+            skipToContent={siteShell("skipToContent")}
           >
             {children}
           </PublicSiteFrame>

@@ -12,6 +12,7 @@ import {createProductBreadcrumbJsonLd} from "@/features/products/presentation/se
 import {JsonLdScript} from "@/shared/presentation/seo/json-ld-script";
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {createProductDetailMetadata} from "@/features/products/presentation/seo/product-metadata";
+import {presentProductCategoryItems} from "@/features/products/presentation/presenters/product-category-presenter";
 import {isLocale} from "@/i18n/locale";
 import {PremiumPageShell} from "@/shared/presentation/marketing/premium-page-shell";
 import type {ProductCategory} from "@/features/products/domain/types/product-types";
@@ -60,9 +61,11 @@ export default async function ProductPage({params}: ProductPageProps) {
     getTranslations({locale, namespace: "Breadcrumbs"}),
   ]);
   const product = detail.product;
-  const categoryNames = product.categories.map((category) =>
-    categories(categoryMessageKey(category)),
+  const categoryItems = presentProductCategoryItems(
+    product.categories,
+    (category) => categories(categoryMessageKey(category)),
   );
+  const categoryNames = categoryItems.map(({name}) => name);
   const breadcrumbData = createProductBreadcrumbJsonLd({
     locale,
     slug: product.identity.slug,
@@ -86,7 +89,7 @@ export default async function ProductPage({params}: ProductPageProps) {
           categories: details("categories"),
           sku: details("sku"),
           applications: details("applications"),
-          categoryNames,
+          categoryItems,
           inquiryPricing: pricing("inquiry"),
           requestAction: pricing("inquiry"),
           specifications: {

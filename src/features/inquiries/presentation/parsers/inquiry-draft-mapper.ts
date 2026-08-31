@@ -1,4 +1,4 @@
-import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
+import {submitInquiryUnits, type SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {normalizeInquiryCustomerDetails, normalizeInquiryQuantity, normalizeInternationalPhone} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
@@ -13,11 +13,13 @@ function failure(field: InquiryDraftFailure["field"], code: InquiryDraftFailure[
   return Object.freeze({status: "invalid", failure: Object.freeze({field, code, ...(line ? {itemIndex: line.index, productId: line.productId} : {})})});
 }
 
-export function parseInquiryPalletCount(rawValue: string): number | null {
+export function parseInquiryQuantity(rawValue: string): number | null {
   if (!/^[1-9][0-9]*$/u.test(rawValue)) return null;
   const quantity = Number.parseInt(rawValue, 10);
   try { return normalizeInquiryQuantity(quantity); } catch { return null; }
 }
+
+export const parseInquiryPalletCount = parseInquiryQuantity;
 
 export function normalizeInquiryPhoneDraft(value: string, field: "contact.phone" | "contact.whatsappPhone"): string {
   if (value.trim() === "") return value;
@@ -27,7 +29,7 @@ export function normalizeInquiryPhoneDraft(value: string, field: "contact.phone"
 export function preselectInquiryProducts(products: readonly InquiryProductOption[], requestedIds: readonly string[]): InquiryDraftLine[] {
   if (requestedIds.length !== 1) return [];
   const requestedId = requestedIds[0];
-  return requestedId === requestedId.trim() && products.some(({id}) => id === requestedId) ? [{productId: requestedId, palletCountText: ""}] : [];
+  return requestedId === requestedId.trim() && products.some(({id}) => id === requestedId) ? [{productId: requestedId, quantityText: "", unit: "pallets"}] : [];
 }
 
 export function preselectInquiryProduct(products: readonly InquiryProductOption[], requestedId: string | null): InquiryDraftLine[] { return preselectInquiryProducts(products, requestedId === null ? [] : [requestedId]); }
@@ -50,10 +52,12 @@ export function mapInquiryDraft(fields: InquiryDraftFields, lines: readonly Inqu
   for (const [index, line] of lines.entries()) {
     const lineIdentity = {index, productId: line.productId};
     try { normalizeInquiryProductId(line.productId); } catch { return failure("products", "invalid", lineIdentity); }
-    if (line.palletCountText === "") return failure("palletCount", "required", lineIdentity);
-    const palletCount = parseInquiryPalletCount(line.palletCountText);
-    if (palletCount === null) return failure("palletCount", /^[1-9][0-9]*$/u.test(line.palletCountText) ? "tooLarge" : "invalid", lineIdentity);
-    items.push(Object.freeze({productId: line.productId, palletCount}));
+    if (!submitInquiryUnits.includes(line.unit)) return failure("quantityUnit", "invalid", lineIdentity);
+    if (line.unit === "packages" && locale !== "fa") return failure("quantityUnit", "invalid", lineIdentity);
+    if (line.quantityText === "") return failure("quantity", "required", lineIdentity);
+    const quantity = parseInquiryQuantity(line.quantityText);
+    if (quantity === null) return failure("quantity", /^[1-9][0-9]*$/u.test(line.quantityText) ? "tooLarge" : "invalid", lineIdentity);
+    items.push(Object.freeze({productId: line.productId, quantity, unit: line.unit}));
   }
   return Object.freeze({status: "valid", input: Object.freeze({contact: details.contact, location: details.location, destination: details.destination, message: details.message, privacy: Object.freeze({accepted: true, policyVersion: inquiryPresentationConsentVersion}), source: Object.freeze({locale, path: `/${locale}/inquiry`}), items: Object.freeze(items)})});
 }

@@ -29,7 +29,7 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
       <FooterBackground />
       <FooterCallToAction
         description={t("footer.description")}
-        contactLabel={t("footer.contact")}
+        inquiryLabel={t("footer.inquiryCta")}
         isRtl={isRtl}
       />
 

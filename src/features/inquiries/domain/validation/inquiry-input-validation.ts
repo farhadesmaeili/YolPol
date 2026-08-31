@@ -109,7 +109,7 @@ export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput, opt
 }
 
 export function normalizeInquiryQuantity(value: unknown): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 1_000_000_000) throw new InquiryValidationError("items.quantity", "Pallet count must fit the PostgreSQL Inquiry quantity constraint.");
+  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 1_000_000_000) throw new InquiryValidationError("items.quantity", "Quantity must fit the PostgreSQL Inquiry quantity constraint.");
   return value as number;
 }
 

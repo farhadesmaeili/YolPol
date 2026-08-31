@@ -12,16 +12,25 @@ describe("Export Logistics messages", () => {
     for (const locale of ["tr", "fa", "ar"] as const) expect(leafPaths(messages[locale].ExportLogistics)).toEqual(expected);
   });
   it.each([
-    ["en", "Export Logistics", "kg", "The buyer begins payment.", "The truck is released only after settlement."],
-    ["tr", "İhracat Lojistiği", "kg", "Alıcı ödemeyi başlatır.", "Kamyon yalnızca ödeme sonrası serbest bırakılır."],
-    ["fa", "لجستیک صادرات", "کیلوگرم", "خریدار پرداخت را آغاز می‌کند.", "کامیون فقط پس از تسویه آزاد می‌شود."],
-    ["ar", "لوجستيات التصدير", "كغ", "يبدأ المشتري الدفع.", "لا تغادر الشاحنة إلا بعد التسوية."],
-  ] as const)("owns navigation, units, and separate payment steps in %s", (locale, navigation, kilograms, beginsPayment, releasedAfterSettlement) => {
-    expect(messages[locale].SiteShell.navigation["export-logistics"]).toBe(navigation);
+    ["en", "Wholesale Process", "kg", "Transportation is arranged by the buyer."],
+    ["tr", "Toptan Sipariş Süreci", "kg", "Taşımacılığı alıcı ayarlar."],
+    ["fa", "فرآیند سفارش عمده", "کیلوگرم", "حمل‌ونقل را خریدار هماهنگ می‌کند."],
+    ["ar", "آلية طلبات الجملة", "كغ", "يرتب المشتري النقل."],
+  ] as const)("owns wholesale navigation, units, and equivalent buyer-arranged transport detail in %s", (locale, navigation, kilograms, buyerArrangedTransport) => {
+    expect(messages[locale].SiteShell.navigation["wholesale-process"]).toBe(navigation);
     expect(messages[locale].ExportLogistics.calculator.kilograms).toBe(kilograms);
-    expect(messages[locale].ExportLogistics.workflow.steps["4"]).toBe(beginsPayment);
-    expect(messages[locale].ExportLogistics.workflow.steps["5"]).toBe(releasedAfterSettlement);
-    expect(beginsPayment).not.toBe(releasedAfterSettlement);
+    expect(Object.keys(messages[locale].ExportLogistics.workflow.steps)).toHaveLength(10);
+    expect(messages[locale].ExportLogistics.workflow.steps["8"]).not.toBe(messages[locale].ExportLogistics.workflow.steps["9"]);
+    expect(messages[locale].ExportLogistics.calculator.disclaimer).toContain(buyerArrangedTransport);
+    expect(messages[locale].HomePage.transportationNote).toContain(buyerArrangedTransport);
+    expect(messages[locale].ExportLogistics.calculator.disclaimer.length).toBeGreaterThan(200);
+    expect(messages[locale].ExportLogistics.calculator.maximum.toLocaleLowerCase(locale)).not.toMatch(/maximum|maximumum|حداکثر|الأقصى/u);
+  });
+
+  it("does not retain the retired public navigation key", () => {
+    for (const locale of ["en", "tr", "fa", "ar"] as const) {
+      expect(messages[locale].SiteShell.navigation).not.toHaveProperty("export-logistics");
+    }
   });
 });
 

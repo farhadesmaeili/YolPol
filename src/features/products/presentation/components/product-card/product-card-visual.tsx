@@ -25,9 +25,9 @@ export function ProductCardVisual({
     <div className="relative isolate aspect-[1/1.05] overflow-hidden border-b border-stone-950/[0.08] bg-[#efeee8]">
       <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,0.95)_0%,rgba(255,255,255,0.58)_30%,rgba(231,229,221,0.62)_70%,rgba(214,211,201,0.84)_100%)]" />
       <div aria-hidden="true" className="absolute inset-0 opacity-[0.28] [background-image:linear-gradient(rgba(28,25,23,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(28,25,23,0.08)_1px,transparent_1px)] [background-size:44px_44px]" />
-      <div aria-hidden="true" className="absolute start-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-stone-950/[0.08] to-transparent" />
+      <div aria-hidden="true" className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-stone-950/[0.08] to-transparent" />
       <div aria-hidden="true" className="absolute start-0 top-1/2 h-px w-full -translate-y-1/2 bg-gradient-to-r from-transparent via-stone-950/[0.08] to-transparent" />
-      <div aria-hidden="true" className="absolute start-1/2 top-[48%] size-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-700/[0.075] blur-[55px] transition-[background-color,opacity] duration-1000 group-hover:bg-emerald-600/[0.105] motion-reduce:transition-none" />
+      <div aria-hidden="true" className="absolute left-1/2 top-[48%] size-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-700/[0.075] blur-[55px] transition-[background-color,opacity] duration-1000 group-hover:bg-emerald-600/[0.105] motion-reduce:transition-none" />
       <div aria-hidden="true" dir="ltr" className="absolute -end-3 bottom-[-0.12em] select-none text-[clamp(5rem,10vw,8rem)] font-black leading-none tracking-[-0.09em] text-stone-950/[0.035]">YP</div>
 
       <div className="absolute inset-x-5 top-5 z-30 flex items-center justify-between gap-3">

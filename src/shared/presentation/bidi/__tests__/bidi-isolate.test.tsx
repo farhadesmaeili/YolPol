@@ -9,7 +9,7 @@ import trMessages from "@/i18n/messages/tr.json";
 import {siteConfig} from "@/shared/config/site";
 
 describe("bidi presentation primitives", () => {
-  it.each(["+98 912 394 5674", "yolpol@gmail.com", "YLP-250-01"])('isolates canonical LTR value %s', (value) => expect(renderToStaticMarkup(<LtrIsolate>{value}</LtrIsolate>)).toContain(`<bdi dir="ltr"`));
+  it.each(["+98 912 394 5674", "+98 912 122 1942", "yolpol@gmail.com", "YLP-250-01"])('isolates canonical LTR value %s', (value) => expect(renderToStaticMarkup(<LtrIsolate>{value}</LtrIsolate>)).toContain(`<bdi dir="ltr"`));
   it("formats human numbers with the active locale", () => {
     expect(formatHumanNumber("en", 26000)).toBe("26,000");
     expect(formatHumanNumber("tr", 26000)).toBe("26.000");
@@ -22,6 +22,6 @@ describe("bidi presentation primitives", () => {
     expect(formatHumanNumber(locale, Number.NEGATIVE_INFINITY)).toBe("—");
   });
   it("keeps a formatted number and unit in one isolated group", () => expect(renderToStaticMarkup(<NumberUnit locale="fa" value={925} unit="kg" />)).toContain("unicode-bidi:isolate"));
-  it("preserves canonical contact and technical values", () => { expect(siteConfig.contact.phone.href).toBe("tel:+989123945674"); expect(siteConfig.contact.whatsapp.href).toBe("https://wa.me/989123945674"); expect(renderToStaticMarkup(<LtrIsolate>YLP-GB-250-01</LtrIsolate>)).toContain("YLP-GB-250-01"); });
+  it("preserves canonical contact and technical values", () => { expect(siteConfig.contact.phones.map(({href}) => href)).toEqual(["tel:+989123945674", "tel:+989121221942"]); expect(siteConfig.contact.whatsapp.href).toBe("https://wa.me/989123945674"); expect(renderToStaticMarkup(<LtrIsolate>YLP-GB-250-01</LtrIsolate>)).toContain("YLP-GB-250-01"); });
   it("contains no embedded bidi control characters in messages or contact configuration", () => expect(JSON.stringify({enMessages,trMessages,faMessages,arMessages,siteConfig})).not.toMatch(/[\u202a-\u202e\u2066-\u2069]/u));
 });

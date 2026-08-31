@@ -10,7 +10,7 @@ export const primaryNavigation = [
   {id: "home", href: "/"},
   {id: "products", href: "/products"},
   ...publicProductCategories,
-  {id: "export-logistics", href: "/export-logistics"},
+  {id: "wholesale-process", href: "/wholesale-process"},
   {id: "inquiry", href: "/inquiry"},
   {id: "about", href: "/about"},
   {id: "contact", href: "/contact"},
@@ -30,7 +30,6 @@ function requireUrl(value: string, protocols: readonly string[]): string {
 
 const brandName = "YolPol";
 const publicEmail = "yolpol@gmail.com";
-const publicPhone = "+98 912 394 5674";
 const publicWhatsapp = "+98 912 394 5674";
 
 export const siteConfig = {
@@ -40,24 +39,39 @@ export const siteConfig = {
   identity: {
     brandName,
     publicName: brandName,
-    publicLocation: "Iran – Tehran",
   },
   contact: {
     email: publicEmail,
     emailHref: requireUrl(`mailto:${publicEmail}`, ["mailto:"]),
-    phone: {
-      display: publicPhone,
-      href: requireUrl("tel:+989123945674", ["tel:"]),
-    },
+    phones: [
+      {
+        id: "mobile-primary",
+        display: "+98 912 394 5674",
+        href: requireUrl("tel:+989123945674", ["tel:"]),
+      },
+      {
+        id: "mobile-secondary",
+        display: "+98 912 122 1942",
+        href: requireUrl("tel:+989121221942", ["tel:"]),
+      },
+    ],
     whatsapp: {
       display: publicWhatsapp,
       href: requireUrl("https://wa.me/989123945674", ["https:"]),
     },
     location: {
-      en: "Tehran, Iran",
-      tr: "Tahran, İran",
-      fa: "تهران، ایران",
-      ar: "طهران، إيران",
+      summary: {
+        en: "Tehran, Iran",
+        tr: "Tahran, İran",
+        fa: "تهران، ایران",
+        ar: "طهران، إيران",
+      },
+      officeAddress: {
+        en: "No. 5, West 1st Street, Daryano, Tarasht, Tehran, Iran",
+        tr: "No: 5, Batı 1. Sokak, Daryano, Tarasht, Tahran, İran",
+        fa: "ایران، تهران، ترشت، دریانو، خیابان یکم غربی، پلاک ۵",
+        ar: "إيران، طهران، ترشت، دريانو، الشارع الأول الغربي، رقم ٥",
+      },
     },
   },
   social: {
@@ -69,8 +83,7 @@ export const siteConfig = {
 
 export const privacyPolicy = {
   publicName: siteConfig.identity.publicName,
-  publicLocation: siteConfig.identity.publicLocation,
-  lastUpdated: "2026-08-22",
+  lastUpdated: "2026-08-31",
   inquiryRetentionMonths: 24,
   securityRetentionDays: 30,
 } as const;

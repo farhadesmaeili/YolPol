@@ -10,7 +10,7 @@ export function HomeExportPalletGrid({ palletCount }: { palletCount: number }) {
           className={`${styles.pallet} relative aspect-square overflow-hidden rounded-[3px] border border-emerald-950/25 bg-emerald-900/[0.08]`}
         >
           <span className="absolute inset-x-[14%] bottom-[18%] h-px bg-emerald-950/30" />
-          <span className="absolute inset-y-[18%] start-1/2 w-px -translate-x-1/2 bg-emerald-950/[0.10]" />
+          <span className="absolute inset-y-[18%] left-1/2 w-px -translate-x-1/2 bg-emerald-950/[0.10]" />
         </span>
       ))}
       <span className={`${styles.scanner} pointer-events-none absolute inset-y-0 start-0 w-[6%] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent`} />

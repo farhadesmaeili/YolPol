@@ -43,6 +43,7 @@ describe("Staff Telegram connection UI", () => {
 
   it("renders disconnect only for the connected state and never displays raw Telegram identifiers", () => {
     const html = renderToStaticMarkup(<StaffTelegramConnection locale="en" labels={labels("en")} initialConnection={{status: "CONNECTED"}} />);
+    expect(html).toContain(`<strong class="text-emerald-800">${enMessages.Staff.telegramConnection.connected}</strong>`);
     expect(html).toContain(enMessages.Staff.telegramConnection.disconnect);
     expect(html).not.toMatch(/telegramUserId|privateChatId|teamMemberId|connectionToken|tokenLookup|tokenVerification/iu);
   });

@@ -1,4 +1,4 @@
-import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
+import {submitInquiryUnits, type SubmitInquiryInput, type SubmitInquiryUnit} from "@/features/inquiries/application/dto/inquiry-dto";
 import {contactMethods} from "@/features/inquiries/domain/types/inquiry-types";
 import {isLocale} from "@/i18n/locale";
 
@@ -11,6 +11,7 @@ const keysAllowed = (record: RecordValue, allowed: readonly string[], field: str
 const requiredString = (record: RecordValue, key: string, field: string, issues: SubmissionPayloadIssue[]): string => { const value = own(record, key); if (value === undefined) { issues.push({field, code: "missing"}); return ""; } if (typeof value !== "string") { issues.push({field, code: "invalid_type"}); return ""; } return value; };
 const optionalString = (record: RecordValue, key: string, field: string, issues: SubmissionPayloadIssue[]): string | undefined => { const value = own(record, key); if (value === undefined) return undefined; if (typeof value !== "string") { issues.push({field, code: "invalid_type"}); return undefined; } return value; };
 const section = (root: RecordValue, key: string, issues: SubmissionPayloadIssue[]): RecordValue => { const value = own(root, key); if (value === undefined) { issues.push({field: key, code: "missing"}); return {}; } if (!plainRecord(value)) { issues.push({field: key, code: "invalid_type"}); return {}; } return value; };
+const isSubmitInquiryUnit = (value: unknown): value is SubmitInquiryUnit => typeof value === "string" && submitInquiryUnits.some((unit) => unit === value);
 
 /** Rejects unexpected keys and reconstructs a fresh, prototype-safe primitive input. */
 export function parseSubmissionPayload(value: unknown): SubmissionPayloadParseResult {
@@ -30,10 +31,31 @@ export function parseSubmissionPayload(value: unknown): SubmissionPayloadParseRe
   if (destinationValue !== undefined) { if (!plainRecord(destinationValue)) issues.push({field: "destination", code: "invalid_type"}); else { keysAllowed(destinationValue, ["country", "city"], "destination", issues); destination = {country: optionalString(destinationValue, "country", "destination.country", issues), city: optionalString(destinationValue, "city", "destination.city", issues)}; } }
   const message = optionalString(value, "message", "message", issues); const itemValues = own(value, "items"); const items: SubmitInquiryInput["items"][number][] = [];
   if (itemValues === undefined) issues.push({field: "items", code: "missing"}); else if (!Array.isArray(itemValues)) issues.push({field: "items", code: "invalid_type"}); else itemValues.forEach((candidate, index) => {
-    const field = `items.${index}`; if (!plainRecord(candidate)) { issues.push({field, code: "invalid_type"}); return; } keysAllowed(candidate, ["productId", "palletCount"], field, issues);
-    const productId = requiredString(candidate, "productId", `${field}.productId`, issues); const palletCount = own(candidate, "palletCount");
-    if (palletCount === undefined) issues.push({field: `${field}.palletCount`, code: "missing"}); else if (typeof palletCount !== "number" || !Number.isFinite(palletCount)) issues.push({field: `${field}.palletCount`, code: "invalid_type"});
-    if (typeof palletCount === "number" && Number.isFinite(palletCount)) items.push({productId, palletCount});
+    const field = `items.${index}`;
+    if (!plainRecord(candidate)) { issues.push({field, code: "invalid_type"}); return; }
+    const productId = requiredString(candidate, "productId", `${field}.productId`, issues);
+    const hasLegacyQuantity = own(candidate, "palletCount") !== undefined;
+    const hasCanonicalQuantity = own(candidate, "quantity") !== undefined || own(candidate, "unit") !== undefined;
+    if (hasLegacyQuantity && hasCanonicalQuantity) {
+      keysAllowed(candidate, ["productId", "palletCount", "quantity", "unit"], field, issues);
+      issues.push({field, code: "invalid_value"});
+      return;
+    }
+    if (hasLegacyQuantity) {
+      keysAllowed(candidate, ["productId", "palletCount"], field, issues);
+      const palletCount = own(candidate, "palletCount");
+      if (typeof palletCount !== "number" || !Number.isFinite(palletCount)) issues.push({field: `${field}.palletCount`, code: "invalid_type"});
+      else items.push({productId, palletCount});
+      return;
+    }
+    keysAllowed(candidate, ["productId", "quantity", "unit"], field, issues);
+    const quantity = own(candidate, "quantity");
+    const unit = own(candidate, "unit");
+    if (quantity === undefined) issues.push({field: `${field}.quantity`, code: "missing"});
+    else if (typeof quantity !== "number" || !Number.isFinite(quantity)) issues.push({field: `${field}.quantity`, code: "invalid_type"});
+    if (unit === undefined) issues.push({field: `${field}.unit`, code: "missing"});
+    else if (!isSubmitInquiryUnit(unit)) issues.push({field: `${field}.unit`, code: "invalid_value"});
+    if (typeof quantity === "number" && Number.isFinite(quantity) && isSubmitInquiryUnit(unit)) items.push({productId, quantity, unit});
   });
   const result: SubmitInquiryInput = {contact: {fullName: requiredString(contact, "fullName", "contact.fullName", issues), company: optionalString(contact, "company", "contact.company", issues), email: requiredString(contact, "email", "contact.email", issues), phone: requiredString(contact, "phone", "contact.phone", issues), whatsappPhone: optionalString(contact, "whatsappPhone", "contact.whatsappPhone", issues), telegramUsername: optionalString(contact, "telegramUsername", "contact.telegramUsername", issues), preferredMethods}, location: {country: requiredString(location, "country", "location.country", issues), city: optionalString(location, "city", "location.city", issues)}, destination, message, privacy: {accepted: accepted as boolean, policyVersion: requiredString(privacy, "policyVersion", "privacy.policyVersion", issues)}, source: {locale: locale as SubmitInquiryInput["source"]["locale"], path: requiredString(source, "path", "source.path", issues)}, items};
   return issues.length ? {status: "failure", issues: Object.freeze(issues.map((issue) => Object.freeze(issue)))} : {status: "success", value: result};

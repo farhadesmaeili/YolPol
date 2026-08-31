@@ -89,7 +89,7 @@ describe("active navigation resolution", () => {
     ["/products/olive-oil", "/products/olive-oil"],
     ["/products/olive-oil/bottle", "/products/olive-oil"],
     ["/products/verified-bottle", "/products"],
-    ["/export-logistics", "/export-logistics"],
+    ["/wholesale-process", "/wholesale-process"],
   ])("resolves %s to %s", (pathname, expected) => {
     expect(resolveActiveNavigationHref(pathname, navigationItems)).toBe(expected);
   });
@@ -137,6 +137,11 @@ describe("localized navigation data", () => {
 
   it("keeps decorative mobile indices out of the accessibility tree", () => {
     expect(navigationSource).toMatch(/aria-hidden="true"[\s\S]*?padStart\(2, "0"\)/u);
+  });
+
+  it("centers the desktop active marker independently of text direction", () => {
+    expect(navigationSource).toContain("left-1/2 size-2 -translate-x-1/2");
+    expect(navigationSource).not.toContain("start-1/2 size-2 -translate-x-1/2");
   });
 });
 

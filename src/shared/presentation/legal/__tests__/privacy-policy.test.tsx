@@ -19,13 +19,14 @@ describe("localized Privacy Policy",()=>{
     expect(html).toContain(messages.ActiveInquiryPrivacy.heading);
     expect(html).toContain(messages.InquiryPrivacyInventory.heading);
     for(const section of [messages.InquiryPrivacyInventory.customer,messages.InquiryPrivacyInventory.product,messages.InquiryPrivacyInventory.evidence]) for(const disclosure of Object.values(section)) expect(html).toContain(htmlText(disclosure));
-    expect(html).toContain(privacyPolicy.publicName); expect(html).toContain(privacyPolicy.publicLocation);
+    expect(html).toContain(privacyPolicy.publicName); expect(html).toContain(siteConfig.contact.location.summary[locale as keyof typeof locales]);
     expect(html).toContain(`href="${siteConfig.contact.emailHref}"`); expect(html).toContain(`<time dateTime="${privacyPolicy.lastUpdated}"`);
   });
   it("states storage, enforced retention policy, absent metadata, cookies, and analytics accurately",()=>{
     const policy=JSON.stringify({privacy:en.PrivacyPage,active:en.ActiveInquiryPrivacy,inventory:en.InquiryPrivacyInventory});
-    expect(policy).toContain("PostgreSQL"); expect(policy).toContain("up to 24 months"); expect(policy).toContain("does not currently collect separate IP-address");
-    expect(policy).toContain("NEXT_LOCALE"); expect(policy).toContain("No website analytics platform is active");
+    expect(policy).toContain("securely transmitted"); expect(policy).toContain("up to 24 months"); expect(policy).toContain("does not currently collect separate IP-address");
+    expect(policy).toContain("internal operational notifications"); expect(policy).toContain("Telegram"); expect(policy).toContain("third-party communication infrastructure");
+    expect(policy).toContain("NEXT_LOCALE"); expect(policy).toContain("No website analytics platform is currently active");
   });
   it("keeps equivalent active policy structures in every locale",()=>{
     const shape=(value:unknown):string=>typeof value!=="object"||value===null?typeof value:Object.keys(value).sort().map(key=>`${key}:${shape((value as Record<string,unknown>)[key])}`).join("|");
@@ -39,6 +40,7 @@ describe("localized Privacy Policy",()=>{
   it("contains no stale inactive-submission or prohibited legal claims",()=>{
     const publicCopy=JSON.stringify(Object.values(locales));
     expect(publicCopy).not.toMatch(/submission is not active|submission is unavailable|does not persist|only locally|secure online submission is not active/iu);
+    expect(publicCopy).not.toMatch(/does not (?:send|generate)[^.]*Telegram/iu);
     expect(publicCopy).not.toMatch(/GDPR compliant|CCPA compliant|Data Protection Officer|registered company|ISO certified|absolute security/iu);
     const sources=["src/app/[locale]/privacy/page.tsx","src/shared/presentation/legal/privacy-policy.tsx","src/app/[locale]/inquiry/page.tsx"].map(path=>readFileSync(path,"utf8")).join("\n");
     expect(sources).not.toMatch(/gtag\(|googletagmanager|analytics\.js|umami\.is|data-website-id/iu);

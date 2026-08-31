@@ -15,7 +15,7 @@ export function HeaderBrand({ homeLabel }: { homeLabel: string }) {
           aria-hidden="true"
           className="absolute -inset-1.5 animate-[spin_18s_linear_infinite] rounded-full border border-transparent border-t-emerald-800/35 opacity-0 transition-opacity duration-500 group-hover:opacity-100 motion-reduce:animate-none motion-reduce:transition-none"
         >
-          <span className="absolute start-1/2 top-[-2px] size-1.5 -translate-x-1/2 rounded-full bg-emerald-800" />
+          <span className="absolute left-1/2 top-[-2px] size-1.5 -translate-x-1/2 rounded-full bg-emerald-800" />
         </div>
         <div
           aria-hidden="true"

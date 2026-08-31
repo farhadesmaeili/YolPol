@@ -390,6 +390,28 @@ describe("PostgresInquiryRepository", () => {
     ]);
   });
 
+  it("persists canonical Persian pallet and Package quantities without conversion", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const handler = createInquiryRequestHandler(() => createInquirySubmission(repository));
+    const payload = {
+      contact: {fullName:"Integration Customer",email:"integration@example.test",phone:"989123456789",preferredMethods:["email"]},
+      location: {country:"IR"},
+      privacy: {accepted:true,policyVersion:"inquiry-contact-consent-v2"},
+      source: {locale:"fa",path:"/fa/inquiry"},
+      items: [
+        {productId:"ylp-gb-250-og-rd",quantity:4,unit:"pallets"},
+        {productId:"ylp-gb-250-cl-rd",quantity:37,unit:"packages"},
+      ],
+    };
+    const response = await handler(new Request("http://localhost/api/inquiries", {method:"POST",headers:{"Content-Type":"application/json",Origin:"http://localhost:3000",Host:"localhost:3000"},body:JSON.stringify(payload)}));
+    expect(response.status).toBe(201);
+    const rows = await pool.query<{position:number;product_id:string;quantity:number;unit:string}>("select position,product_id,quantity,unit from inquiry_items order by position");
+    expect(rows.rows).toEqual([
+      {position:0,product_id:"ylp-gb-250-og-rd",quantity:4,unit:"pallets"},
+      {position:1,product_id:"ylp-gb-250-cl-rd",quantity:37,unit:"packages"},
+    ]);
+  });
+
   it.each([
     {items:[]},
     {items:[{productId:"unknown-product",quantity:1,unit:"pieces"}]},
@@ -566,7 +588,7 @@ describe("PostgresInquiryRepository", () => {
     expect(restored?.updatedAt.toISOString()).toBe("2026-01-03T04:05:06.789Z");
   });
 
-  it("preserves legacy persisted units while new submissions remain pallet-only", async () => {
+  it("preserves all historical persisted units during repository round trips", async () => {
     const items = (["pieces", "packages", "pallets", "truckloads"] as const).map((unit, index) => item(index + 1, unit));
     const inquiry = new InquiryTestBuilder().with({id: "ordered-inquiry", items}).buildReconstituted();
     await repository.save(inquiry);

@@ -79,7 +79,7 @@ export function StaffTelegramConnection({locale, labels, initialConnection}: Rea
     <section aria-labelledby="staff-telegram-connection-title" className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
       <h2 id="staff-telegram-connection-title" className="text-lg font-bold">{labels.title}</h2>
       <p className="mt-2 text-sm leading-6 text-stone-600">{labels.description}</p>
-      <p className="mt-4 text-sm"><span className="text-stone-500">{labels.status}: </span><strong>{statusLabel}</strong></p>
+      <p className="mt-4 text-sm"><span className="text-stone-500">{labels.status}: </span><strong className={connection?.status === "CONNECTED" ? "text-emerald-800" : undefined}>{statusLabel}</strong></p>
 
       {connection?.status === "PENDING" ? (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import {Fragment, type ReactNode} from "react";
 
 import { siteConfig } from "@/shared/config/site";
 import { LtrIsolate } from "@/shared/presentation/bidi/bidi-isolate";
@@ -31,11 +31,15 @@ export function FooterContact({ labels, isRtl, locale }: { labels: FooterContact
             <span aria-hidden="true" className="shrink-0 text-stone-400">↗</span>
           </a>
           <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
-          <a href={siteConfig.contact.phone.href} className={contactLinkClass}>
-            <LtrIsolate>{siteConfig.contact.phone.display}</LtrIsolate>
-            <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-emerald-800" />
-          </a>
-          <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
+          {siteConfig.contact.phones.map((phone) => (
+            <Fragment key={phone.id}>
+              <a href={phone.href} className={contactLinkClass}>
+                <LtrIsolate>{phone.display}</LtrIsolate>
+                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-emerald-800" />
+              </a>
+              <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
+            </Fragment>
+          ))}
           <a href={siteConfig.contact.whatsapp.href} target="_blank" rel="noopener noreferrer" className={contactLinkClass}>
             <span>{labels.whatsapp}</span>
             <LtrIsolate className="shrink-0">{siteConfig.contact.whatsapp.display}</LtrIsolate>
@@ -43,7 +47,7 @@ export function FooterContact({ labels, isRtl, locale }: { labels: FooterContact
           <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
           <div className="py-2">
             <p className="text-xs font-medium text-stone-400">{labels.location}</p>
-            <p className="mt-2 max-w-xs break-words leading-6 text-stone-700">{siteConfig.contact.location[locale]}</p>
+            <p className="mt-2 max-w-xs break-words leading-6 text-stone-700">{siteConfig.contact.location.summary[locale]}</p>
           </div>
         </address>
       </div>

@@ -33,13 +33,13 @@ export function ProductPackaging({
   ] as const;
 
   return (
-    <section aria-labelledby="product-packaging-heading">
+    <section aria-labelledby="product-packaging-heading" className="text-start">
       <h2 id="product-packaging-heading" className="text-2xl font-semibold text-stone-950">
         {labels.heading}
       </h2>
       <dl className="mt-5 divide-y divide-stone-200 border-y border-stone-200">
         {rows.map(([label, value]) => (
-          <div key={label} className="grid gap-1 py-4 sm:grid-cols-2 sm:gap-6">
+          <div key={label} className="grid gap-1 py-4 text-start sm:grid-cols-2 sm:gap-6">
             <dt className="font-medium text-stone-700">{label}</dt>
             <dd className="text-stone-950">{value}</dd>
           </div>

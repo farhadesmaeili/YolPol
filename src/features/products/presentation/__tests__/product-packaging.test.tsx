@@ -15,7 +15,7 @@ const packaging = {
 };
 
 describe("public Product packaging", () => {
-  it("renders all approved fields including derived truck capacity", () => {
+  it("renders all approved fields with reference-load terminology", () => {
     const html = renderToStaticMarkup(
       <ProductPackaging
         packaging={packaging}
@@ -25,14 +25,14 @@ describe("public Product packaging", () => {
           unitsPerPackage: "Units per package",
           packagesPerPallet: "Packages per pallet",
           unitsPerPallet: "Units per pallet",
-          unitsPerTruck: "Units per truck",
+          unitsPerTruck: "Units per 26-pallet reference load",
           palletGrossWeight: "Gross pallet weight",
           kilograms: "kg",
         }}
       />,
     );
     expect(html).toContain("116,480");
-    expect(html).toContain("Units per truck");
+    expect(html).toContain("Units per 26-pallet reference load");
     expect(html).not.toMatch(/180000|230000|350000|IRR|priceCurrency|offers/u);
   });
 
@@ -68,5 +68,17 @@ describe("public Product packaging", () => {
       expect(Object.keys(messages.ProductPackaging).sort()).toEqual(keys);
       expect(Object.values(messages.ProductPackaging).every(Boolean)).toBe(true);
     }
+  });
+
+  it.each([
+    ["en", "Units per 26-pallet reference load"],
+    ["tr", "26 paletlik referans yük başına adet"],
+    ["fa", "تعداد در هر بار مرجع ۲۶ پالتی"],
+    ["ar", "الوحدات في حمولة مرجعية من ٢٦ منصة"],
+  ] as const)("avoids absolute truck-capacity wording in %s", (locale, expected) => {
+    const messages = JSON.parse(
+      readFileSync(`src/i18n/messages/${locale}.json`, "utf8"),
+    ) as {ProductPackaging: Record<string, string>};
+    expect(messages.ProductPackaging.unitsPerTruck).toBe(expected);
   });
 });
