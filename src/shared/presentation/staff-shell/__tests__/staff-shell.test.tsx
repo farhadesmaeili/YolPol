@@ -33,6 +33,7 @@ const principal: StaffPrincipal = {
 
 const labels: StaffShellLabels = {
   changeLanguage: "Change language",
+  aiOperations: "AI Operations",
   dashboard: "Dashboard",
   inquiries: "Inquiries",
   logout: "Log out",
@@ -54,6 +55,8 @@ const capabilities = {
   mayReplyToCustomerConversation: true,
   mayPublishStaffTyping: true,
   mayUpdateInquiryWorkflow: true,
+  mayViewAiOperations: true,
+  mayManageAiOperations: true,
   mayManageTeam: true,
   mayCreateStaffInvitation: true,
   mayDeactivateStaffMember: true,

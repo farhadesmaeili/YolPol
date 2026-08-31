@@ -65,6 +65,8 @@ export interface StaffAuthorization {
   mayReplyToCustomerConversation(principal: StaffPrincipal): boolean;
   mayPublishStaffTyping(principal: StaffPrincipal): boolean;
   mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean;
+  mayViewAiOperations(principal: StaffPrincipal): boolean;
+  mayManageAiOperations(principal: StaffPrincipal): boolean;
   mayManageTeam(principal: StaffPrincipal): boolean;
   mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean;
   mayDeactivateStaffMember(principal: StaffPrincipal, target: Readonly<{staffAccountId: string; role: StaffRole; active: boolean}>): boolean;

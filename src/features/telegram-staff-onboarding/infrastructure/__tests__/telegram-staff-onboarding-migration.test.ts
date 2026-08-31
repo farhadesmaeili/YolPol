@@ -38,8 +38,8 @@ describe("Telegram Staff onboarding migration", () => {
     expect(migration).not.toContain("communication_recipients");
 
     const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8")) as {entries: {idx: number; tag: string}[]};
-    expect(journal.entries[journal.entries.length - 2]).toMatchObject({idx: 12, tag: "0012_staff_invitations"});
-    expect(journal.entries[journal.entries.length - 1]).toMatchObject({idx: 13, tag: "0013_telegram_staff_onboarding"});
+    expect(journal.entries.find(({idx}) => idx === 12)).toMatchObject({idx: 12, tag: "0012_staff_invitations"});
+    expect(journal.entries.find(({idx}) => idx === 13)).toMatchObject({idx: 13, tag: "0013_telegram_staff_onboarding"});
     const snapshot = JSON.parse(await readFile("drizzle/meta/0013_snapshot.json", "utf8")) as {tables: Record<string, unknown>};
     expect(snapshot.tables).toHaveProperty("public.telegram_staff_links");
     expect(snapshot.tables).toHaveProperty("public.telegram_connection_requests");

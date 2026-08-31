@@ -36,6 +36,7 @@ export default async function ProtectedStaffLayout({children, params}: Protected
       capabilities={access.capabilities}
       labels={{
         dashboard: t("navigation.dashboard"),
+        aiOperations: t("navigation.aiOperations"),
         inquiries: t("navigation.inquiries"),
         team: t("navigation.team"),
         navigation: t("navigation.label"),
