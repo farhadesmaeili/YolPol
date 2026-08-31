@@ -5,6 +5,8 @@ export type StaffCapabilities = Readonly<{
   mayReplyToCustomerConversation: boolean;
   mayPublishStaffTyping: boolean;
   mayUpdateInquiryWorkflow: boolean;
+  mayViewAiOperations: boolean;
+  mayManageAiOperations: boolean;
   mayManageTeam: boolean;
   mayCreateStaffInvitation: boolean;
   mayDeactivateStaffMember: boolean;

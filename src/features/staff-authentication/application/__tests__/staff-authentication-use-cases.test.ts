@@ -128,6 +128,8 @@ describe("StaffAuthorizationPolicy", () => {
       mayReplyToCustomerConversation: mayWrite,
       mayPublishStaffTyping: mayWrite,
       mayUpdateInquiryWorkflow: mayWrite,
+      mayViewAiOperations: true,
+      mayManageAiOperations: mayManageTeam,
       mayManageTeam,
       mayCreateStaffInvitation: mayManageTeam,
       mayDeactivateStaffMember: mayManageTeam,
@@ -169,6 +171,8 @@ describe("StaffAuthorizationPolicy", () => {
     expect(policy.actorReferenceFor(admin)).toBe("staff:member-1");
     expect(policy.mayAccessStaffPanel({...admin, role: "OWNER" as never})).toBe(false);
     expect(policy.mayReplyToCustomerConversation({...admin, role: "OWNER" as never})).toBe(false);
+    expect(policy.mayViewAiOperations({...admin, actorReference: "browser:override"})).toBe(false);
+    expect(policy.mayManageAiOperations(principal("SALES"))).toBe(false);
     expect(policy.mayAccessStaffPanel({...admin, actorReference: "browser:override"})).toBe(false);
   });
 });

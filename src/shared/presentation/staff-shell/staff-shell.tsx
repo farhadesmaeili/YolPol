@@ -12,6 +12,7 @@ import type {Locale} from "@/shared/types/locale";
 
 export type StaffShellLabels = Readonly<{
   dashboard: string;
+  aiOperations: string;
   inquiries: string;
   logout: string;
   logoutError: string;
@@ -36,6 +37,7 @@ export function StaffShell({children, labels, locale, principal, capabilities}: 
   const navigation = [
     {href: "/staff" as const, label: labels.dashboard},
     {href: "/staff/inquiries" as const, label: labels.inquiries},
+    ...(capabilities.mayViewAiOperations ? [{href: "/staff/ai-operations" as const, label: labels.aiOperations}] : []),
     ...(capabilities.mayManageTeam ? [{href: "/staff/team" as const, label: labels.team}] : []),
   ];
 

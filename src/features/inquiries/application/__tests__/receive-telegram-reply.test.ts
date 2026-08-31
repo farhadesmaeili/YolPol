@@ -23,6 +23,7 @@ function capabilities(mayReplyToCustomerConversation: boolean): StaffCapabilitie
   return {
     mayAccessStaffPanel: true, mayViewInquiries: true, mayViewCustomerConversation: true, mayReplyToCustomerConversation,
     mayPublishStaffTyping: mayReplyToCustomerConversation, mayUpdateInquiryWorkflow: mayReplyToCustomerConversation,
+    mayViewAiOperations: true, mayManageAiOperations: false,
     mayManageTeam: false, mayCreateStaffInvitation: false, mayDeactivateStaffMember: false,
     mayReactivateStaffMember: false, mayChangeStaffRole: false, mayAssignAdminRole: false, mayAssignSuperAdminRole: false,
   };

@@ -32,6 +32,8 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
 
   mayPublishStaffTyping(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
   mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
+  mayViewAiOperations(principal: StaffPrincipal): boolean { return this.valid(principal); }
+  mayManageAiOperations(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
   mayManageTeam(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
 
   mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean {
@@ -66,6 +68,8 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
       mayReplyToCustomerConversation: this.mayReplyToCustomerConversation(principal),
       mayPublishStaffTyping: this.mayPublishStaffTyping(principal),
       mayUpdateInquiryWorkflow: this.mayUpdateInquiryWorkflow(principal),
+      mayViewAiOperations: this.mayViewAiOperations(principal),
+      mayManageAiOperations: this.mayManageAiOperations(principal),
       mayManageTeam,
       mayCreateStaffInvitation: mayManageTeam,
       mayDeactivateStaffMember: mayManageTeam,
