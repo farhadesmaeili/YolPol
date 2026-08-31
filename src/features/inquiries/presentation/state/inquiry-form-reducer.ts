@@ -1,6 +1,7 @@
 import type {PreferredContactMethod} from "@/features/inquiries/domain/types/inquiry-types";
 import type {InquiryDraftFields} from "@/features/inquiries/presentation/parsers/inquiry-draft-mapper";
 import type {InquiryDraftFailure, InquiryDraftLine} from "@/features/inquiries/presentation/view-models/inquiry-form-view-model";
+import type {SubmitInquiryUnit} from "@/features/inquiries/application/dto/inquiry-dto";
 
 export type InquiryFormFeedback = "idle" | "invalid" | "submitting" | "succeeded" | "failed";
 export type InquirySubmissionFailureKind = "service" | "timeout" | "rate_limited";
@@ -14,8 +15,9 @@ export type InquiryFormAction =
   | Readonly<{type: "select_pending_product"; productId: string}>
   | Readonly<{type: "add_product"; availableIds: readonly string[]}>
   | Readonly<{type: "remove_product"; productId: string}>
-  | Readonly<{type: "change_product"; index: number; productId: string}>
-  | Readonly<{type: "change_pallet_count"; index: number; value: string}>
+  | Readonly<{type: "change_product"; index: number; productId: string; availableUnits: readonly SubmitInquiryUnit[]}>
+  | Readonly<{type: "change_quantity"; index: number; value: string}>
+  | Readonly<{type: "change_unit"; index: number; unit: SubmitInquiryUnit}>
   | Readonly<{type: "apply_preselection"; lines: readonly InquiryDraftLine[]}>
   | Readonly<{type: "validation_failed"; failure: InquiryDraftFailure}>
   | Readonly<{type: "submission_started"}>
@@ -43,11 +45,15 @@ export function inquiryFormReducer(state: InquiryFormState, action: InquiryFormA
     case "add_product": {
       const productId = state.pendingProductId;
       if (!productId || !action.availableIds.includes(productId) || state.lines.some((line) => line.productId === productId)) return state;
-      return edited(state, {lines: Object.freeze([...state.lines, Object.freeze({productId, palletCountText: ""})]), pendingProductId: ""});
+      return edited(state, {lines: Object.freeze([...state.lines, Object.freeze({productId, quantityText: "", unit: "pallets" as const})]), pendingProductId: ""});
     }
     case "remove_product": return edited(state, {lines: Object.freeze(state.lines.filter((line) => line.productId !== action.productId)), pendingProductId: ""});
-    case "change_product": return updateLine(state, action.index, {productId: action.productId});
-    case "change_pallet_count": return updateLine(state, action.index, {palletCountText: action.value});
+    case "change_product": {
+      const currentUnit = state.lines[action.index]?.unit ?? "pallets";
+      return updateLine(state, action.index, {productId: action.productId, unit: action.availableUnits.includes(currentUnit) ? currentUnit : "pallets"});
+    }
+    case "change_quantity": return updateLine(state, action.index, {quantityText: action.value});
+    case "change_unit": return updateLine(state, action.index, {unit: action.unit});
     case "apply_preselection": return edited(state, {lines: Object.freeze(action.lines.map((line) => Object.freeze({...line}))), pendingProductId: "", preselectionResolved: true});
     case "validation_failed": return Object.freeze({...state, feedback: "invalid", inquiryId:null, failure: action.failure, submissionFailure:null});
     case "submission_started": return state.feedback === "submitting" ? state : Object.freeze({...state, feedback: "submitting", inquiryId:null, failure: null, submissionFailure:null});
@@ -60,4 +66,4 @@ export function inquiryFormReducer(state: InquiryFormState, action: InquiryFormA
 export function inquiryControlId(field: InquiryDraftFailure["field"], itemIndex?: number): string { return `inquiry-${field}${itemIndex === undefined ? "" : `-${itemIndex}`}`; }
 export function inquiryErrorId(field: InquiryDraftFailure["field"], itemIndex?: number): string { return `${inquiryControlId(field, itemIndex)}-error`; }
 export function inquiryFailureFocusId(failure: InquiryDraftFailure): string { return inquiryControlId(failure.field, failure.itemIndex); }
-export function inquiryAddedProductFocusId(index: number): string { return inquiryControlId("palletCount", index); }
+export function inquiryAddedProductFocusId(index: number): string { return inquiryControlId("quantity", index); }

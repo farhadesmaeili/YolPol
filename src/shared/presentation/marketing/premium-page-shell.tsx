@@ -3,7 +3,7 @@ import type {ReactNode} from "react";
 import {Link} from "@/i18n/navigation";
 
 export function PremiumPageShell({children}: {children: ReactNode}) {
-  return <div className="relative isolate overflow-hidden bg-[#f3f1eb] text-stone-950"><div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"><div className="absolute -start-80 -top-80 size-[48rem] max-w-[90vw] rounded-full bg-emerald-700/[0.06] blur-[150px]" /><div className="absolute -end-80 top-[20%] size-[46rem] max-w-[85vw] rounded-full bg-[#d8c7a3]/20 blur-[170px]" /></div>{children}</div>;
+  return <div className="relative isolate overflow-hidden bg-[#f3f1eb] text-start text-stone-950"><div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"><div className="absolute -start-80 -top-80 size-[48rem] max-w-[90vw] rounded-full bg-emerald-700/[0.06] blur-[150px]" /><div className="absolute -end-80 top-[20%] size-[46rem] max-w-[85vw] rounded-full bg-[#d8c7a3]/20 blur-[170px]" /></div>{children}</div>;
 }
 
 export function PremiumBreadcrumbs({label, home, current}: {label: string; home: string; current: string}) {

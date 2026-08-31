@@ -21,9 +21,9 @@ export default async function AboutPage({params}: Props) {
   const {locale} = await params;
   if (!isLocale(locale)) notFound();
   setRequestLocale(locale);
-  const [t, breadcrumbs, common] = await Promise.all([getTranslations({locale, namespace: "About"}), getTranslations({locale, namespace: "Breadcrumbs"}), getTranslations({locale, namespace: "Common"})]);
+  const [t, breadcrumbs, siteShell] = await Promise.all([getTranslations({locale, namespace: "About"}), getTranslations({locale, namespace: "Breadcrumbs"}), getTranslations({locale, namespace: "SiteShell"})]);
   return (
-    <><AboutPagePresentation model={{isRtl: locale === "fa" || locale === "ar", breadcrumbLabel: breadcrumbs("label"), homeLabel: breadcrumbs("home"), eyebrow: t("eyebrow"), heading: t("heading"), introduction: t("introduction"), catalog: t("catalog"), pricing: t("pricing"), location: t("location", {location: siteConfig.contact.location[locale]}), imageAlt: t("imageAlt"), productsCta: common("viewProducts"), contactCta: t("contactCta")}} />
+    <><AboutPagePresentation model={{isRtl: locale === "fa" || locale === "ar", breadcrumbLabel: breadcrumbs("label"), homeLabel: breadcrumbs("home"), eyebrow: t("eyebrow"), heading: t("heading"), introduction: t("introduction"), catalog: t("catalog"), pricing: t("pricing"), location: t("location", {location: siteConfig.contact.location.summary[locale]}), imageAlt: t("imageAlt"), inquiryCta: t("inquiryCta"), processCta: siteShell("navigation.wholesale-process")}} />
       <JsonLdScript data={createBreadcrumbJsonLd({locale, items: [{name: breadcrumbs("home"), pathname: "/"}, {name: t("heading"), pathname: "/about"}]})} />
     </>
   );

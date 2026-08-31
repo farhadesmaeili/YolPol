@@ -1,26 +1,26 @@
 {
   "ConversationTyping": {"team":"YOLPOL Ekibi yazıyor…","customer":"Müşteri yazıyor…"},
   "CustomerChat": {"title":"Görüşmeyi sürdürün","description":"Bu talep hakkında takip mesajı gönderin.","messages":"Talep mesajları","empty":"Bu görüşmeye henüz mesaj eklenmedi.","customerAuthor":"Siz","supportAuthor":"YolPol","messageLabel":"Mesaj","messagePlaceholder":"Takip mesajınızı yazın…","send":"Mesaj gönder","sending":"Gönderiliyor…","loading":"Mesajınız gönderiliyor…","loadingHistory":"Görüşme geçmişi yükleniyor…","sent":"Mesajınız gönderildi.","errorTitle":"Mesaj gönderilemedi","historyErrorTitle":"Mesajlar yüklenemedi","errors":{"required":"Göndermeden önce bir mesaj yazın.","tooLong":"Mesajınız çok uzun.","validation":"Mesajınızı kontrol edip yeniden deneyin.","rateLimited":"Çok fazla istek yapıldı. Lütfen bekleyip yeniden deneyin.","network":"Mesajlaşma hizmetine ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.","service":"Mesajınız şu anda gönderilemedi. Lütfen yeniden deneyin.","history":"Görüşme geçmişiniz şu anda yüklenemedi. Lütfen yeniden deneyin."}},
-  "InquirySubmission": {"submit":"Talebi gönder","submitting":"Talep gönderiliyor…","succeeded":"Talebiniz başarıyla kaydedildi.","reference":"Talep referansı","invalid":"Zorunlu alanları doldurun, bir ürün seçin ve onay verin.","productUnavailable":"Seçilen ürünlerden biri kullanılamıyor. Ürün seçiminizi kontrol edip yeniden deneyin.","serviceFailure":"Talep hizmeti geçici olarak kullanılamıyor.","retry":"Bilgileriniz korundu; lütfen yeniden deneyin.","rateLimited":"Şu anda çok fazla talep gönderiliyor. Lütfen bekleyip yeniden deneyin.","timeout":"Gönderim çok uzun sürdüğü için durduruldu."},
-  "ActiveInquiryPrivacy": {"heading":"Çevrimiçi Talep gönderimi","paragraphs":{"submission":"Talep formunu gönderdiğinizde girdiğiniz bilgiler YolPol'e iletilir ve yapılandırılmış PostgreSQL veritabanında saklanır.","purpose":"YolPol, gönderilen Talep bilgilerini müşteri talebinize yanıt vermek ve talebi yönetmek için kullanır.","retention":"Talep kayıtları 24 aya kadar saklanabilir ve artık gerekli olmadığında daha erken silinebilir.","security":"Bu form şu anda ayrı IP adresi, User-Agent, hız sınırlama veya başka güvenlik metadatası toplamaz. Bu durum değişirse söz konusu metadata en fazla 30 gün saklanabilir.","delivery":"Gönderim E-posta, Telegram mesajı veya n8n bildirimi göndermez. Etkin bir web sitesi analiz platformu yoktur."}},
+  "InquirySubmission": {"submit":"Talebi gönder","submitting":"Talep gönderiliyor…","succeeded":"Toptan satış talebiniz alındı. Ekibimiz talebi inceleyip sizinle iletişime geçecektir.","reference":"Talep referansı","invalid":"Zorunlu alanları doldurun, bir ürün seçin ve onay verin.","productUnavailable":"Seçilen ürünlerden biri kullanılamıyor. Ürün seçiminizi kontrol edip yeniden deneyin.","serviceFailure":"Talep hizmeti geçici olarak kullanılamıyor.","retry":"Bilgileriniz korundu; lütfen yeniden deneyin.","rateLimited":"Şu anda çok fazla talep gönderiliyor. Lütfen bekleyip yeniden deneyin.","timeout":"Gönderim çok uzun sürdüğü için durduruldu."},
+  "ActiveInquiryPrivacy": {"heading":"Çevrimiçi toptan satış talebi","paragraphs":{"submission":"Toptan satış talep formunu gönderdiğinizde sağladığınız bilgiler YolPol'e güvenli biçimde iletilir ve talebin işlenmesi için saklanır.","purpose":"YolPol, gönderilen talep bilgilerini toptan satış talebinizi incelemek, yanıtlamak ve yönetmek için kullanır.","retention":"Talep kayıtları 24 aya kadar saklanabilir ve artık gerekli olmadığında daha erken silinebilir.","security":"Bu form şu anda ayrı IP adresi, User-Agent, hız sınırlama veya başka güvenlik metadatası toplamaz. Bu durum değişirse söz konusu metadata en fazla 30 gün saklanabilir.","delivery":"Gönderilen talepler, talep işlemlerini desteklemek amacıyla Telegram dahil yapılandırılmış iletişim kanalları üzerinden yetkili YOLPOL Personeline yönelik kurum içi operasyonel bildirimler oluşturabilir. Bu nedenle gönderilen bilgilerin bir bölümü, iç operasyonlarda kullanılan yapılandırılmış üçüncü taraf iletişim altyapısı üzerinden işlenebilir."}},
   "InquiryPrivacyInventory": {"heading":"Sakladığımız Talep bilgileri","customerHeading":"Sağladığınız bilgiler","customer":{"contact":"Ad soyad, e-posta adresi, ana telefon, seçilen iletişim yöntemleri, koşullu WhatsApp numarası ve Telegram kullanıcı adı ile isteğe bağlı şirket adı.","location":"Seçilen ülkeniz ve isteğe bağlı şehriniz ile isteğe bağlı seçilen varış ülkesi ve şehri.","request":"İsteğe bağlı mesaj ve seçilen her Ürün için Ürün kimliği ve palet sayısı."},"productHeading":"YolPol tarafından doğrulanan Ürün bilgileri","product":{"snapshot":"YolPol, seçilen her Ürün için doğrulanmış Ürün kimliğini, SKU'yu, Ürün kısa adını ve yerelleştirilmiş Ürün adını saklar."},"evidenceHeading":"Gönderim ve onay kanıtı","evidence":{"context":"Etkin dil ve yerelleştirilmiş kaynak yolu.","consent":"Onay durumu, onay zamanı ve Gizlilik Politikası sürümü.","system":"Sunucu tarafından oluşturulan Talep kimliği, oluşturulma zamanı ve güncellenme zamanı."}},
   "InquiryProductSelection": {"emptyTitle":"Henüz ürün eklenmedi","emptyDescription":"Bir veya daha fazla ürün seçin ve her biri için istenen palet sayısını girin.","selectProduct":"Ürün seçin","productPlaceholder":"Bir ürün seçin","addProduct":"Ürün ekle","addAnotherProduct":"Başka bir ürün ekle","allProductsAdded":"Tüm mevcut ürünler eklendi."},
-  "InquiryFormCorrections": {"palletCountRequiredLabel":"Palet sayısı (zorunlu)","invalidField":"Bu alan için geçerli bir değer girin.","phoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası telefon numarası girin.","whatsappPhoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası WhatsApp numarası girin.","telegramUsernameInvalid":"@ ile başlayan geçerli bir Telegram kullanıcı adı girin.","preferredContactRequired":"En az bir tercih edilen iletişim yöntemi seçin.","palletCountRequired":"Palet sayısını girin.","palletCountInvalid":"Pozitif bir tam sayı palet sayısı girin.","palletCountTooLarge":"Palet sayısı çok büyük.","productsRequired":"En az bir kullanılabilir ürün seçin.","privacyRequired":"Talebi hazırlamak için onay gereklidir.","destinationDependency":"Varış şehri girildiğinde varış ülkesini seçin."},
+  "InquiryFormCorrections": {"palletCountRequiredLabel":"Palet sayısı (zorunlu)","quantityRequiredLabel":"Miktar (zorunlu)","quantityUnitLabel":"Birim","invalidField":"Bu alan için geçerli bir değer girin.","phoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası telefon numarası girin.","whatsappPhoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası WhatsApp numarası girin.","telegramUsernameInvalid":"@ ile başlayan geçerli bir Telegram kullanıcı adı girin.","preferredContactRequired":"En az bir tercih edilen iletişim yöntemi seçin.","quantityRequired":"Miktarı girin.","quantityInvalid":"Pozitif bir tam sayı miktarı girin.","quantityTooLarge":"Miktar çok büyük.","quantityUnitInvalid":"Geçerli bir miktar birimi seçin.","productsRequired":"En az bir kullanılabilir ürün seçin.","privacyRequired":"Talebi hazırlamak için onay gereklidir.","destinationDependency":"Varış şehri girildiğinde varış ülkesini seçin."},
   "ExportLogistics": {
     "metadata": {
-      "title": "İhracat Lojistiği ve Palet Planlama | YolPol",
-      "description": "Doğrulanmış ambalaj profilleriyle palet bazlı ihracat yükü planlayın."
+      "title": "Toptan Sipariş ve Referans Yük Planlama | YolPol",
+      "description": "Toptan sipariş, yükleme ve alıcının ayarladığı taşımacılık sürecini, cam ambalaj için referans palet planlamasıyla birlikte inceleyin."
     },
-    "eyebrow": "İhracat lojistiği",
-    "heading": "İhracat yük planlama",
-    "introduction": "Doğrulanmış ambalaj profiline sahip ürünlerle karma palet yükü planlayın.",
+    "eyebrow": "B2B toptan sipariş süreci",
+    "heading": "Toptan Sipariş Süreci",
+    "introduction": "Toptan sipariş, yükleme ve alıcının ayarladığı taşımacılığın nasıl yürüdüğünü öğrenin.",
     "capacity": {
-      "heading": "Kamyon kapasitesi",
-      "text": "Planlama sınırı 26 palet ve 26.000 kg brüt ağırlıktır. Sınıra eşit yük kabul edilir."
+      "heading": "Referans yük planlaması",
+      "text": "Standart treyler için referans yapılandırma 26 palet ve yaklaşık 26.000 kg planlama zarfı kullanır. Gerçek araç kapasitesi ile yasal, dingil, yol, taşıyıcı, gümrük ve sınır limitleri değişebilir."
     },
     "method": {
       "heading": "Hesaplama yöntemi",
-      "text": "Yalnızca tam palet girin. Paket, şişe ve ağırlık doğrulanmış profilden hesaplanır."
+      "text": "Yalnızca tam palet girin. Paket, şişe ve brüt ağırlık, referans planlama amacıyla doğrulanmış Ürün profillerinden hesaplanır."
     },
     "calculator": {
       "heading": "Palet yük hesaplayıcı",
@@ -33,14 +33,14 @@
       "units": "Şişe adedi",
       "weight": "Brüt ağırlık",
       "totals": "Yük toplamları",
-      "maximum": "azami",
+      "maximum": "referans",
       "remaining": "Kalan",
-      "feasible": "Planlama sınırları içinde",
-      "palletExceeded": "Palet sınırı aşıldı",
-      "weightExceeded": "Ağırlık sınırı aşıldı",
-      "bothExceeded": "Palet ve ağırlık sınırları aşıldı",
+      "feasible": "Referans planlama zarfı içinde",
+      "palletExceeded": "Referans palet sayısı aşıldı",
+      "weightExceeded": "Referans brüt ağırlık zarfı aşıldı",
+      "bothExceeded": "Referans palet sayısı ve brüt ağırlık zarfı aşıldı",
       "invalid": "Geçerli bir yük planı girin",
-      "disclaimer": "Bu planlama hesabı doğrulanmış palet profillerini kullanır. Nihai yükleme ve araç uygunluğu operasyonel olarak teyit edilmelidir.",
+      "disclaimer": "Bu hesaplama yalnızca 26 paletlik referans yük içindir; navlun teklifi, taşıyıcı kabulü, gümrük garantisi veya teslimat vaadi değildir. Gerçek araç kapasitesi ile yasal, dingil, yol, taşıyıcı, gümrük ve sınır limitleri değişebilir. Taşımacılığı alıcı ayarlar.",
       "insufficientData": "Seçilen bir Ürün için doğrulanmış ambalaj verisi bulunmuyor.",
       "arithmeticOverflow": "Yük güvenli biçimde hesaplanamayacak kadar büyük.",
       "kilograms": "kg"
@@ -50,26 +50,30 @@
       "text": "Doğrulanmış ambalaj profili bulunmadığından tahmin yapılmaz."
     },
     "workflow": {
-      "heading": "Alıcının ayarladığı taşıma süreci",
+      "heading": "Toptan sipariş süreci nasıl işler",
       "steps": {
-        "1": "Alıcı kamyonu ayarlar.",
-        "2": "Kamyon depoya gelir.",
-        "3": "Sürücü yükü alıcıya teyit eder.",
-        "4": "Alıcı ödemeyi başlatır.",
-        "5": "Kamyon yalnızca ödeme sonrası serbest bırakılır.",
-        "6": "Uluslararası çıkış işlemlerini nakliyeci yürütür."
+        "1": "Alıcı ürünleri inceler ve seçer.",
+        "2": "Alıcı toptan satış talebi gönderir.",
+        "3": "Ürün özellikleri, miktar ve ticari koşullar görüşülerek onaylanır.",
+        "4": "Alıcı aracı ve taşımacılığı ayarlar.",
+        "5": "Alıcının ayarladığı araç yükleme noktasına gelir.",
+        "6": "Uygun olduğunda alıcı veya sürücü temsilcisi hazırlanan yükü inceleyebilir.",
+        "7": "Yükleme tamamlanır.",
+        "8": "Ödeme veya onaylanmış diğer ticari koşullar, kararlaştırılan düzenlemeye göre yük serbest bırakılmadan önce tamamlanır.",
+        "9": "Yük serbest bırakılır.",
+        "10": "Sonraki taşıma alıcının sorumluluğunda kalır."
       }
     },
     "limitations": {
-      "heading": "Önemli sınırlamalar",
-      "text": "Bu sayfa rezervasyon, navlun teklifi, hukuki belge, gümrük garantisi veya teslimat vaadi değildir."
+      "heading": "Planlama sınırlamaları",
+      "text": "Hesaplayıcı ticari bir planlama referansıdır; taşıyıcı rezervasyonu, navlun teklifi, hukuki taşıma belgesi, gümrük garantisi veya teslimat vaadi değildir."
     },
-    "contactCta": "YolPol ile iletişime geçin",
+    "contactCta": "Toptan Teklif İsteyin",
     "listingFailure": "Ürün ambalaj bilgileri geçici olarak kullanılamıyor."
   },
   "Common": {"viewProducts": "Ürünleri görüntüle", "contactUs": "Bize ulaşın"},
-  "HomePage": {"eyebrow":"Toplu cam şişe tedariki","heading":"Uluslararası B2B pazarları için cam şişeler","description":"Zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili YolPol cam şişelerini toplu uluslararası talepler için inceleyin.","imageAlt":"Toplu sunum için hazırlanan şeffaf ve zeytin yeşili YolPol cam şişeleri","glassExport":"Cam / ihracat","exportPlanning":"İhracat planlama","referenceConfiguration":"Referans yapılandırma","capacityTitle":"26 palet planlama kapasitesi","capacityDescription":"Standart palet yapılandırması için doğrulanmış planlama sınırları.","pallets":"Palet","palletLayout":"Palet düzeni","maximumGrossWeight":"Azami brüt ağırlık","tradeMode":"Ticaret modeli","exportLabel":"İhracat","capacitySummary":"13'e 2 düzende 26 palet ve azami 26.000 kilogram brüt ağırlık içeren referans ihracat yapılandırması.","kilograms":"kg","planningLimit":"Doğrulanmış planlama sınırı","networkLabel":"Uluslararası B2B","technicalIndex":"Teknik indeks"},
-  "Metadata": {"title": "YolPol | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğunu keşfedin."},
+  "HomePage": {"eyebrow":"B2B toptan ürün tedariki ve arzı","heading":"Uluslararası B2B alıcılar için toptan tedarik","description":"YolPol, ticari alıcıların talep bazlı bir ticari tedarik süreciyle toplu ürün temin etmesine yardımcı olur.","catalog":"Mevcut kataloğumuz toplu boş cam şişeler ve cam ambalajlara odaklanır.","imageAlt":"Toplu sunum için hazırlanan şeffaf ve zeytin yeşili YolPol cam şişeleri","inquiryCta":"Toptan Teklif İsteyin","productsCta":"Ürünleri İnceleyin","glassExport":"B2B / toptan","exportPlanning":"Referans yük planlaması","referenceConfiguration":"Referans yük","capacityTitle":"26 paletlik referans yük","capacityDescription":"Ticari planlama için standart treyler referans yapılandırması.","pallets":"Palet","palletLayout":"Palet düzeni","maximumGrossWeight":"Yaklaşık planlama zarfı","tradeMode":"Ticari model","exportLabel":"Toptan Sipariş Süreci","capacitySummary":"13'e 2 düzende yerleştirilen 26 palet ve yaklaşık 26.000 kilogramlık planlama zarfından oluşan referans yük yapılandırması. Gerçek araç kapasitesi ile yasal, dingil, yol, taşıyıcı, gümrük ve sınır limitleri değişebilir. Taşımacılığı alıcı ayarlar.","kilograms":"kg","planningLimit":"Yalnızca referans","transportationNote":"Taşımacılığı alıcı ayarlar. Gerçek araç kapasitesi ile yasal, dingil, yol, taşıyıcı, gümrük ve sınır limitleri değişebilir.","networkLabel":"Uluslararası B2B","technicalIndex":"Yük referansı"},
+  "Metadata": {"title": "YolPol | B2B Toptan Tedarikçi", "description": "YolPol, uluslararası ticari alıcılara talep bazlı toptan ürün tedariki ve arzı sunar. Mevcut katalog, toplu boş cam şişeler ve cam ambalajlara odaklanır."},
   "Products": {
     "metadata": {"title": "Zeytinyağı, Gıda ve İçecekler için Cam Şişeler | YolPol", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili cam şişe kataloğunu keşfedin. Ürün fiyatları talep üzerine sunulur."},
     "heading": "Zeytinyağı, Gıda ve İçecekler için Cam Şişeler",
@@ -101,6 +105,7 @@
   },
   "SiteShell": {
     "homeLabel": "YolPol ana sayfası",
+    "skipToContent": "Ana içeriğe geç",
     "primaryLabel": "Ana navigasyon",
     "openMenu": "Navigasyon menüsünü aç",
     "closeMenu": "Navigasyon menüsünü kapat",
@@ -113,7 +118,7 @@
       "beverage": "İçecek",
       "about": "Hakkımızda",
       "contact": "İletişim",
-      "export-logistics": "İhracat Lojistiği",
+      "wholesale-process": "Toptan Sipariş Süreci",
       "inquiry": "Teklif isteyin"
     },
     "locales": {
@@ -123,12 +128,13 @@
       "ar": "Arapça"
     },
     "footer": {
-      "description": "Zeytinyağı, gıda ve içecek uygulamaları için şeffaf ve zeytin yeşili cam şişelerden oluşan çok dilli katalog.",
+      "description": "Ticari alıcılar için B2B toptan ürün tedariki ve arzı. Mevcut kataloğumuz toplu boş cam şişeler ve cam ambalajlara odaklanır.",
       "navigation": "Navigasyon",
       "categories": "Ürün kategorileri",
       "contact": "İletişim",
       "rights": "Tüm hakları saklıdır.",
-      "privacy": "Gizlilik Politikası"
+      "privacy": "Gizlilik Politikası",
+      "inquiryCta": "Toptan Teklif İsteyin"
     },
     "contact": {
       "whatsapp": "WhatsApp",
@@ -141,29 +147,29 @@
     }
   },
   "CategoryPages": {"oliveOil": {"metadata": {"title": "Zeytinyağı için Cam Şişeler | YolPol", "description": "Zeytinyağı uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Zeytinyağı için Cam Şişeler", "description": "Zeytinyağı uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "food": {"metadata": {"title": "Gıda için Cam Şişeler | YolPol", "description": "Gıda uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "Gıda için Cam Şişeler", "description": "Gıda uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "beverage": {"metadata": {"title": "İçecekler için Cam Şişeler | YolPol", "description": "İçecek uygulamaları için şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}, "heading": "İçecekler için Cam Şişeler", "description": "İçecek uygulamaları için listelenen şeffaf ve zeytin yeşili cam şişeleri inceleyin. Ürün fiyatları talep üzerine sunulur."}},
-  "About": {"metadata": {"title": "YolPol Hakkında | Cam Şişe Kataloğu", "description": "YolPol'ün zeytinyağı, gıda ve içecek uygulamalarına yönelik çok dilli cam şişe kataloğu hakkında bilgi edinin."}, "eyebrow": "YolPol hakkında", "heading": "Doğrulanmış bilgilere dayalı çok dilli cam şişe kataloğu", "introduction": "YolPol cam şişe bilgilerini İngilizce, Türkçe, Farsça ve Arapça sunar.", "catalog": "Mevcut katalogda zeytinyağı, gıda ve içecek uygulamalarına yönelik şeffaf ve zeytin yeşili şişeler bulunur.", "pricing": "Ürün fiyatları talep üzerine sunulur.", "location": "YolPol iletişim konumu {location}'dır.", "contactCta": "YolPol ile iletişime geçin", "imageAlt": "Toplu katalog sunumu için düzenlenmiş şeffaf ve zeytin yeşili YolPol cam şişeleri"},
-  "Contact": {"metadata": {"title": "YolPol ile İletişim", "description": "Cam şişe kataloğu hakkında YolPol'e e-posta, telefon, WhatsApp veya sosyal kanallardan ulaşın."}, "eyebrow": "İletişim", "heading": "YolPol ile İletişim", "introduction": "YolPol kataloğundaki ürünlerle ilgili talepleriniz için aşağıdaki doğrulanmış iletişim bilgilerini kullanın.", "email": "E-posta", "phone": "Telefon", "whatsapp": "WhatsApp", "location": "Konum", "social": "Sosyal kanallar", "instagramLabel": "YolPol'ü Instagram'da ziyaret edin", "linkedinLabel": "YolPol'ü LinkedIn'de ziyaret edin", "telegramLabel": "YolPol'ü Telegram'da ziyaret edin"},
+  "About": {"metadata": {"title": "YolPol Hakkında | B2B Toptan Tedarik ve Arz", "description": "YolPol'ün ticari alıcıları talep bazlı toptan ürün tedarikiyle nasıl desteklediğini ve toplu cam ambalaja odaklanan mevcut kataloğunu öğrenin."}, "eyebrow": "YolPol hakkında", "heading": "Ticari alıcılar için toptan ürün tedariki", "introduction": "YolPol, alıcılara talep bazlı bir ticari süreçle hizmet veren B2B toptan ürün tedariki ve arzı işletmesidir.", "catalog": "Mevcut kataloğumuz zeytinyağı, gıda ve içecek uygulamalarına yönelik toplu boş cam şişeler ve cam ambalajlara odaklanır.", "pricing": "Ürün fiyatları ve ticari koşullar talep yoluyla kesinleştirilir.", "location": "YolPol {location} konumundan faaliyet gösterir.", "inquiryCta": "Toptan Teklif İsteyin", "imageAlt": "Toplu katalog sunumu için düzenlenmiş şeffaf ve zeytin yeşili YolPol cam şişeleri"},
+  "Contact": {"metadata": {"title": "YolPol ile İletişim | B2B Toptan Talepler", "description": "Toptan ürün tedariki ve mevcut toplu cam ambalaj kataloğu hakkında YolPol'e e-posta, telefon, WhatsApp veya onaylı sosyal kanallardan ulaşın."}, "eyebrow": "Toptan satış iletişimi", "heading": "YolPol ile İletişim", "introduction": "Aşağıdaki doğrulanmış iletişim bilgilerini kullanın veya yayımlanmış ürünler ve ticari gereksinimler için toptan satış talebi gönderin.", "email": "E-posta", "phone": "Telefon numaraları", "whatsapp": "WhatsApp", "location": "Ofis adresi", "social": "Sosyal kanallar", "instagramLabel": "YolPol'ü Instagram'da ziyaret edin", "linkedinLabel": "YolPol'ü LinkedIn'de ziyaret edin", "telegramLabel": "YolPol'ü Telegram'da ziyaret edin"},
   "PrivacyPage": {
     "metadata": {"title": "Gizlilik Politikası | YolPol", "description": "YolPol'ün web sitesi, iletişim, Talep ve güvenlik bilgilerini nasıl işlediğini öğrenin."},
-    "eyebrow": "Gizlilik", "heading": "Gizlilik Politikası", "introduction": "Bu politika; web sitesini ziyaret ettiğinizde, YolPol ile iletişime geçtiğinizde, bir Talep hazırladığınızda veya etkinleştirildikten sonra güvenli çevrimiçi Talep gönderimini kullandığınızda bilgilerin nasıl işlendiğini açıklar.", "lastUpdated": "Son güncelleme",
+    "eyebrow": "Gizlilik", "heading": "Gizlilik Politikası", "introduction": "Bu politika, web sitesini ziyaret ettiğinizde, YolPol ile iletişime geçtiğinizde veya çevrimiçi bir toptan satış talebi gönderdiğinizde bilgilerin nasıl işlendiğini açıklar.", "lastUpdated": "Son güncelleme",
     "controller": {"heading": "Gizlilik kimliği ve iletişim", "text": "Bu politikada açıklanan web sitesi uygulamaları için kullanılan kamuya açık ad YolPol'dür.", "publicNameLabel": "Kamuya açık ad", "locationLabel": "Kamuya açık konum", "emailLabel": "Gizlilik iletişimi"},
-    "purposes": {"heading": "İşleme amaçları", "items": {"response": "Ürün ve fiyat teklifi taleplerine yanıt vermek.", "products": "Talep edilen Ürünleri, miktarları, sevkiyat varış yerlerini ve ticari gereksinimleri anlamak.", "security": "Spam, dolandırıcılık ve kötüye kullanımı önlemek ve hizmet güvenliğini korumak.", "legal": "Uygulanabildiğinde geçerli hukuki yükümlülüklere uymak."}},
+    "purposes": {"heading": "İşleme amaçları", "items": {"response": "Ürün ve fiyat teklifi taleplerine yanıt vermek.", "products": "Talep edilen Ürünleri, miktarları, alıcının ayarladığı taşımacılık için varış yerlerini ve ticari gereksinimleri anlamak.", "security": "Spam, dolandırıcılık ve kötüye kullanımı önlemek ve hizmet güvenliğini korumak.", "legal": "Uygulanabildiğinde geçerli hukuki yükümlülüklere uymak."}},
     "cookies": {"heading": "Çerezler ve yerel depolama", "paragraphs": {"locale": "Seçilen dili hatırlamak için NEXT_LOCALE çerezi dahil zorunlu dil tercihi depolaması kullanılabilir.", "advertising": "Şu anda bilerek kullanılan bir reklam çerezi yoktur.", "analytics": "Google Analytics ve Umami kurulu veya etkin değildir.", "storage": "Talep kişisel verileri localStorage veya sessionStorage içinde saklanmaz."}},
     "analytics": {"heading": "Analitik", "paragraphs": {"current": "Şu anda etkin bir web sitesi analitik platformu yoktur ve Google Analytics etkin değildir.", "future": "Gelecekte trafik analitiği için tercih edilen seçenek kendi sunucumuzda barındırılan Umami'dir.", "update": "Analitik etkinleştirilmeden önce bu politika incelenecek ve güncellenecektir. Onay gerektiren analitik yüklenmeden önce gerekli onay mekanizması uygulanacaktır."}},
     "searchVisibility": {"heading": "Arama görünürlüğü", "text": "Google Search Console doğrulaması şu anda uygulanmamıştır. Gelecekte bir arama performansı aracı sayfaların arama sonuçlarında nasıl göründüğüne dair toplu bilgiler sağlayabilir; bu, ziyaretçi analitiğinden farklıdır."},
     "choices": {"heading": "Seçimleriniz ve talepleriniz", "textBeforeEmail": "Sorularınız veya uygulanabilir gerekliliklere tabi talepleriniz için", "textAfterEmail": "adresine ulaşabilirsiniz:", "items": {"access": "Hakkınızdaki bilgilere erişim.", "correction": "Yanlış bilgilerin düzeltilmesi.", "deletion": "Bilgiler artık gerekli olmadığında veya başka uygulanabilir bir neden bulunduğunda silme.", "withdrawal": "Gelecekteki işlemler için onayın geri çekilmesi."}},
-    "children": {"heading": "Çocuklar", "text": "YolPol'ün ticari cam şişe hizmetleri çocuklara yönelik değildir."},
+    "children": {"heading": "Çocuklar", "text": "YolPol'ün B2B toptan satış faaliyetleri çocuklara yönelik değildir."},
     "externalLinks": {"heading": "Harici bağlantılar", "text": "Bu web sitesi harici hizmetlere bağlantı verebilir. YolPol bu hizmetlerin bağımsız gizlilik uygulamalarını kontrol etmez veya bunlardan sorumlu değildir."}
   },
   "InquiryConsent": {"privacyLink":"Gizlilik Politikası","privacyAgreement":"YolPol'ün bu bilgileri talebime yanıt vermek için kullanmasına izin veriyorum."},
   "ProductDetails": {"categories": "Kategoriler", "sku": "Stok kodu", "applications": "Kullanım alanları"},
   "ProductSpecifications": {"heading": "Teknik özellikler", "capacity": "Kapasite", "glassColor": "Cam rengi", "bottleShape": "Şişe şekli", "neckFinish": "Ağız tipi", "weight": "Ağırlık", "height": "Yükseklik", "diameter": "Çap", "milliliters": "ml", "grams": "g", "millimeters": "mm", "materials": {"glass": "Cam"}, "glassColors": {"oliveGreen": "Zeytin yeşili", "clear": "Şeffaf"}, "bottleShapes": {"round": "Yuvarlak", "square": "Kare"}},
-  "ProductPackaging": {"heading": "Ambalaj bilgileri", "unitsPerPackage": "Paket başına adet", "packagesPerPallet": "Palet başına paket", "unitsPerPallet": "Palet başına adet", "unitsPerTruck": "Kamyon başına adet", "palletGrossWeight": "Brüt palet ağırlığı", "kilograms": "kg"},
+  "ProductPackaging": {"heading": "Ambalaj bilgileri", "unitsPerPackage": "Paket başına adet", "packagesPerPallet": "Palet başına paket", "unitsPerPallet": "Palet başına adet", "unitsPerTruck": "26 paletlik referans yük başına adet", "palletGrossWeight": "Brüt palet ağırlığı", "kilograms": "kg"},
   "ProductPricing": {"inquiry": "Fiyat isteyin"},
   "ProductCategories": {"oliveOil": "Zeytinyağı şişeleri", "food": "Gıda şişeleri", "beverage": "İçecek şişeleri", "pharmaceutical": "İlaç şişeleri"},
   "Breadcrumbs": {"label": "İçerik yolu", "home": "Ana sayfa", "products": "Ürünler"},
   "NotFound": {"title": "Sayfa bulunamadı", "description": "İstenen sayfa veya yerelleştirilmiş ürün bulunamadı.", "backHome": "Ana sayfaya dön"},
-  "InquiryPage": {"metadata":{"title":"Cam Şişe Teklifi İsteyin | YolPol","description":"Doğrulanmış YolPol cam şişeleri için talep hazırlayın."},"eyebrow":"Müşteri talebi","heading":"Ürün teklifi isteyin","introduction":"Yayımlanmış ürünleri seçin; iletişim, palet ve varış bilgilerinizi düzenleyin.","pricing":"Ürün fiyatları talep üzerine sunulur.","form":{"customer":"İletişim bilgileri","fullName":"Ad soyad (zorunlu)","company":"Şirket adı (isteğe bağlı)","country":"Ülke (zorunlu)","countryPlaceholder":"Ülke seçin","city":"Şehir (isteğe bağlı)","email":"E-posta (zorunlu)","phone":"Ana telefon (zorunlu)","whatsappPhone":"WhatsApp numarası (zorunlu)","telegramUsername":"Telegram kullanıcı adı (zorunlu)","preferredContact":"Tercih edilen iletişim yöntemleri (bir veya daha fazla)","products":"Ürünler","product":"Ürün","removeProduct":"Ürünü kaldır","destination":"Sevkiyat varış yeri","destinationCountry":"Varış ülkesi (isteğe bağlı)","destinationCity":"Varış şehri (isteğe bağlı)","message":"Mesaj (isteğe bağlı)"},"contactMethods":{"email":"E-posta","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"İran","TR":"Türkiye","IQ":"Irak","AM":"Ermenistan","AZ":"Azerbaycan","TM":"Türkmenistan","AF":"Afganistan","PK":"Pakistan","AE":"Birleşik Arap Emirlikleri","SA":"Suudi Arabistan","QA":"Katar","KW":"Kuveyt","BH":"Bahreyn","OM":"Umman"}},
+  "InquiryPage": {"metadata":{"title":"Toptan Teklif İsteyin | YolPol","description":"Yayımlanmış YolPol ürünleri ve ticari gereksinimler için B2B toptan satış talebi gönderin."},"eyebrow":"B2B toptan satış talebi","heading":"Toptan teklif isteyin","introduction":"Yayımlanmış ürünleri seçin ve alıcının ayarladığı taşımacılık için iletişim, palet ve varış bilgilerinizi paylaşın.","pricing":"Ürün fiyatları ve ticari koşullar talep yoluyla kesinleştirilir.","form":{"customer":"İletişim bilgileri","fullName":"Ad soyad (zorunlu)","company":"Şirket adı (isteğe bağlı)","country":"Ülke (zorunlu)","countryPlaceholder":"Ülke seçin","city":"Şehir (isteğe bağlı)","email":"E-posta (zorunlu)","phone":"Ana telefon (zorunlu)","whatsappPhone":"WhatsApp numarası (zorunlu)","telegramUsername":"Telegram kullanıcı adı (zorunlu)","preferredContact":"Tercih edilen iletişim yöntemleri (bir veya daha fazla)","products":"Ürünler","product":"Ürün","removeProduct":"Ürünü kaldır","destination":"Alıcının ayarladığı taşımacılık için varış yeri","destinationCountry":"Varış ülkesi (isteğe bağlı)","destinationCity":"Varış şehri (isteğe bağlı)","message":"Mesaj (isteğe bağlı)"},"contactMethods":{"email":"E-posta","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"İran","TR":"Türkiye","IQ":"Irak","AM":"Ermenistan","AZ":"Azerbaycan","TM":"Türkmenistan","AF":"Afganistan","PK":"Pakistan","AE":"Birleşik Arap Emirlikleri","SA":"Suudi Arabistan","QA":"Katar","KW":"Kuveyt","BH":"Bahreyn","OM":"Umman"}},
   "Inquiry": {"customerInformation": "Müşteri bilgileri", "fullName": "Ad soyad", "company": "Şirket", "country": "Ülke", "city": "Şehir", "email": "E-posta", "phone": "Telefon veya WhatsApp", "telegramUsername": "Telegram kullanıcı adı", "preferredContact": "Tercih edilen iletişim yöntemi", "productSelection": "Ürün seçimi", "quantity": "Miktar", "units": {"pieces": "Adet", "packages": "Paket", "pallets": "Palet", "truckloads": "Kamyon yükü"}, "destination": "Varış yeri", "message": "Mesaj", "privacyConsent": "Belirtilen gizlilik koşullarını açıkça kabul ediyorum.", "validation": {"required": "Bu alan zorunludur.", "invalid": "Geçerli bir değer girin.", "productUnavailable": "Seçilen ürün kullanılamıyor."}, "submission": {"idle": "Hazır", "submitting": "Gönderiliyor", "accepted": "Talebiniz alındı.", "acceptedWithWarning": "Talebiniz alındı ancak bir veya daha fazla bildirim gönderilemedi.", "integrationUnavailable": "Talep gönderimi şu anda kullanılamıyor."}}
   ,"Staff": {
     "metadata": {"login":"Personel Girişi | YolPol","dashboard":"Personel Paneli | YolPol","inquiries":"Talepler | YolPol Personel","inquiryDetail":"Talep Detayı | YolPol Personel","team":"Ekip | YolPol Personel","activation":"Personel Etkinleştirme | YolPol"},

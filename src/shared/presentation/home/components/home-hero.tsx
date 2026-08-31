@@ -5,9 +5,9 @@ import type { HomeHeroViewModel } from "@/shared/presentation/home/view-models/h
 
 export function HomeHero({ model }: { model: HomeHeroViewModel }) {
   return (
-    <section dir={model.isRtl ? "rtl" : "ltr"} className="relative isolate overflow-hidden bg-[#f3f1eb] text-stone-950">
+    <section dir={model.isRtl ? "rtl" : "ltr"} className="relative isolate overflow-hidden bg-[#f3f1eb] text-start text-stone-950">
       <HomeHeroBackground />
-      <div aria-hidden="true" dir="ltr" className="pointer-events-none absolute start-1/2 top-[48%] z-0 max-w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden whitespace-nowrap text-[clamp(7rem,23vw,29rem)] font-black leading-none tracking-[-0.09em] text-stone-950/[0.025]">YOLPOL</div>
+      <div aria-hidden="true" dir="ltr" className="pointer-events-none absolute left-1/2 top-[48%] z-0 max-w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden whitespace-nowrap text-[clamp(7rem,23vw,29rem)] font-black leading-none tracking-[-0.09em] text-stone-950/[0.025]">YOLPOL</div>
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100svh-88px)] w-full max-w-[1900px] flex-col px-4 sm:px-8 lg:px-10 xl:px-14 min-[1600px]:px-20">
         <div className="flex min-h-16 items-center justify-between gap-3 border-b border-stone-950/[0.09]">

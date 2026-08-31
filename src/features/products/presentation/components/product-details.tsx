@@ -5,6 +5,7 @@ import {
 } from "@/features/products/presentation/components/product-packaging";
 import {ProductSpecifications} from "@/features/products/presentation/components/product-specifications";
 import type {ProductViewModel} from "@/features/products/presentation/view-models/product-view-model";
+import type {ProductCategoryItem} from "@/features/products/presentation/presenters/product-category-presenter";
 import {Link} from "@/i18n/navigation";
 import {LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
 import type {Locale} from "@/shared/types/locale";
@@ -13,7 +14,7 @@ type ProductDetailLabels = Readonly<{
   categories: string;
   sku: string;
   applications: string;
-  categoryNames: readonly string[];
+  categoryItems: readonly ProductCategoryItem[];
   inquiryPricing: string;
   requestAction: string;
   specifications: Parameters<typeof ProductSpecifications>[0]["labels"];
@@ -30,16 +31,16 @@ export function ProductDetails({
   locale: Locale;
 }) {
   return (
-    <article className="mt-8 pb-20">
+    <article className="mt-8 pb-20 text-start">
       <div className="grid gap-10 border-b border-stone-950/10 pb-14 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:items-start">
         <ProductGallery images={product.images} />
         <div className="lg:sticky lg:top-36">
           <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold text-emerald-800">
-            {labels.categoryNames.map((categoryName) => (
-              <li key={categoryName}>{categoryName}</li>
+            {labels.categoryItems.map((category) => (
+              <li key={category.id}><ProductCategoryName category={category} /></li>
             ))}
           </ul>
-          <h1 className="mt-5 text-[clamp(2.6rem,5vw,5.5rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-stone-950">
+          <h1 className={`mt-5 text-[clamp(2.6rem,5vw,5.5rem)] font-semibold leading-[0.98] text-stone-950 ${locale === "fa" || locale === "ar" ? "" : "tracking-[-0.05em]"}`}>
             {product.content.name}
           </h1>
           <p className="mt-5 text-lg leading-8 text-stone-700">
@@ -50,8 +51,8 @@ export function ProductDetails({
               <dt className="text-sm text-stone-600">{labels.categories}</dt>
               <dd className="mt-1 font-medium text-stone-950">
                 <ul className="space-y-1">
-                  {labels.categoryNames.map((categoryName) => (
-                    <li key={categoryName}>{categoryName}</li>
+                  {labels.categoryItems.map((category) => (
+                    <li key={category.id}><ProductCategoryName category={category} /></li>
                   ))}
                 </ul>
               </dd>
@@ -94,5 +95,17 @@ export function ProductDetails({
         ) : null}
       </div>
     </article>
+  );
+}
+
+function ProductCategoryName({category}: {category: ProductCategoryItem}) {
+  if (!category.href) return category.name;
+  return (
+    <Link
+      href={category.href}
+      className="outline-none underline-offset-4 hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:ring-emerald-700"
+    >
+      {category.name}
+    </Link>
   );
 }

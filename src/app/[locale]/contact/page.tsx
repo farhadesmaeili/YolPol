@@ -24,7 +24,7 @@ export default async function ContactPage({params}: Props) {
   setRequestLocale(locale);
   const [t, breadcrumbs, inquiry] = await Promise.all([getTranslations({locale, namespace: "Contact"}), getTranslations({locale, namespace: "Breadcrumbs"}), getTranslations({locale, namespace: "InquiryPage"})]);
   return (
-    <><ContactPagePresentation model={{isRtl: locale === "fa" || locale === "ar", breadcrumbLabel: breadcrumbs("label"), homeLabel: breadcrumbs("home"), eyebrow: t("eyebrow"), heading: t("heading"), introduction: t("introduction"), email: t("email"), phone: t("phone"), whatsapp: t("whatsapp"), location: t("location"), contactLocation: siteConfig.contact.location[locale], social: t("social"), instagramLabel: t("instagramLabel"), linkedinLabel: t("linkedinLabel"), telegramLabel: t("telegramLabel"), inquiryCta: inquiry("heading")}} />
+    <><ContactPagePresentation model={{isRtl: locale === "fa" || locale === "ar", breadcrumbLabel: breadcrumbs("label"), homeLabel: breadcrumbs("home"), eyebrow: t("eyebrow"), heading: t("heading"), introduction: t("introduction"), email: t("email"), phone: t("phone"), whatsapp: t("whatsapp"), location: t("location"), contactLocation: siteConfig.contact.location.officeAddress[locale], social: t("social"), instagramLabel: t("instagramLabel"), linkedinLabel: t("linkedinLabel"), telegramLabel: t("telegramLabel"), inquiryCta: inquiry("heading")}} />
       <JsonLdScript data={createBreadcrumbJsonLd({locale, items: [{name: breadcrumbs("home"), pathname: "/"}, {name: t("heading"), pathname: "/contact"}]})} />
     </>
   );

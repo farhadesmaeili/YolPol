@@ -1,4 +1,4 @@
-import type {SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
+import type {SubmitInquiryInput, SubmitInquiryItemInput, SubmitInquiryUnit} from "@/features/inquiries/application/dto/inquiry-dto";
 import {toAcceptedInquiryDto} from "@/features/inquiries/application/mappers/inquiry-dto-mapper";
 import {DuplicateInquiryIdError, type Clock, type InquiryIdGenerator, type InquiryProductCatalog, type InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
 import type {SubmitInquiryResult} from "@/features/inquiries/application/results/submit-inquiry-result";
@@ -14,11 +14,25 @@ import {normalizeInquiryQuantity} from "@/features/inquiries/domain/validation/i
 import {customerConversationResumeLifetimeMs} from "@/features/inquiries/application/config/customer-conversation-access-policy";
 
 function isRecord(value: unknown): value is Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) return false; const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; }
-function validCatalogProduct(value: unknown, requestedId: string): value is NonNullable<Awaited<ReturnType<InquiryProductCatalog["findById"]>>> & {packaging: {unitsPerPallet: number; grossPalletWeightGrams: number}} {
+function validCatalogProduct(value: unknown, requestedId: string): value is NonNullable<Awaited<ReturnType<InquiryProductCatalog["findById"]>>> & {packaging: {unitsPerPackage: number; packagesPerPallet: number; unitsPerPallet: number; grossPalletWeightGrams: number}} {
   if (!isRecord(value) || value.id !== requestedId || typeof value.id !== "string" || typeof value.sku !== "string" || !value.sku.trim() || typeof value.slug !== "string" || !value.slug.trim()) return false;
   if (!(["draft", "published", "archived"] as const).includes(value.status as never)) return false;
   if (!isRecord(value.localizedNames) || !isRecord(value.packaging)) return false;
-  return Number.isSafeInteger(value.packaging.unitsPerPallet) && (value.packaging.unitsPerPallet as number) > 0 && Number.isSafeInteger(value.packaging.grossPalletWeightGrams) && (value.packaging.grossPalletWeightGrams as number) > 0;
+  const unitsPerPackage = value.packaging.unitsPerPackage;
+  const packagesPerPallet = value.packaging.packagesPerPallet;
+  const unitsPerPallet = value.packaging.unitsPerPallet;
+  const grossPalletWeightGrams = value.packaging.grossPalletWeightGrams;
+  return typeof unitsPerPackage === "number" && Number.isSafeInteger(unitsPerPackage) && unitsPerPackage > 0
+    && typeof packagesPerPallet === "number" && Number.isSafeInteger(packagesPerPallet) && packagesPerPallet > 0
+    && typeof unitsPerPallet === "number" && Number.isSafeInteger(unitsPerPallet) && unitsPerPallet > 0
+    && unitsPerPackage * packagesPerPallet === unitsPerPallet
+    && typeof grossPalletWeightGrams === "number" && Number.isSafeInteger(grossPalletWeightGrams) && grossPalletWeightGrams > 0;
+}
+
+function resolveRequestedQuantity(item: SubmitInquiryItemInput): Readonly<{quantity: number; unit: SubmitInquiryUnit; field: "palletCount" | "quantity"}> {
+  return "palletCount" in item
+    ? {quantity: item.palletCount, unit: "pallets", field: "palletCount"}
+    : {quantity: item.quantity, unit: item.unit, field: "quantity"};
 }
 
 export class SubmitInquiry {
@@ -30,7 +44,10 @@ export class SubmitInquiry {
     const trustedItems = [];
     for (const [index, requested] of input.items.entries()) {
       try { normalizeInquiryProductId(requested.productId); } catch { return {status:"validation_failed",field:`items.${index}.productId`}; }
-      try { normalizeInquiryQuantity(requested.palletCount); } catch { return {status:"validation_failed",field:`items.${index}.palletCount`}; }
+      const requestedQuantity = resolveRequestedQuantity(requested);
+      try { normalizeInquiryQuantity(requestedQuantity.quantity); } catch { return {status:"validation_failed",field:`items.${index}.${requestedQuantity.field}`}; }
+      if (requestedQuantity.unit !== "pallets" && requestedQuantity.unit !== "packages") return {status:"validation_failed",field:`items.${index}.unit`};
+      if (requestedQuantity.unit === "packages" && input.source.locale !== "fa") return {status:"validation_failed",field:`items.${index}.unit`};
       let product: Awaited<ReturnType<InquiryProductCatalog["findById"]>>;
       try { product = await this.catalog.findById(requested.productId); }
       catch { return {status: "dependency_failed", dependency: "catalog"}; }
@@ -39,10 +56,10 @@ export class SubmitInquiry {
       if (product.status !== "published") return {status: "product_unavailable", productId: requested.productId};
       const productName = product.localizedNames[input.source.locale];
       if (productName === undefined) return {status: "locale_not_available", productId: requested.productId};
-      const unitsRequested = requested.palletCount * product.packaging.unitsPerPallet;
-      const grossWeightGrams = requested.palletCount * product.packaging.grossPalletWeightGrams;
-      if (!Number.isSafeInteger(unitsRequested) || !Number.isSafeInteger(grossWeightGrams)) return {status: "validation_failed", field: `items.${index}.palletCount`};
-      try { trustedItems.push({...createInquiryProductSnapshot({productId: product.id, sku: product.sku, slug: product.slug, productName}), quantity: requested.palletCount, unit: "pallets" as const}); }
+      const unitsRequested = requestedQuantity.quantity * (requestedQuantity.unit === "packages" ? product.packaging.unitsPerPackage : product.packaging.unitsPerPallet);
+      const grossWeightGrams = requestedQuantity.unit === "pallets" ? requestedQuantity.quantity * product.packaging.grossPalletWeightGrams : undefined;
+      if (!Number.isSafeInteger(unitsRequested) || (grossWeightGrams !== undefined && !Number.isSafeInteger(grossWeightGrams))) return {status: "validation_failed", field: `items.${index}.${requestedQuantity.field}`};
+      try { trustedItems.push({...createInquiryProductSnapshot({productId: product.id, sku: product.sku, slug: product.slug, productName}), quantity: requestedQuantity.quantity, unit: requestedQuantity.unit}); }
       catch (error) { if (error instanceof InquiryValidationError) return {status: "dependency_failed", dependency: "catalog"}; throw error; }
     }
     let inquiry: Inquiry;

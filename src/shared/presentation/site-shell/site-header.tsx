@@ -29,9 +29,9 @@ export async function SiteHeader({ locale }: { locale: Locale }) {
       <div className="relative mx-auto flex min-h-[88px] w-full max-w-[1900px] items-center justify-between gap-3 px-4 sm:gap-6 sm:px-10 lg:px-8 xl:px-6 min-[1440px]:px-10 min-[1600px]:px-14">
         <HeaderBrand homeLabel={translations("homeLabel")} />
 
-        <div aria-hidden="true" className="pointer-events-none absolute start-1/2 top-0 hidden h-full -translate-x-1/2 items-center xl:flex">
+        <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-0 hidden h-full -translate-x-1/2 items-center xl:flex">
           <div className="relative flex h-full items-center">
-            <span className="absolute start-1/2 top-0 h-3 w-px -translate-x-1/2 bg-stone-950/10" />
+            <span className="absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 bg-stone-950/10" />
             <span className="size-1.5 rounded-full border border-emerald-900/30 bg-[#f3f1eb]" />
           </div>
         </div>

@@ -7,4 +7,4 @@ import {createLocalizedMetadata} from "@/shared/seo/metadata";
 import type {Locale} from "@/shared/types/locale";
 
 const messages = {en: enMessages, tr: trMessages, fa: faMessages, ar: arMessages} as const;
-export function createExportLogisticsMetadata(locale: Locale): Metadata { const metadata = messages[locale].ExportLogistics.metadata; return createLocalizedMetadata({locale, title: metadata.title, description: metadata.description, pathname: "/export-logistics"}); }
+export function createExportLogisticsMetadata(locale: Locale): Metadata { const metadata = messages[locale].ExportLogistics.metadata; return createLocalizedMetadata({locale, title: metadata.title, description: metadata.description, pathname: "/wholesale-process"}); }

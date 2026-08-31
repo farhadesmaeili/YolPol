@@ -2,11 +2,11 @@ import { Link } from "@/i18n/navigation";
 
 export function FooterCallToAction({
   description,
-  contactLabel,
+  inquiryLabel,
   isRtl,
 }: {
   description: string;
-  contactLabel: string;
+  inquiryLabel: string;
   isRtl: boolean;
 }) {
   return (
@@ -25,8 +25,8 @@ export function FooterCallToAction({
           <p className="mt-7 max-w-3xl text-base leading-8 text-stone-600 sm:text-lg sm:leading-9">{description}</p>
         </div>
 
-        <Link href="/contact" className="group relative inline-flex min-h-16 max-w-full items-stretch self-start overflow-hidden border border-emerald-950/20 bg-emerald-950 text-white shadow-[0_20px_55px_-32px_rgba(6,78,59,0.65)] outline-none transition-[background-color,box-shadow] duration-500 hover:bg-emerald-900 hover:shadow-[0_24px_65px_-30px_rgba(6,78,59,0.7)] focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb] motion-reduce:transition-none lg:self-auto">
-          <span className="relative z-10 flex min-w-0 items-center px-5 text-sm font-semibold sm:px-8">{contactLabel}</span>
+        <Link href="/inquiry" className="group relative inline-flex min-h-16 max-w-full items-stretch self-start overflow-hidden border border-emerald-950/20 bg-emerald-950 text-white shadow-[0_20px_55px_-32px_rgba(6,78,59,0.65)] outline-none transition-[background-color,box-shadow] duration-500 hover:bg-emerald-900 hover:shadow-[0_24px_65px_-30px_rgba(6,78,59,0.7)] focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb] motion-reduce:transition-none lg:self-auto">
+          <span className="relative z-10 flex min-w-0 items-center px-5 text-sm font-semibold sm:px-8">{inquiryLabel}</span>
           <span aria-hidden="true" className="relative z-10 flex w-16 shrink-0 items-center justify-center border-s border-white/15 bg-emerald-200 text-xl text-emerald-950 transition-colors duration-500 group-hover:bg-emerald-100 motion-reduce:transition-none">
             {isRtl ? "←" : "→"}
           </span>

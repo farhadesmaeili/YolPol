@@ -9,7 +9,7 @@ export class DuplicateInquiryIdError extends Error { readonly name = "DuplicateI
 export interface InquiryRepository { save(inquiry: Inquiry, event?: InquiryCreated, conversation?: Conversation, access?: ConversationAccessCredential): Promise<void>; findById(id: string): Promise<Inquiry | null>; }
 export interface InquiryIdGenerator { generate(): string; }
 export interface Clock { now(): Date; }
-export type CatalogProduct = Readonly<{id: string; sku: string; slug: string; status: "draft" | "published" | "archived"; localizedNames: Readonly<Partial<Record<Locale, string>>>; packaging?: Readonly<{unitsPerPallet: number; grossPalletWeightGrams: number}>}>;
+export type CatalogProduct = Readonly<{id: string; sku: string; slug: string; status: "draft" | "published" | "archived"; localizedNames: Readonly<Partial<Record<Locale, string>>>; packaging?: Readonly<{unitsPerPackage: number; packagesPerPallet: number; unitsPerPallet: number; grossPalletWeightGrams: number}>}>;
 export interface InquiryProductCatalog { findById(id: string): Promise<CatalogProduct | null>; }
 export type NotificationChannel = "email" | "telegram";
 export type InquiryNotificationEvent = InquiryCreated | CustomerConversationMessageCreated;

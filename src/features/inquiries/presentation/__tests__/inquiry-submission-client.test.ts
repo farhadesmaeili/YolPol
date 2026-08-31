@@ -27,8 +27,9 @@ describe("Inquiry submission timing and indexed errors",()=>{
   it("propagates network failure and clears the timer",async()=>{vi.useFakeTimers();await expect(requestInquirySubmissionWithTimeout(input,new AbortController(),vi.fn().mockRejectedValue(new TypeError("network")),100)).rejects.toThrow("network");expect(vi.getTimerCount()).toBe(0);vi.useRealTimers();});
   it("maps later Product rows to stable accessible targets",()=>{
     expect(inquiryServerFailure("items.1.productId")).toEqual({field:"products",code:"invalid",itemIndex:1});
-    expect(inquiryServerFailure("items.1.palletCount")).toEqual({field:"palletCount",code:"invalid",itemIndex:1});
-    expect(inquiryServerFailure("items.2.quantity")).toBeUndefined();
+    expect(inquiryServerFailure("items.1.palletCount")).toEqual({field:"quantity",code:"invalid",itemIndex:1});
+    expect(inquiryServerFailure("items.2.quantity")).toEqual({field:"quantity",code:"invalid",itemIndex:2});
+    expect(inquiryServerFailure("items.2.unit")).toEqual({field:"quantityUnit",code:"invalid",itemIndex:2});
   });
   it("focuses the first specific invalid control",()=>{const focus=vi.fn();const findControl=vi.fn(()=>({focus}));focusInquiryFailure({field:"phone",code:"invalid"},findControl);expect(findControl).toHaveBeenCalledWith("inquiry-phone");expect(focus).toHaveBeenCalledOnce();});
 });

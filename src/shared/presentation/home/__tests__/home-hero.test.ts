@@ -51,6 +51,12 @@ describe("homepage presentation architecture", () => {
     expect(combinedSource).not.toMatch(/<main\b/u);
     expect(combinedSource).toContain("model.heading");
   });
+
+  it("sets textual base direction from the active locale while keeping visual-only regions isolated", () => {
+    expect(combinedSource).toContain('dir={model.isRtl ? "rtl" : "ltr"}');
+    expect(combinedSource).toContain('<div dir="ltr"');
+    expect(combinedSource).not.toContain('<HomeHeroContent dir="ltr"');
+  });
 });
 
 describe("homepage facts and assets", () => {
@@ -93,8 +99,8 @@ describe("homepage facts and assets", () => {
 
   it("keeps approved crawlable actions and removes fabricated status claims", () => {
     expect(combinedSource).toContain('href="/products"');
-    expect(combinedSource).toContain('href="/contact"');
-    expect(combinedSource).toContain('href="/export-logistics"');
+    expect(combinedSource).toContain('href="/inquiry"');
+    expect(combinedSource).toContain('href="/wholesale-process"');
     expect(combinedSource).toContain("bg-emerald-950");
     expect(combinedSource).not.toMatch(/\b(?:READY|ACTIVE)\b/u);
   });

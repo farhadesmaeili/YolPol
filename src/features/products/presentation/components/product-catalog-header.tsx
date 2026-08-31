@@ -27,7 +27,7 @@ export function ProductCatalogHeader({
             <span aria-hidden="true" className="h-px w-10 bg-emerald-900/60 sm:w-14" />
             <span className={isRtl ? "text-xs font-semibold text-emerald-950/65" : "text-[9px] font-semibold uppercase tracking-[0.28em] text-emerald-950/65"}>{indexLabel}</span>
           </div>
-          <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.04em] text-stone-950 sm:text-5xl lg:text-6xl">{title}</h1>
+          <h1 className={`mt-5 text-4xl font-semibold leading-tight text-stone-950 sm:text-5xl lg:text-6xl ${isRtl ? "" : "tracking-[-0.04em]"}`}>{title}</h1>
           <p className="mt-5 max-w-3xl text-base leading-8 text-stone-600 sm:text-lg">{description}</p>
         </div>
 

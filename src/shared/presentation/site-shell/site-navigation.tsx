@@ -138,7 +138,7 @@ export function SiteNavigation({ items, locale, locales, labels }: SiteNavigatio
                         active ? "scale-x-100 bg-emerald-800" : "scale-x-0 bg-stone-950/40 group-hover:scale-x-100",
                       )}
                     />
-                    {active ? <span aria-hidden="true" className="absolute bottom-[-4px] start-1/2 size-2 -translate-x-1/2 rounded-full border border-[#f3f1eb] bg-emerald-800 shadow-[0_0_10px_rgba(6,78,59,0.25)]" /> : null}
+                    {active ? <span aria-hidden="true" className="absolute bottom-[-4px] left-1/2 size-2 -translate-x-1/2 rounded-full border border-[#f3f1eb] bg-emerald-800 shadow-[0_0_10px_rgba(6,78,59,0.25)]" /> : null}
                   </>
                 )}
               </Link>
@@ -208,10 +208,10 @@ export function SiteNavigation({ items, locale, locales, labels }: SiteNavigatio
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
               <div className="absolute -end-32 -top-32 size-80 rounded-full bg-emerald-700/[0.08] blur-[100px]" />
               <div className="absolute -start-32 bottom-[-10rem] size-72 rounded-full bg-[#d8c7a3]/25 blur-[110px]" />
-              <div dir="ltr" className="absolute bottom-[-2rem] start-1/2 max-w-full -translate-x-1/2 overflow-hidden whitespace-nowrap text-[clamp(4rem,28vw,8rem)] font-black tracking-[-0.08em] text-stone-950/[0.025]">YOLPOL</div>
+              <div dir="ltr" className="absolute bottom-[-2rem] left-1/2 max-w-full -translate-x-1/2 overflow-hidden whitespace-nowrap text-[clamp(4rem,28vw,8rem)] font-black tracking-[-0.08em] text-stone-950/[0.025]">YOLPOL</div>
               <div className="absolute -end-28 top-16 size-64 max-w-[70vw]">
                 <div className="absolute inset-0 animate-[spin_26s_linear_infinite] rounded-full border border-stone-950/[0.06] border-t-emerald-800/30 motion-reduce:animate-none">
-                  <span className="absolute start-1/2 top-[-4px] size-2 -translate-x-1/2 rounded-full bg-emerald-800" />
+                  <span className="absolute left-1/2 top-[-4px] size-2 -translate-x-1/2 rounded-full bg-emerald-800" />
                 </div>
                 <div className="absolute inset-[22%] animate-[spin_18s_linear_infinite] rounded-full border border-dashed border-stone-950/[0.06] [animation-direction:reverse] motion-reduce:animate-none" />
               </div>

@@ -44,9 +44,7 @@ export class Inquiry {
     if (!Array.isArray(input.items) || input.items.length === 0) throw new InquiryValidationError("items", "At least one item is required.");
     const items = Object.freeze(input.items.map(item));
     if (new Set(items.map(({productId}) => productId)).size !== items.length) throw new InquiryValidationError("items.productId", "Duplicate Products are not allowed.");
-    if (!allowLegacy) {
-      if (items.some(({unit}) => unit !== "pallets")) throw new InquiryValidationError("items.unit", "New Inquiries require pallet quantities.");
-    }
+    if (!allowLegacy && items.some(({unit}) => unit !== "pallets" && unit !== "packages")) throw new InquiryValidationError("items.unit", "New Inquiries require pallet or package quantities.");
     return new Inquiry(id, freeze(details.contact), freeze(details.location), details.destination ? freeze(details.destination) : undefined, details.message, Object.freeze({accepted: true, acceptedAt, policyVersion: normalizeInquiryText(input.privacy.policyVersion, "privacy.policyVersion", 1, 100)!}), freeze({locale: input.source.locale, path: input.source.path}), items, input.status, createdAt, updatedAt);
   }
   get contact() { return freeze(this._contact); } get location() { return freeze(this._location); } get destination() { return this._destination ? freeze(this._destination) : undefined; }

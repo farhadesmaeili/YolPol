@@ -63,7 +63,7 @@ describe("SiteFooter", () => {
     expect(generalDestinations).toEqual([
       "/",
       "/products",
-      "/export-logistics",
+      "/wholesale-process",
       "/inquiry",
       "/about",
       "/contact",
@@ -79,7 +79,7 @@ describe("SiteFooter", () => {
 
   it("uses centralized contact links, bidi isolation, and safe external links", () => {
     expect(completeFooterSource).toContain("siteConfig.contact.emailHref");
-    expect(completeFooterSource).toContain("siteConfig.contact.phone.href");
+    expect(completeFooterSource).toContain("siteConfig.contact.phones.map");
     expect(completeFooterSource).toContain("siteConfig.contact.whatsapp.href");
     expect(completeFooterSource.match(/<LtrIsolate/g)).toHaveLength(3);
     expect(completeFooterSource).toContain('rel="noopener noreferrer"');
@@ -90,7 +90,7 @@ describe("SiteFooter", () => {
   });
 
   it("uses the approved emerald CTA and accessible decorative treatment", () => {
-    expect(completeFooterSource).toContain('href="/contact"');
+    expect(completeFooterSource).toContain('href="/inquiry"');
     expect(completeFooterSource).toContain("bg-emerald-950");
     expect(completeFooterSource).not.toContain("bg-stone-950 text-white");
     expect(completeFooterSource).toContain("motion-reduce:animate-none");
@@ -109,6 +109,9 @@ describe("SiteFooter", () => {
     expect(completeFooterSource).toContain("<span>GCC</span>");
     expect(completeFooterSource).toContain("<span>INTL</span>");
     expect(completeFooterSource).not.toContain("<span>IQ</span>");
+    expect(completeFooterSource).toContain("<span>WHOLESALE</span>");
+    expect(completeFooterSource).toContain("<span>SUPPLY</span>");
+    expect(completeFooterSource).not.toMatch(/GLASS\s*\/\s*EXPORT/u);
   });
 
   it("keeps all locale catalogs structurally aligned", () => {

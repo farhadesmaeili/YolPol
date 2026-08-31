@@ -29,7 +29,7 @@ export function HomeHeroVisual({ model }: { model: HomeHeroViewModel }) {
           <FrameCorners />
           <div className="absolute start-6 top-6 z-30 flex items-center gap-3 sm:start-8 sm:top-8">
             <span aria-hidden="true" className="size-2 rounded-full bg-emerald-300 shadow-[0_0_15px_rgba(110,231,183,0.8)]" />
-            <span className="text-[9px] font-semibold text-white/80">{model.referenceConfiguration}</span>
+            <span dir={model.isRtl ? "rtl" : "ltr"} className="text-[9px] font-semibold text-white/80">{model.referenceConfiguration}</span>
           </div>
           <div aria-hidden="true" dir="ltr" className="absolute end-6 top-5 z-20 text-5xl font-extralight text-white/[0.14] sm:text-7xl">01</div>
           <div className="absolute bottom-0 start-0 z-30 w-full border-t border-white/20 bg-stone-950/25 px-5 py-4 backdrop-blur-xl sm:px-9 sm:py-6">
@@ -42,11 +42,11 @@ export function HomeHeroVisual({ model }: { model: HomeHeroViewModel }) {
       </div>
 
       <div aria-hidden="true" className={`${styles.floatingCard} absolute start-0 top-[13%] z-30 hidden border border-stone-950/10 bg-[#f3f1eb]/80 px-5 py-4 shadow-[0_24px_70px_-30px_rgba(28,25,23,0.45)] backdrop-blur-2xl xl:block`}>
-        <span className="text-[9px] font-semibold text-stone-500">{model.networkLabel}</span>
+        <span dir={model.isRtl ? "rtl" : "ltr"} className="text-[9px] font-semibold text-stone-500">{model.networkLabel}</span>
         <div dir="ltr" className="mt-3 flex items-center gap-3 text-xl"><span>IR</span><span className="h-px w-8 bg-stone-950/20" /><span className="text-emerald-800">→</span><span className="text-stone-400">INTL</span></div>
       </div>
       <div aria-hidden="true" dir="ltr" className={`absolute bottom-[5%] z-30 hidden items-end gap-3 xl:flex ${model.isRtl ? "start-[1%]" : "end-[1%]"}`}>
-        <span className="text-[9px] text-stone-400">{model.technicalIndex}</span><span className="text-7xl font-extralight text-stone-950/[0.10]">01</span>
+        <span dir={model.isRtl ? "rtl" : "ltr"} className="text-[9px] text-stone-400">{model.technicalIndex}</span><span className="text-7xl font-extralight text-stone-950/[0.10]">01</span>
       </div>
     </div>
   );
@@ -55,10 +55,10 @@ export function HomeHeroVisual({ model }: { model: HomeHeroViewModel }) {
 function HomeHeroOrbits() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute start-1/2 top-1/2 size-[min(105vw,850px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.08] border-t-emerald-800/60 animate-[spin_28s_linear_infinite] motion-reduce:animate-none" />
-      <div className="absolute start-1/2 top-1/2 size-[min(88vw,700px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.06] border-b-stone-950/25 animate-[spin_38s_linear_infinite] [animation-direction:reverse] motion-reduce:animate-none" />
-      <div className="absolute start-1/2 top-1/2 size-[min(70vw,580px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-emerald-900/[0.18] animate-[spin_18s_linear_infinite] motion-reduce:animate-none" />
-      <div className="absolute start-1/2 top-[8%] h-[84%] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-stone-950/[0.07] to-transparent" />
+      <div className="absolute left-1/2 top-1/2 size-[min(105vw,850px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.08] border-t-emerald-800/60 animate-[spin_28s_linear_infinite] motion-reduce:animate-none" />
+      <div className="absolute left-1/2 top-1/2 size-[min(88vw,700px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.06] border-b-stone-950/25 animate-[spin_38s_linear_infinite] [animation-direction:reverse] motion-reduce:animate-none" />
+      <div className="absolute left-1/2 top-1/2 size-[min(70vw,580px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-emerald-900/[0.18] animate-[spin_18s_linear_infinite] motion-reduce:animate-none" />
+      <div className="absolute left-1/2 top-[8%] h-[84%] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-stone-950/[0.07] to-transparent" />
       <div className="absolute start-[4%] top-1/2 h-px w-[92%] -translate-y-1/2 bg-gradient-to-r from-transparent via-stone-950/[0.07] to-transparent" />
     </div>
   );

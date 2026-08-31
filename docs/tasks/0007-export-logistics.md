@@ -1,12 +1,12 @@
-# 0007 — Export Logistics
+# 0007 — Wholesale Process and Reference Load Planning
 
 ## Outcome
 
-Adds a statically generated multilingual `/[locale]/export-logistics` page and a pallet-only mixed-load calculator. The verified truck policy is 26 pallets and 26,000,000 grams gross weight; equality is feasible.
+Adds a statically generated multilingual `/[locale]/wholesale-process` page and a pallet-only mixed-load calculator. The former `/[locale]/export-logistics` URLs permanently redirect to the new public route. The calculator uses 26 pallets and approximately 26,000 kilograms as a reference planning envelope, not a universal vehicle or legal limit.
 
 ## Architecture
 
-The five-layer Export Logistics feature owns a pure, immutable calculation service, application Product-packaging port and use cases, Product application anti-corruption adapter, presentation mapping and isolated calculator Client Component, and testing helpers. Product packaging remains owned by the Product dataset and reaches this feature through application DTO queries; no production values are duplicated.
+The internal five-layer Export Logistics feature name remains unchanged to avoid architectural churn. It owns a pure, immutable calculation service, application Product-packaging port and use cases, Product application anti-corruption adapter, presentation mapping and isolated calculator Client Component, and testing helpers. Product packaging remains owned by the Product dataset and reaches this feature through application DTO queries; no production values are duplicated.
 
 ## Outcomes and limits
 
@@ -18,7 +18,7 @@ The browser uses a strict ASCII positive-decimal parser with leading zeroes proh
 
 ## Operations and disclaimer
 
-The page documents the approved buyer-arranged transport, payment, settlement, release and carrier exit workflow. Results are planning information, not booking, freight pricing, legal/customs approval, vehicle acceptance, or delivery guarantees.
+The page documents product selection, wholesale inquiry, commercial confirmation, buyer-arranged transportation, arrival, optional inspection, loading, agreed payment or commercial terms, cargo release, and the buyer's onward-transport responsibility. Results are reference planning information, not a freight quotation, carrier acceptance, legal or customs approval, vehicle acceptance, or a delivery promise. Vehicle, axle, road, carrier, customs, and border limits may vary.
 
 ## Deferred
 
