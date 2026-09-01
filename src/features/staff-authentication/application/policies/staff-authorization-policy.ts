@@ -34,6 +34,9 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
   mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
   mayViewAiOperations(principal: StaffPrincipal): boolean { return this.valid(principal); }
   mayManageAiOperations(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
+  mayViewAiProviderRegistry(principal: StaffPrincipal): boolean { return this.valid(principal); }
+  mayManageAiProviders(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
+  mayManageAiCredentialReferences(principal: StaffPrincipal): boolean { return this.valid(principal) && principal.role === "SUPER_ADMIN"; }
   mayManageTeam(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
 
   mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean {
@@ -70,6 +73,9 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
       mayUpdateInquiryWorkflow: this.mayUpdateInquiryWorkflow(principal),
       mayViewAiOperations: this.mayViewAiOperations(principal),
       mayManageAiOperations: this.mayManageAiOperations(principal),
+      mayViewAiProviderRegistry: this.mayViewAiProviderRegistry(principal),
+      mayManageAiProviders: this.mayManageAiProviders(principal),
+      mayManageAiCredentialReferences: this.mayManageAiCredentialReferences(principal),
       mayManageTeam,
       mayCreateStaffInvitation: mayManageTeam,
       mayDeactivateStaffMember: mayManageTeam,

@@ -2,14 +2,14 @@
 
 import {Link, usePathname} from "@/i18n/navigation";
 
-type StaffNavigationItem = Readonly<{href: "/staff" | "/staff/inquiries" | "/staff/ai-operations" | "/staff/team"; label: string}>;
+type StaffNavigationItem = Readonly<{href: "/staff" | "/staff/inquiries" | "/staff/ai-operations" | "/staff/ai-providers" | "/staff/team"; label: string}>;
 
 export function StaffNavigation({items, label}: Readonly<{items: readonly StaffNavigationItem[]; label: string}>) {
   const pathname = usePathname();
 
   return (
     <nav aria-label={label}>
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-1">
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-1">
         {items.map((item) => {
           const active = item.href === "/staff" ? pathname === item.href : pathname.startsWith(item.href);
           return (
