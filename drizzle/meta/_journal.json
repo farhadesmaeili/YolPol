@@ -113,6 +113,13 @@
       "when": 1788229393953,
       "tag": "0015_ai_provider_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788273303392,
+      "tag": "0016_ai_provider_gateway",
+      "breakpoints": true
     }
   ]
 }
