@@ -11,6 +11,7 @@ export default defineConfig({
     "./src/features/staff-authentication/infrastructure/persistence/postgres/schema/staff-authentication-schema.ts",
     "./src/features/telegram-staff-onboarding/infrastructure/persistence/postgres/schema/telegram-staff-onboarding-schema.ts",
     "./src/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema.ts",
+    "./src/features/ai-provider-registry/infrastructure/persistence/postgres/schema/ai-provider-registry-schema.ts",
   ],
   out: "./drizzle",
   dbCredentials: {url: databaseUrl},
