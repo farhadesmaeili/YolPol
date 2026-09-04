@@ -7,12 +7,14 @@ import {ConversationValidationError} from "@/features/inquiries/domain/errors/co
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
 import {InquiryId} from "@/features/inquiries/domain/value-objects/inquiry-id";
 import {normalizeMessageBody} from "@/features/inquiries/domain/validation/message-input-validation";
+import type {CustomerMessageAiFallbackPlanner} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
 
 export class ReceiveCustomerMessage {
   constructor(
     private readonly messages: CustomerWebsiteConversationMessageWriter,
     private readonly idGenerator: ConversationMessageIdGenerator,
     private readonly clock: Clock,
+    private readonly aiFallback: CustomerMessageAiFallbackPlanner = {plan: async () => null},
   ) {}
 
   async execute(input: ReceiveCustomerMessageInput): Promise<ReceiveCustomerMessageResult> {
@@ -45,7 +47,10 @@ export class ReceiveCustomerMessage {
     }
 
     try {
-      const result = await this.messages.appendCustomerWebsiteForInquiry(inquiryId, message);
+      let aiFallbackJob = null;
+      try { aiFallbackJob = await this.aiFallback.plan({triggerMessageId: message.id.value, triggeredAt: message.createdAt}); }
+      catch { aiFallbackJob = null; }
+      const result = await this.messages.appendCustomerWebsiteForInquiry(inquiryId, message, aiFallbackJob);
       if (result === "conversation_not_found") return {status: "conversation_not_found"};
       if (result === "duplicate") return {status: "conflict"};
       return {status: "created", messageId: message.id.value};

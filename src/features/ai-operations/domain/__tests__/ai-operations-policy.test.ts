@@ -2,7 +2,7 @@ import {describe, expect, it} from "vitest";
 
 import {AiOperationsPolicy} from "@/features/ai-operations/domain/entities/ai-operations-policy";
 import {AiOperationsPolicyValidationError} from "@/features/ai-operations/domain/errors/ai-operations-policy-errors";
-import {evaluateAiOperationsPolicy} from "@/features/ai-operations/domain/services/evaluate-ai-operations-policy";
+import {evaluateAiOperationsPolicy, findNextAiOperationsEligibleInstant} from "@/features/ai-operations/domain/services/evaluate-ai-operations-policy";
 
 const base = {
   mode: "SCHEDULED" as const,
@@ -59,5 +59,11 @@ describe("AiOperationsPolicy", () => {
     const fallback = AiOperationsPolicy.create({...base, mode: "FALLBACK", scheduleWindows: []});
     expect(evaluateAiOperationsPolicy(disabled, base.updatedAt)).toEqual({allowed: false, reason: "POLICY_DISABLED"});
     expect(evaluateAiOperationsPolicy(fallback, base.updatedAt)).toEqual({allowed: true, reason: "ALLOWED_FALLBACK"});
+  });
+
+  it("finds the next scheduled instant across an overnight week boundary in the business timezone", () => {
+    const policy = AiOperationsPolicy.create({...base, scheduleWindows: [{weekday: "SUNDAY", startMinute: 1_200, endMinute: 120, enabled: true}]});
+    expect(findNextAiOperationsEligibleInstant(policy, new Date("2026-09-06T15:00:30.000Z"), new Date("2026-09-07T15:00:30.000Z"))?.toISOString()).toBe("2026-09-06T16:30:00.000Z");
+    expect(findNextAiOperationsEligibleInstant(policy, new Date("2026-09-07T20:00:00.000Z"), new Date("2026-09-08T20:00:00.000Z"))).toBeNull();
   });
 });

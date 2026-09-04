@@ -215,6 +215,12 @@
     "units": {"pieces":"قطع","packages":"عبوات","pallets":"منصات","truckloads":"حمولات شاحنة"},
     "workflowEvents": {"INQUIRY_CREATED":"تم إنشاء الاستفسار","STATUS_CHANGED":"تغيرت الحالة","ASSIGNED":"تم التعيين","UNASSIGNED":"أُلغي التعيين"},
     "reply": {"replyToCustomer":"الرد على العميل","writeReply":"اكتب ردًا","characters":"الأحرف المستخدمة","keyboardHint":"اضغط Ctrl+Enter أو Command+Enter للإرسال. يضيف Enter سطرًا جديدًا.","sendReply":"إرسال الرد","sending":"جارٍ الإرسال…","sent":"تم إرسال الرسالة.","messageList":"سجل المحادثة","yolpolTeam":"فريق YOLPOL","errors":{"required":"اكتب رسالة قبل الإرسال.","tooLong":"يجب ألا تتجاوز الرسالة ١٠٬٠٠٠ حرف.","invalidMessage":"الرسالة غير صالحة. راجعها وحاول مرة أخرى.","sessionExpired":"انتهت جلسة الموظفين. سجّل الدخول مرة أخرى.","permissionDenied":"ليست لديك صلاحية إرسال هذا الرد.","conversationUnavailable":"محادثة الاستفسار غير متاحة.","retryConflict":"تعذر مطابقة إعادة المحاولة بأمان. حاول الإرسال مرة أخرى.","messageTooLarge":"حجم الرسالة أكبر من المسموح للإرسال.","unsupportedRequest":"تعذر قبول طلب الرد.","rateLimited":"تمت محاولات رد كثيرة. حاول لاحقًا.","serviceUnavailable":"خدمة الرد غير متاحة مؤقتًا. تم الاحتفاظ برسالتك."}},
+    "conversationAi": {
+      "title": "الذكاء الاصطناعي للمحادثة", "currentState": "حالة الأتمتة", "jobState": "آخر رد احتياطي",
+      "states": {"AUTO": "رد احتياطي تلقائي", "PAUSED": "متوقف مؤقتًا", "HUMAN_TAKEOVER": "استلام بشري"},
+      "jobs": {"PENDING": "بانتظار رد بشري", "RUNNING": "الذكاء الاصطناعي ينشئ الرد", "SUCCEEDED": "مكتمل", "CANCELLED": "أوقفه الموظف", "SUPERSEDED": "استبدلته رسالة أحدث من العميل", "FAILED": "الذكاء الاصطناعي غير متاح لهذه الرسالة"},
+      "noJob": "لا يوجد رد احتياطي معلق", "pause": "إيقاف الذكاء الاصطناعي", "takeover": "استلام بشري", "resume": "استئناف الذكاء الاصطناعي", "working": "جارٍ التحديث…", "error": "تعذر تحديث تحكم الذكاء الاصطناعي للمحادثة. حدّث الصفحة وحاول مجددًا."
+    },
     "senders": {"CUSTOMER":"العميل","INTERNAL_USER":"الموظف","AI_AGENT":"وكيل الذكاء الاصطناعي","SYSTEM":"النظام"},
     "channels": {"WEBSITE":"الموقع الإلكتروني","TELEGRAM":"تلغرام","EMAIL":"البريد الإلكتروني","WHATSAPP":"واتساب"}
   }

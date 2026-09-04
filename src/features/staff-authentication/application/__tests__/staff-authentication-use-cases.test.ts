@@ -126,6 +126,7 @@ describe("StaffAuthorizationPolicy", () => {
       mayViewInquiries: mayView,
       mayViewCustomerConversation: mayView,
       mayReplyToCustomerConversation: mayWrite,
+      mayControlConversationAi: mayWrite,
       mayPublishStaffTyping: mayWrite,
       mayUpdateInquiryWorkflow: mayWrite,
       mayViewAiOperations: true,

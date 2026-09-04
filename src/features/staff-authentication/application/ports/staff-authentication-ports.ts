@@ -63,6 +63,7 @@ export interface StaffAuthorization {
   mayViewInquiries(principal: StaffPrincipal): boolean;
   mayViewCustomerConversation(principal: StaffPrincipal): boolean;
   mayReplyToCustomerConversation(principal: StaffPrincipal): boolean;
+  mayControlConversationAi(principal: StaffPrincipal): boolean;
   mayPublishStaffTyping(principal: StaffPrincipal): boolean;
   mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean;
   mayViewAiOperations(principal: StaffPrincipal): boolean;

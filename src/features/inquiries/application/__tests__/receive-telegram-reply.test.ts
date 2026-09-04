@@ -21,7 +21,7 @@ function deliveryRepository(conversationId: string | null = "conversation-1"): T
 
 function capabilities(mayReplyToCustomerConversation: boolean): StaffCapabilities {
   return {
-    mayAccessStaffPanel: true, mayViewInquiries: true, mayViewCustomerConversation: true, mayReplyToCustomerConversation,
+    mayAccessStaffPanel: true, mayViewInquiries: true, mayViewCustomerConversation: true, mayReplyToCustomerConversation, mayControlConversationAi: mayReplyToCustomerConversation,
     mayPublishStaffTyping: mayReplyToCustomerConversation, mayUpdateInquiryWorkflow: mayReplyToCustomerConversation,
     mayViewAiOperations: true, mayManageAiOperations: false,
     mayViewAiProviderRegistry: true, mayManageAiProviders: false, mayManageAiCredentialReferences: false,

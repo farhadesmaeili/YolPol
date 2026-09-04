@@ -4,9 +4,10 @@ import type {ConversationAccessCredential} from "@/features/inquiries/domain/ent
 import type {CustomerConversationMessageCreated} from "@/features/inquiries/domain/events/customer-conversation-message-created";
 import type {InquiryCreated} from "@/features/inquiries/domain/events/inquiry-created";
 import type {Locale} from "@/shared/types/locale";
+import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
 
 export class DuplicateInquiryIdError extends Error { readonly name = "DuplicateInquiryIdError"; }
-export interface InquiryRepository { save(inquiry: Inquiry, event?: InquiryCreated, conversation?: Conversation, access?: ConversationAccessCredential): Promise<void>; findById(id: string): Promise<Inquiry | null>; }
+export interface InquiryRepository { save(inquiry: Inquiry, event?: InquiryCreated, conversation?: Conversation, access?: ConversationAccessCredential, aiFallbackJob?: CustomerMessageAiFallbackJobPlan | null): Promise<void>; findById(id: string): Promise<Inquiry | null>; }
 export interface InquiryIdGenerator { generate(): string; }
 export interface Clock { now(): Date; }
 export type CatalogProduct = Readonly<{id: string; sku: string; slug: string; status: "draft" | "published" | "archived"; localizedNames: Readonly<Partial<Record<Locale, string>>>; packaging?: Readonly<{unitsPerPackage: number; packagesPerPallet: number; unitsPerPallet: number; grossPalletWeightGrams: number}>}>;

@@ -1,4 +1,4 @@
-import {and, asc, desc, eq} from "drizzle-orm";
+import {and, asc, desc, eq, inArray, sql} from "drizzle-orm";
 import {drizzle} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
@@ -8,8 +8,10 @@ import {InvalidStoredAiOperationsPolicyError, type AiOperationsPolicyEvent, type
 import {AiOperationsPolicy} from "@/features/ai-operations/domain/entities/ai-operations-policy";
 import {AiOperationsPolicyValidationError} from "@/features/ai-operations/domain/errors/ai-operations-policy-errors";
 import {aiOperationPolicy, aiOperationsPostgresSchema, aiPolicyEvents, aiScheduleWindows} from "@/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema";
+import {conversationAiResponseJobs, conversationAiRoutingPostgresSchema} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema";
 
 const singletonPolicyId = "global";
+const schema = {...aiOperationsPostgresSchema, ...conversationAiRoutingPostgresSchema};
 
 function restoreSnapshot(value: AiOperationsPolicyDto | null | undefined): AiOperationsPolicy | null {
   if (value === null || value === undefined) return null;
@@ -24,7 +26,7 @@ function safeEventType(value: string): AiOperationsPolicyEventType {
 export class PostgresAiOperationsPolicyRepository implements AiOperationsPolicyRepository {
   private readonly database;
 
-  constructor(pool: Pool) { this.database = drizzle(pool, {schema: aiOperationsPostgresSchema}); }
+  constructor(pool: Pool) { this.database = drizzle(pool, {schema}); }
 
   async find(): Promise<AiOperationsPolicy | null> {
     const [row] = await this.database.select().from(aiOperationPolicy).where(eq(aiOperationPolicy.id, singletonPolicyId)).limit(1);
@@ -95,6 +97,17 @@ export class PostgresAiOperationsPolicyRepository implements AiOperationsPolicyR
         newPolicy,
         occurredAt: event.occurredAt,
       });
+      if (policy.mode === "DISABLED") {
+        const terminalAt = sql`greatest(${conversationAiResponseJobs.createdAt}, ${policy.updatedAt})`;
+        await transaction.update(conversationAiResponseJobs).set({
+          status: "CANCELLED",
+          leaseToken: null,
+          leasedUntil: null,
+          terminalAt,
+          updatedAt: terminalAt,
+          version: sql`${conversationAiResponseJobs.version} + 1`,
+        }).where(inArray(conversationAiResponseJobs.status, ["PENDING", "RUNNING"]));
+      }
       return "saved" as const;
     });
   }

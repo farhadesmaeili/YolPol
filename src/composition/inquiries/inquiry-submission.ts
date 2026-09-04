@@ -9,6 +9,8 @@ import {SubmitInquiry} from "@/features/inquiries/application/use-cases/submit-i
 import {CreateConversationAccess} from "@/features/inquiries/application/use-cases/create-conversation-access";
 import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
 import {supportedLocales} from "@/shared/types/locale";
+import {getConversationAiRouting} from "@/composition/conversation-ai-routing/conversation-ai-routing";
+import type {CustomerMessageAiFallbackPlanner} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
 
 export const inquiryProductCatalog: InquiryProductCatalog = {
   async findById(id) {
@@ -32,9 +34,9 @@ export const inquiryProductCatalog: InquiryProductCatalog = {
 };
 
 export function getInquirySubmission(): SubmitInquiry {
-  return createInquirySubmission(getInquiryRepository());
+  return createInquirySubmission(getInquiryRepository(), getConversationAiRouting().scheduler);
 }
 
-export function createInquirySubmission(repository: InquiryRepository): SubmitInquiry {
-  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()}, new CreateConversationAccess(new NodeConversationAccessTokenService()));
+export function createInquirySubmission(repository: InquiryRepository, aiFallback: CustomerMessageAiFallbackPlanner = {plan: async () => null}): SubmitInquiry {
+  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()}, new CreateConversationAccess(new NodeConversationAccessTokenService()), aiFallback);
 }

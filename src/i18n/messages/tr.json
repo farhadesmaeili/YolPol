@@ -215,6 +215,12 @@
     "units": {"pieces":"adet","packages":"paket","pallets":"palet","truckloads":"kamyon yükü"},
     "workflowEvents": {"INQUIRY_CREATED":"Talep oluşturuldu","STATUS_CHANGED":"Durum değişti","ASSIGNED":"Atandı","UNASSIGNED":"Atama kaldırıldı"},
     "reply": {"replyToCustomer":"Müşteriye yanıt ver","writeReply":"Yanıtınızı yazın","characters":"Kullanılan karakterler","keyboardHint":"Göndermek için Ctrl+Enter veya Command+Enter tuşlarına basın. Enter yeni satır ekler.","sendReply":"Yanıtı gönder","sending":"Gönderiliyor…","sent":"Mesaj gönderildi.","messageList":"Konuşma geçmişi","yolpolTeam":"YOLPOL Ekibi","errors":{"required":"Göndermeden önce bir mesaj yazın.","tooLong":"Mesaj en fazla 10.000 karakter olmalıdır.","invalidMessage":"Mesaj geçersiz. Kontrol edip tekrar deneyin.","sessionExpired":"Personel oturumunuz sona erdi. Yeniden giriş yapın.","permissionDenied":"Bu yanıtı gönderme izniniz yok.","conversationUnavailable":"Talep konuşmasına ulaşılamıyor.","retryConflict":"Bu yeniden deneme güvenli biçimde eşleştirilemedi. Tekrar göndermeyi deneyin.","messageTooLarge":"Mesaj gönderilemeyecek kadar büyük.","unsupportedRequest":"Yanıt isteği kabul edilemedi.","rateLimited":"Çok fazla yanıt denendi. Daha sonra tekrar deneyin.","serviceUnavailable":"Yanıt hizmeti geçici olarak kullanılamıyor. Mesajınız korundu."}},
+    "conversationAi": {
+      "title": "Görüşme yapay zekâsı", "currentState": "Otomasyon durumu", "jobState": "Son yedek yanıt",
+      "states": {"AUTO": "Otomatik yedek", "PAUSED": "Duraklatıldı", "HUMAN_TAKEOVER": "İnsan devraldı"},
+      "jobs": {"PENDING": "İnsan yanıtı bekleniyor", "RUNNING": "Yapay zekâ oluşturuyor", "SUCCEEDED": "Tamamlandı", "CANCELLED": "Personel tarafından engellendi", "SUPERSEDED": "Yeni müşteri mesajıyla geçersiz", "FAILED": "Bu tur için yapay zekâ kullanılamıyor"},
+      "noJob": "Bekleyen yedek yanıt yok", "pause": "Yapay zekâyı duraklat", "takeover": "İnsan devralsın", "resume": "Yapay zekâyı sürdür", "working": "Güncelleniyor…", "error": "Görüşme yapay zekâsı denetimi güncellenemedi. Yenileyip tekrar deneyin."
+    },
     "senders": {"CUSTOMER":"Müşteri","INTERNAL_USER":"Personel","AI_AGENT":"Yapay zekâ aracısı","SYSTEM":"Sistem"},
     "channels": {"WEBSITE":"Web sitesi","TELEGRAM":"Telegram","EMAIL":"E-posta","WHATSAPP":"WhatsApp"}
   }

@@ -1,5 +1,3 @@
-import "server-only";
-
 import {readFile} from "node:fs/promises";
 
 import type {AiCredentialSecretResolver} from "@/features/ai-provider-gateway/application/ports/ai-provider-gateway-ports";

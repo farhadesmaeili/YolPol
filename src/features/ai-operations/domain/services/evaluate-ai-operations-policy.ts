@@ -5,7 +5,7 @@ const weekdayByShortName: Readonly<Record<string, AiOperationsWeekday>> = Object
   Mon: "MONDAY", Tue: "TUESDAY", Wed: "WEDNESDAY", Thu: "THURSDAY", Fri: "FRIDAY", Sat: "SATURDAY", Sun: "SUNDAY",
 });
 
-function localWeekdayAndMinute(instant: Date, timeZone: string): Readonly<{weekday: AiOperationsWeekday; minute: number}> {
+export function localWeekdayAndMinute(instant: Date, timeZone: string): Readonly<{weekday: AiOperationsWeekday; minute: number}> {
   if (!(instant instanceof Date) || !Number.isFinite(instant.getTime())) throw new Error("Evaluation instant is invalid.");
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -21,6 +21,26 @@ function localWeekdayAndMinute(instant: Date, timeZone: string): Readonly<{weekd
     throw new Error("Time zone evaluation failed.");
   }
   return {weekday, minute: hour * 60 + minute};
+}
+
+export function findNextAiOperationsEligibleInstant(
+  policy: AiOperationsPolicy,
+  earliest: Date,
+  latest: Date,
+): Date | null {
+  if (!(earliest instanceof Date) || !Number.isFinite(earliest.getTime())
+    || !(latest instanceof Date) || !Number.isFinite(latest.getTime())
+    || latest < earliest) throw new Error("AI Operations search range is invalid.");
+  if (policy.mode === "DISABLED") return null;
+  if (policy.mode === "FALLBACK") return new Date(earliest);
+  if (evaluateAiOperationsPolicy(policy, earliest).allowed) return new Date(earliest);
+
+  const firstMinute = Math.ceil(earliest.getTime() / 60_000) * 60_000;
+  for (let instant = firstMinute; instant <= latest.getTime(); instant += 60_000) {
+    const candidate = new Date(instant);
+    if (evaluateAiOperationsPolicy(policy, candidate).allowed) return candidate;
+  }
+  return null;
 }
 
 export function evaluateAiOperationsPolicy(policy: AiOperationsPolicy, instant: Date): AiOperationsDecision {

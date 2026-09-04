@@ -225,6 +225,12 @@
     "units": {"pieces":"pieces","packages":"packages","pallets":"pallets","truckloads":"truckloads"},
     "workflowEvents": {"INQUIRY_CREATED":"Inquiry created","STATUS_CHANGED":"Status changed","ASSIGNED":"Assigned","UNASSIGNED":"Unassigned"},
     "reply": {"replyToCustomer":"Reply to customer","writeReply":"Write a reply","characters":"Characters used","keyboardHint":"Press Ctrl+Enter or Command+Enter to send. Enter adds a new line.","sendReply":"Send reply","sending":"Sending…","sent":"Message sent.","messageList":"Conversation history","yolpolTeam":"YOLPOL Team","errors":{"required":"Write a message before sending.","tooLong":"The message must be 10,000 characters or fewer.","invalidMessage":"The message is invalid. Review it and try again.","sessionExpired":"Your Staff session has expired. Sign in again.","permissionDenied":"You do not have permission to send this reply.","conversationUnavailable":"The Inquiry conversation is unavailable.","retryConflict":"This retry could not be matched safely. Try sending again.","messageTooLarge":"The message is too large to send.","unsupportedRequest":"The reply request could not be accepted.","rateLimited":"Too many replies were attempted. Try again later.","serviceUnavailable":"The reply service is temporarily unavailable. Your message has been kept."}},
+    "conversationAi": {
+      "title": "Conversation AI", "currentState": "Automation state", "jobState": "Latest fallback",
+      "states": {"AUTO": "Automatic fallback", "PAUSED": "Paused", "HUMAN_TAKEOVER": "Human takeover"},
+      "jobs": {"PENDING": "Waiting for human", "RUNNING": "AI generating", "SUCCEEDED": "Completed", "CANCELLED": "Suppressed by Staff", "SUPERSEDED": "Superseded by newer customer message", "FAILED": "AI unavailable for this turn"},
+      "noJob": "No pending fallback", "pause": "Pause AI", "takeover": "Human takeover", "resume": "Resume AI", "working": "Updating…", "error": "Conversation AI control could not be updated. Refresh and try again."
+    },
     "senders": {"CUSTOMER":"Customer","INTERNAL_USER":"Staff","AI_AGENT":"AI agent","SYSTEM":"System"},
     "channels": {"WEBSITE":"Website","TELEGRAM":"Telegram","EMAIL":"Email","WHATSAPP":"WhatsApp"}
   }
