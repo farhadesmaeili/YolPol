@@ -1,4 +1,7 @@
 import {defineConfig} from "drizzle-kit";
+import {loadDevelopmentEnv} from "./tooling/development/load-development-env";
+
+loadDevelopmentEnv();
 
 const databaseUrl = process.env.DATABASE_URL;
 

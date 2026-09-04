@@ -1,7 +1,9 @@
-import {createInquiryNotificationWorker} from "../../src/composition/inquiries/inquiry-notification-worker";
-import {runInquiryNotificationDevelopmentCommand} from "./inquiry-notification-runtime";
+import {loadDevelopmentEnv} from "../development/load-development-env";
 
 export async function main(): Promise<void> {
+  loadDevelopmentEnv();
+  const {runInquiryNotificationDevelopmentCommand} = await import("./inquiry-notification-runtime");
+  const {createInquiryNotificationWorker} = await import("../../src/composition/inquiries/inquiry-notification-worker");
   process.exitCode = await runInquiryNotificationDevelopmentCommand({
     environment: process.env,
     createRuntime: createInquiryNotificationWorker,
