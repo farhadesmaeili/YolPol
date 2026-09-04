@@ -6,6 +6,7 @@ import {GetConversationMessageHistory} from "@/features/inquiries/application/us
 import {ReceiveCustomerMessage} from "@/features/inquiries/application/use-cases/receive-customer-message";
 import {getInquiryPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
+import {getConversationAiRouting} from "@/composition/conversation-ai-routing/conversation-ai-routing";
 
 let receiver: ReceiveCustomerMessage | undefined;
 let history: GetConversationMessageHistory | undefined;
@@ -21,6 +22,7 @@ export function getCustomerMessageReceiver(): ReceiveCustomerMessage {
     getConversationMessages(),
     {generate: () => randomUUID()},
     {now: () => new Date()},
+    getConversationAiRouting().scheduler,
   );
   return receiver;
 }

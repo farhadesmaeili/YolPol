@@ -7,6 +7,8 @@ import {StaffDateTime, StaffPageHeader, StaffPanel, StaffState, StaffStatusBadge
 import {Link} from "@/i18n/navigation";
 import {formatHumanNumber, LtrIsolate} from "@/shared/presentation/bidi/bidi-isolate";
 import type {Locale} from "@/shared/types/locale";
+import type {ConversationAiStatusDto} from "@/features/conversation-ai-routing/application/dto/conversation-ai-routing-dto";
+import {ConversationAiControlPanel} from "@/features/conversation-ai-routing/presentation/components/conversation-ai-control";
 
 function isStatus(value: string | null): value is InquiryStatus {
   return value === "NEW" || value === "WAITING_FOR_TEAM" || value === "WAITING_FOR_CUSTOMER" || value === "QUOTED" || value === "CONFIRMED" || value === "CLOSED";
@@ -16,11 +18,13 @@ function DetailValue({children, label, ltr = false}: Readonly<{children: React.R
   return <div className="min-w-0"><dt className="text-xs font-medium text-stone-500">{label}</dt><dd className={`mt-1 break-words text-sm font-semibold text-stone-900 ${ltr ? "font-mono text-xs" : ""}`}>{ltr ? <LtrIsolate>{children}</LtrIsolate> : children}</dd></div>;
 }
 
-export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply}: Readonly<{
+export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply, conversationAiStatus = {state: "AUTO", version: 0, latestJob: null}, canControlConversationAi = false}: Readonly<{
   detail: TeamInquiryDetailDto;
   locale: Locale;
   teamMemberNames?: Readonly<Record<string, string>>;
   canReply: boolean;
+  conversationAiStatus?: ConversationAiStatusDto;
+  canControlConversationAi?: boolean;
 }>) {
   const [t, typing] = await Promise.all([
     getTranslations({locale, namespace: "Staff"}),
@@ -92,6 +96,19 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
         </div>
 
         <div className="space-y-4">
+          <StaffPanel title={t("conversationAi.title")}>
+            <ConversationAiControlPanel
+              inquiryId={inquiry.id}
+              initialStatus={conversationAiStatus}
+              canControl={canControlConversationAi}
+              labels={{
+                title: t("conversationAi.title"), currentState: t("conversationAi.currentState"), jobState: t("conversationAi.jobState"),
+                states: {AUTO: t("conversationAi.states.AUTO"), PAUSED: t("conversationAi.states.PAUSED"), HUMAN_TAKEOVER: t("conversationAi.states.HUMAN_TAKEOVER")},
+                jobs: {PENDING: t("conversationAi.jobs.PENDING"), RUNNING: t("conversationAi.jobs.RUNNING"), SUCCEEDED: t("conversationAi.jobs.SUCCEEDED"), CANCELLED: t("conversationAi.jobs.CANCELLED"), SUPERSEDED: t("conversationAi.jobs.SUPERSEDED"), FAILED: t("conversationAi.jobs.FAILED")},
+                noJob: t("conversationAi.noJob"), pause: t("conversationAi.pause"), takeover: t("conversationAi.takeover"), resume: t("conversationAi.resume"), working: t("conversationAi.working"), error: t("conversationAi.error"),
+              }}
+            />
+          </StaffPanel>
           <StaffPanel title={t("inquiryDetail.workflowHistory")}>
             {detail.workflowHistory.length === 0 ? <StaffState title={t("states.emptyWorkflowTitle")} description={t("states.emptyWorkflowDescription")} /> : (
               <ol className="space-y-4">

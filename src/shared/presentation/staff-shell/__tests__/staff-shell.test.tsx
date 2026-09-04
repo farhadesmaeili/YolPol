@@ -54,6 +54,7 @@ const capabilities = {
   mayViewInquiries: true,
   mayViewCustomerConversation: true,
   mayReplyToCustomerConversation: true,
+  mayControlConversationAi: true,
   mayPublishStaffTyping: true,
   mayUpdateInquiryWorkflow: true,
   mayViewAiOperations: true,

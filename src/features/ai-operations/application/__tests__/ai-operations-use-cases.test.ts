@@ -5,6 +5,7 @@ import {EvaluateAiOperationsAvailability} from "@/features/ai-operations/applica
 import {GetAiOperationsPolicy} from "@/features/ai-operations/application/use-cases/get-ai-operations-policy";
 import {ReadAiOperationsAuditHistory} from "@/features/ai-operations/application/use-cases/read-ai-operations-audit-history";
 import {UpdateAiOperationsPolicy} from "@/features/ai-operations/application/use-cases/update-ai-operations-policy";
+import {PlanAiOperationsFallback} from "@/features/ai-operations/application/use-cases/plan-ai-operations-fallback";
 import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
 import type {StaffRole} from "@/features/staff-authentication/domain/types/staff-role";
 import {FakeAiOperationsClock, FakeAiOperationsEmergencyOverride, FakeAiOperationsEventIdGenerator, FakeAiOperationsRepository} from "@/features/ai-operations/testing/fakes/ai-operations-fakes";
@@ -69,6 +70,19 @@ describe("AI Operations use cases", () => {
     await expect(evaluate.execute()).resolves.toEqual({allowed: true, reason: "ALLOWED_FALLBACK"});
     emergency.value = {active: true, state: "INVALID"};
     await expect(evaluate.execute()).resolves.toEqual({allowed: false, reason: "EMERGENCY_DISABLED"});
+  });
+
+  it("plans grace deadlines and scheduled windows while suppressing disabled and emergency states", async () => {
+    const repository = new FakeAiOperationsRepository();
+    const emergency = new FakeAiOperationsEmergencyOverride({active: false, state: "INACTIVE"});
+    const update = new UpdateAiOperationsPolicy(repository, authorization, new FakeAiOperationsClock(), new FakeAiOperationsEventIdGenerator());
+    await update.execute({...updateInput(), mode: "FALLBACK", humanGracePeriodSeconds: 900, scheduleWindows: []});
+    const planner = new PlanAiOperationsFallback(repository, emergency);
+    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({status: "scheduled", notBefore: new Date("2026-09-07T05:15:00.000Z")});
+    await update.execute({...updateInput(), expectedVersion: 1, mode: "SCHEDULED", humanGracePeriodSeconds: 60, scheduleWindows: [{weekday: "MONDAY", startMinute: 600, endMinute: 660, enabled: true}]});
+    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({status: "scheduled", notBefore: new Date("2026-09-07T06:30:00.000Z")});
+    emergency.value = {active: true, state: "ACTIVE"};
+    await expect(planner.execute({triggeredAt: new Date()})).resolves.toEqual({status: "suppressed", reason: "EMERGENCY_DISABLED"});
   });
 
   it("lets all valid Staff roles read status and audit while preserving management boundaries", async () => {

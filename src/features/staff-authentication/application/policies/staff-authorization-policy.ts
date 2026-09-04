@@ -30,6 +30,8 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
     return this.valid(principal) && principal.role !== "VIEWER";
   }
 
+  mayControlConversationAi(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
+
   mayPublishStaffTyping(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
   mayUpdateInquiryWorkflow(principal: StaffPrincipal): boolean { return this.mayReplyToCustomerConversation(principal); }
   mayViewAiOperations(principal: StaffPrincipal): boolean { return this.valid(principal); }
@@ -69,6 +71,7 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
       mayViewInquiries: this.mayViewInquiries(principal),
       mayViewCustomerConversation: this.mayViewCustomerConversation(principal),
       mayReplyToCustomerConversation: this.mayReplyToCustomerConversation(principal),
+      mayControlConversationAi: this.mayControlConversationAi(principal),
       mayPublishStaffTyping: this.mayPublishStaffTyping(principal),
       mayUpdateInquiryWorkflow: this.mayUpdateInquiryWorkflow(principal),
       mayViewAiOperations: this.mayViewAiOperations(principal),

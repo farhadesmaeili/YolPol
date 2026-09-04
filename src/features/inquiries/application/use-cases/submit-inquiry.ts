@@ -12,6 +12,7 @@ import type {CreateConversationAccess} from "@/features/inquiries/application/us
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import {normalizeInquiryQuantity} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 import {customerConversationResumeLifetimeMs} from "@/features/inquiries/application/config/customer-conversation-access-policy";
+import type {CustomerMessageAiFallbackPlanner} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
 
 function isRecord(value: unknown): value is Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) return false; const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; }
 function validCatalogProduct(value: unknown, requestedId: string): value is NonNullable<Awaited<ReturnType<InquiryProductCatalog["findById"]>>> & {packaging: {unitsPerPackage: number; packagesPerPallet: number; unitsPerPallet: number; grossPalletWeightGrams: number}} {
@@ -36,7 +37,7 @@ function resolveRequestedQuantity(item: SubmitInquiryItemInput): Readonly<{quant
 }
 
 export class SubmitInquiry {
-  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock, private readonly createAccess: CreateConversationAccess) {}
+  constructor(private readonly repository: InquiryRepository, private readonly catalog: InquiryProductCatalog, private readonly idGenerator: InquiryIdGenerator, private readonly clock: Clock, private readonly createAccess: CreateConversationAccess, private readonly aiFallback: CustomerMessageAiFallbackPlanner = {plan: async () => null}) {}
   async execute(input: SubmitInquiryInput): Promise<SubmitInquiryResult> {
     if (!Array.isArray(input.items) || input.items.length === 0) return {status: "validation_failed", field: "items"};
     const productIds = input.items.map(({productId}) => productId);
@@ -80,7 +81,14 @@ export class SubmitInquiry {
     const conversationAccessExpiresAt = new Date(inquiry.createdAt.getTime() + customerConversationResumeLifetimeMs);
     const access = this.createAccess.execute({conversationId: conversation.id.value, createdAt: inquiry.createdAt, expiresAt: conversationAccessExpiresAt});
     if (access.status === "dependency_failed") return {status: "dependency_failed", dependency: "access_token"};
-    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation, access.credential); }
+    const initialCustomerMessage = conversation.messages.find(({senderType}) => senderType === "CUSTOMER");
+    let aiFallbackJob = null;
+    try {
+      aiFallbackJob = initialCustomerMessage
+        ? await this.aiFallback.plan({triggerMessageId: initialCustomerMessage.id.value, triggeredAt: initialCustomerMessage.createdAt})
+        : null;
+    } catch { aiFallbackJob = null; }
+    try { await this.repository.save(inquiry, createInquiryCreated(inquiry.id.value, inquiry.createdAt), conversation, access.credential, aiFallbackJob); }
     catch (error) { return error instanceof DuplicateInquiryIdError ? {status: "duplicate_inquiry"} : {status: "persistence_failed"}; }
     return {status: "accepted", inquiry: toAcceptedInquiryDto(inquiry), conversationAccessToken: access.token, conversationAccessExpiresAt: conversationAccessExpiresAt.toISOString()};
   }

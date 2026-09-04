@@ -1,4 +1,5 @@
 import type {Message} from "@/features/inquiries/domain/entities/message";
+import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
 
 export type AppendConversationMessageResult = "created" | "duplicate" | "conversation_not_found";
 
@@ -7,7 +8,7 @@ export interface ConversationMessageWriter {
 }
 
 export interface CustomerWebsiteConversationMessageWriter {
-  appendCustomerWebsiteForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult>;
+  appendCustomerWebsiteForInquiry(inquiryId: string, message: Message, aiFallbackJob?: CustomerMessageAiFallbackJobPlan | null): Promise<AppendConversationMessageResult>;
 }
 
 export interface CorrelatedConversationMessageWriter {

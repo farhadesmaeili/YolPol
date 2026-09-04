@@ -215,6 +215,12 @@
     "units": {"pieces":"عدد","packages":"بسته","pallets":"پالت","truckloads":"کامیون"},
     "workflowEvents": {"INQUIRY_CREATED":"درخواست ایجاد شد","STATUS_CHANGED":"وضعیت تغییر کرد","ASSIGNED":"تخصیص داده شد","UNASSIGNED":"تخصیص برداشته شد"},
     "reply": {"replyToCustomer":"پاسخ به مشتری","writeReply":"پاسخ را بنویسید","characters":"تعداد نویسه‌های استفاده‌شده","keyboardHint":"برای ارسال Ctrl+Enter یا Command+Enter را بزنید. Enter خط جدید ایجاد می‌کند.","sendReply":"ارسال پاسخ","sending":"در حال ارسال…","sent":"پیام ارسال شد.","messageList":"تاریخچه گفتگو","yolpolTeam":"تیم یول‌پل","errors":{"required":"پیش از ارسال، پیام را بنویسید.","tooLong":"پیام باید حداکثر ۱۰٬۰۰۰ نویسه باشد.","invalidMessage":"پیام نامعتبر است. آن را بررسی و دوباره تلاش کنید.","sessionExpired":"نشست کارکنان شما منقضی شده است. دوباره وارد شوید.","permissionDenied":"اجازه ارسال این پاسخ را ندارید.","conversationUnavailable":"گفتگوی این درخواست در دسترس نیست.","retryConflict":"این تلاش مجدد به‌صورت امن تطبیق داده نشد. دوباره ارسال کنید.","messageTooLarge":"حجم پیام برای ارسال بیش از حد است.","unsupportedRequest":"درخواست پاسخ پذیرفته نشد.","rateLimited":"تعداد تلاش‌های ارسال زیاد است. بعداً دوباره امتحان کنید.","serviceUnavailable":"سرویس پاسخ موقتاً در دسترس نیست. پیام شما حفظ شده است."}},
+    "conversationAi": {
+      "title": "هوش مصنوعی گفتگو", "currentState": "وضعیت خودکارسازی", "jobState": "آخرین پاسخ جایگزین",
+      "states": {"AUTO": "پاسخ جایگزین خودکار", "PAUSED": "متوقف‌شده", "HUMAN_TAKEOVER": "واگذاری به انسان"},
+      "jobs": {"PENDING": "در انتظار پاسخ انسان", "RUNNING": "در حال تولید پاسخ هوش مصنوعی", "SUCCEEDED": "تکمیل‌شده", "CANCELLED": "توسط کارشناس متوقف شد", "SUPERSEDED": "با پیام جدید مشتری منسوخ شد", "FAILED": "هوش مصنوعی برای این نوبت در دسترس نیست"},
+      "noJob": "پاسخ جایگزین در انتظاری نیست", "pause": "توقف هوش مصنوعی", "takeover": "واگذاری به انسان", "resume": "ازسرگیری هوش مصنوعی", "working": "در حال به‌روزرسانی…", "error": "کنترل هوش مصنوعی گفتگو به‌روزرسانی نشد. صفحه را تازه کنید و دوباره تلاش کنید."
+    },
     "senders": {"CUSTOMER":"مشتری","INTERNAL_USER":"کارمند","AI_AGENT":"عامل هوش مصنوعی","SYSTEM":"سامانه"},
     "channels": {"WEBSITE":"وب‌سایت","TELEGRAM":"تلگرام","EMAIL":"ایمیل","WHATSAPP":"واتس‌اپ"}
   }

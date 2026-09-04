@@ -28,7 +28,7 @@ let messageRepository: PostgresConversationMessageRepository;
 const now = new Date("2026-08-26T10:00:00.000Z");
 
 async function cleanTables() {
-  await pool.query("truncate table telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 async function seedInquiry(id: string) {

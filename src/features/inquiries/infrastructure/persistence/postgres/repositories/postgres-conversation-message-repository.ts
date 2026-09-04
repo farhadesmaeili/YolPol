@@ -1,6 +1,6 @@
 import {createHash} from "node:crypto";
 
-import {and, asc, eq, gt, max} from "drizzle-orm";
+import {and, asc, eq, gt, inArray, max, sql} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
@@ -10,8 +10,12 @@ import {createCustomerConversationMessageCreated} from "@/features/inquiries/dom
 import {conversationChannels, messageSenderTypes} from "@/features/inquiries/domain/types/conversation-types";
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {conversationMessages, conversations, inquiryOutbox, inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
+import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
+import {conversationAiControls, conversationAiResponseJobs, conversationAiRoutingPostgresSchema} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema";
+import {aiOperationPolicy, aiOperationsPostgresSchema} from "@/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema";
 
-type InquiryDatabase = NodePgDatabase<typeof inquiryPostgresSchema>;
+const schema = {...inquiryPostgresSchema, ...conversationAiRoutingPostgresSchema, ...aiOperationsPostgresSchema};
+type InquiryDatabase = NodePgDatabase<typeof schema>;
 const customerMessageEventIdDomain = "yolpol:customer-conversation-message-created:v1";
 
 function customerMessageEventId(messageId: string): string {
@@ -22,7 +26,7 @@ function customerMessageEventId(messageId: string): string {
 export class PostgresConversationMessageRepository implements ConversationMessageRepository, CustomerWebsiteConversationMessageWriter, InquiryNotificationConversationReader {
   private readonly database: InquiryDatabase;
 
-  constructor(pool: Pool) { this.database = drizzle(pool, {schema: inquiryPostgresSchema}); }
+  constructor(pool: Pool) { this.database = drizzle(pool, {schema}); }
 
   async findConversationIdForInquiry(inquiryId: string): Promise<string | null> {
     try {
@@ -40,12 +44,12 @@ export class PostgresConversationMessageRepository implements ConversationMessag
     return this.appendForInquiryTransaction(inquiryId, message, false);
   }
 
-  async appendCustomerWebsiteForInquiry(inquiryId: string, message: Message): Promise<AppendConversationMessageResult> {
+  async appendCustomerWebsiteForInquiry(inquiryId: string, message: Message, aiFallbackJob?: CustomerMessageAiFallbackJobPlan | null): Promise<AppendConversationMessageResult> {
     if (message.senderType !== "CUSTOMER" || message.channel !== "WEBSITE") throw new InquiryPersistenceError();
-    return this.appendForInquiryTransaction(inquiryId, message, true);
+    return this.appendForInquiryTransaction(inquiryId, message, true, aiFallbackJob);
   }
 
-  private async appendForInquiryTransaction(inquiryId: string, message: Message, notifyCustomerMessage: boolean): Promise<AppendConversationMessageResult> {
+  private async appendForInquiryTransaction(inquiryId: string, message: Message, notifyCustomerMessage: boolean, aiFallbackJob?: CustomerMessageAiFallbackJobPlan | null): Promise<AppendConversationMessageResult> {
     try {
       return await this.database.transaction(async (transaction) => {
         const [conversation] = await transaction.select({id: conversations.id})
@@ -58,10 +62,11 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         const [latest] = await transaction.select({position: max(conversationMessages.position)})
           .from(conversationMessages)
           .where(eq(conversationMessages.conversationId, conversation.id));
+        const position = (latest?.position ?? -1) + 1;
         const inserted = await transaction.insert(conversationMessages).values({
           id: message.id.value,
           conversationId: conversation.id,
-          position: (latest?.position ?? -1) + 1,
+          position,
           senderType: message.senderType,
           channel: message.channel,
           actorReference: message.actorReference?.value ?? null,
@@ -69,6 +74,32 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           createdAt: message.createdAt,
         }).onConflictDoNothing({target: conversationMessages.id}).returning({id: conversationMessages.id});
         if (inserted.length !== 1) return "duplicate";
+
+        const [operationsPolicy] = message.senderType === "CUSTOMER" && aiFallbackJob
+          ? await transaction.select({mode: aiOperationPolicy.mode}).from(aiOperationPolicy)
+              .where(eq(aiOperationPolicy.id, "global")).limit(1).for("share")
+          : [];
+        if (message.senderType === "CUSTOMER") {
+          await transaction.update(conversationAiResponseJobs).set({
+            status: "SUPERSEDED", leaseToken: null, leasedUntil: null, terminalAt: message.createdAt,
+            updatedAt: message.createdAt, version: sql`${conversationAiResponseJobs.version} + 1`,
+          }).where(and(eq(conversationAiResponseJobs.conversationId, conversation.id), inArray(conversationAiResponseJobs.status, ["PENDING", "RUNNING"])));
+          if (aiFallbackJob) {
+            const [control] = await transaction.select({state: conversationAiControls.state}).from(conversationAiControls)
+              .where(eq(conversationAiControls.conversationId, conversation.id)).limit(1);
+            if (operationsPolicy && operationsPolicy.mode !== "DISABLED" && (!control || control.state === "AUTO")) await transaction.insert(conversationAiResponseJobs).values({
+              id: aiFallbackJob.id, conversationId: conversation.id, triggerMessageId: message.id.value,
+              triggerMessagePosition: position, status: "PENDING", notBefore: aiFallbackJob.notBefore,
+              executionId: aiFallbackJob.executionId, attempts: 0, createdAt: aiFallbackJob.createdAt,
+              updatedAt: aiFallbackJob.createdAt, version: 1,
+            }).onConflictDoNothing({target: conversationAiResponseJobs.triggerMessageId});
+          }
+        } else if (message.senderType === "INTERNAL_USER") {
+          await transaction.update(conversationAiResponseJobs).set({
+            status: "CANCELLED", leaseToken: null, leasedUntil: null, terminalAt: message.createdAt,
+            updatedAt: message.createdAt, version: sql`${conversationAiResponseJobs.version} + 1`,
+          }).where(and(eq(conversationAiResponseJobs.conversationId, conversation.id), inArray(conversationAiResponseJobs.status, ["PENDING", "RUNNING"]), sql`${conversationAiResponseJobs.triggerMessagePosition} < ${position}`));
+        }
 
         if (notifyCustomerMessage) {
           const event = createCustomerConversationMessageCreated({
@@ -136,17 +167,23 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         const [latest] = await transaction.select({position: max(conversationMessages.position)})
           .from(conversationMessages)
           .where(eq(conversationMessages.conversationId, conversation.id));
+        const position = (latest?.position ?? -1) + 1;
         const inserted = await transaction.insert(conversationMessages).values({
           id: message.id.value,
           conversationId: conversation.id,
-          position: (latest?.position ?? -1) + 1,
+          position,
           senderType: message.senderType,
           channel: message.channel,
           actorReference: message.actorReference?.value ?? null,
           body: message.body,
           createdAt: message.createdAt,
         }).onConflictDoNothing({target: conversationMessages.id}).returning({id: conversationMessages.id});
-        return inserted.length === 1 ? "created" : "duplicate";
+        if (inserted.length !== 1) return "duplicate";
+        if (message.senderType === "INTERNAL_USER") await transaction.update(conversationAiResponseJobs).set({
+          status: "CANCELLED", leaseToken: null, leasedUntil: null, terminalAt: message.createdAt,
+          updatedAt: message.createdAt, version: sql`${conversationAiResponseJobs.version} + 1`,
+        }).where(and(eq(conversationAiResponseJobs.conversationId, conversation.id), inArray(conversationAiResponseJobs.status, ["PENDING", "RUNNING"]), sql`${conversationAiResponseJobs.triggerMessagePosition} < ${position}`));
+        return "created";
       });
     } catch { throw new InquiryPersistenceError(); }
   }
