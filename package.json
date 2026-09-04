@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:host": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -20,6 +21,7 @@
     "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts",
     "worker:ai-fallback": "pnpm exec tsx tooling/workers/conversation-ai-fallback.ts",
     "dev:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications-dev.ts",
+    "dev:ai-fallback": "pnpm exec tsx tooling/workers/conversation-ai-fallback-dev.ts",
     "telegram:webhook:set": "pnpm exec tsx tooling/telegram/set-telegram-webhook.ts",
     "telegram:webhook:info": "pnpm exec tsx tooling/telegram/get-telegram-webhook-info.ts"
   },
@@ -34,6 +36,7 @@
     "tsx": "4.23.12"
   },
   "devDependencies": {
+    "@next/env": "16.3.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "8.21.0",

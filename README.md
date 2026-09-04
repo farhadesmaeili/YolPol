@@ -4,7 +4,7 @@ YolPol is a multilingual, SEO-first B2B glass-bottle catalog built with Next.js.
 
 ## Application setup
 
-Install dependencies with `pnpm install`, then run `pnpm dev`. Copy `.env.example` to an ignored local environment file and replace every example credential.
+Install dependencies with `pnpm install`, copy `.env.example` to the ignored `.env.local`, and replace every example credential. Run `pnpm dev` for local-only access or `pnpm dev:host` to bind the Development server to `0.0.0.0` for LAN/mobile testing. Neither command starts a background worker.
 
 ## Local PostgreSQL
 
@@ -15,7 +15,7 @@ docker compose up -d postgres
 docker compose ps
 ```
 
-Set `DATABASE_URL`, then use the reviewed migration workflow:
+Set `DATABASE_URL` in `.env.local`, then use the reviewed migration workflow. Drizzle loads the local Development environment automatically while preserving an already supplied process environment value:
 
 ```powershell
 pnpm db:check
@@ -23,6 +23,27 @@ pnpm db:migrate
 ```
 
 Generate a migration only after an intentional schema change with `pnpm db:generate`; commit and review the resulting SQL. Do not use runtime schema synchronization or `push` for production.
+
+## Local workers
+
+Run Development workers as separate, explicit processes with `pnpm dev:inquiry-notifications` and `pnpm dev:ai-fallback`. These commands load the ignored local Development environment before importing worker composition. The production-style `pnpm worker:inquiry-notifications` and `pnpm worker:ai-fallback` commands remain environment-only and do not load `.env.local`.
+
+After a machine restart, the normal Development workflow requires no manual PowerShell environment exports:
+
+```powershell
+# Terminal 1
+pnpm dev
+# Or, for LAN/mobile access:
+pnpm dev:host
+
+# Terminal 2
+pnpm dev:inquiry-notifications
+
+# Terminal 3
+pnpm dev:ai-fallback
+```
+
+`pnpm db:check` and the explicitly reviewed `pnpm db:migrate` command use the same local Development environment loading. Production application and worker processes continue to receive secrets through their process environment and/or Docker Secrets; they do not read `.env.local`.
 
 ## PostgreSQL integration tests
 
