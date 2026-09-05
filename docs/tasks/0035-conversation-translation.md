@@ -1,5 +1,10 @@
 # Conversation Translation final audit
 
+> Superseded live-delivery detail: [0036](./0036-conversation-translation-live-delivery.md)
+> makes historical unknown/SYSTEM outbound records withheld, non-blocking gaps.
+> Known required translations in PENDING, RUNNING, FAILED, or CANCELLED remain
+> ordering barriers.
+
 ## Result
 
 CONVERSATION TRANSLATION FINAL AUDIT PASSED WITH DEFERRED NON-BLOCKING WARNINGS — READY FOR STAGING

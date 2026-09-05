@@ -47,4 +47,13 @@ describe("Customer translation delivery", () => {
       expect(projectCustomerMessages([{...message, translation: undefined}])).toEqual([]);
     }
   });
+  it("withholds an unknown outbound gap without suppressing later Customer-safe content", () => {
+    const unknown: TranslatableMessage = {...row(0, "INTERNAL_USER"), translation: {sourceLocale: null, customerTargetLocale: "tr", translations: []}};
+    const projected = projectCustomerMessages([unknown, row(1, "CUSTOMER"), row(2, "INTERNAL_USER", "SUCCEEDED")]);
+    expect(projected.map(({position, message}) => ({position, body: message.body}))).toEqual([
+      {position: 1, body: "Customer original"},
+      {position: 2, body: "Turkish translation"},
+    ]);
+    expect(projected.map(({message}) => message.body)).not.toContain("Staff original");
+  });
 });

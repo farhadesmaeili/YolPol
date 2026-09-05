@@ -199,7 +199,8 @@
       "translation": "Çeviri",
       "pending": "Çevriliyor",
       "failed": "Çeviri başarısız",
-      "ready": "Müşteriye iletime hazır",
+      "ready": "Çeviri hazır",
+      "sameLanguage": "Çeviri gerekmiyor",
       "unknown": "Özgün dil bilinmiyor",
       "authoring": "Yanıtları Farsça yazın. Gerektiğinde yanıtlar müşterinin diline çevrilir.",
       "languages": {

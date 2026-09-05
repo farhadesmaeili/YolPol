@@ -209,7 +209,8 @@
       "translation": "Translation",
       "pending": "Translating",
       "failed": "Translation unavailable",
-      "ready": "Ready for Customer delivery",
+      "ready": "Translation ready",
+      "sameLanguage": "No translation required",
       "unknown": "Original language unknown",
       "authoring": "Write replies in Persian. Replies are translated into the customer's language when needed.",
       "languages": {
