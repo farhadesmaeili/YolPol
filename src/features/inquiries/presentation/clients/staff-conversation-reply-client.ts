@@ -1,3 +1,4 @@
+import {parseMessageTranslation} from "@/features/conversation-translation/presentation/clients/parse-message-translation";
 import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import {conversationChannels, messageSenderTypes} from "@/features/inquiries/domain/types/conversation-types";
 import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/message-input-validation";
@@ -61,7 +62,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseStaffConversationMessage(value: unknown): StaffConversationMessageDto | null {
-  if (!isPlainRecord(value) || Object.keys(value).sort().join(",") !== "actorReference,body,channel,createdAt,id,senderType") return null;
+  if (!isPlainRecord(value) || !(["actorReference,body,channel,createdAt,id,senderType", "actorReference,body,channel,createdAt,id,senderType,translation"].includes(Object.keys(value).sort().join(",")))) return null;
   if (typeof value.id !== "string" || !messageIdPattern.test(value.id)) return null;
   const senderType = messageSenderTypes.find((candidate) => candidate === value.senderType);
   const channel = conversationChannels.find((candidate) => candidate === value.channel);
@@ -75,7 +76,10 @@ export function parseStaffConversationMessage(value: unknown): StaffConversation
   if (typeof value.createdAt !== "string") return null;
   const createdAt = new Date(value.createdAt);
   if (!Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== value.createdAt) return null;
+  const translation = value.translation === undefined ? undefined : parseMessageTranslation(value.translation);
+  if (translation === null) return null;
   return Object.freeze({
+    ...(translation ? {translation} : {}),
     id: value.id,
     senderType,
     channel,

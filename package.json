@@ -19,6 +19,8 @@
     "staff:provision": "pnpm exec tsx tooling/staff-provisioning/index.ts",
     "staff:bootstrap-super-admin": "pnpm exec tsx tooling/staff-provisioning/bootstrap-super-admin.ts",
     "worker:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications.ts",
+    "worker:conversation-translation": "pnpm exec tsx tooling/workers/conversation-translation.ts",
+    "dev:conversation-translation": "pnpm exec tsx tooling/workers/conversation-translation-dev.ts",
     "worker:ai-fallback": "pnpm exec tsx tooling/workers/conversation-ai-fallback.ts",
     "dev:inquiry-notifications": "pnpm exec tsx tooling/workers/inquiry-notifications-dev.ts",
     "dev:ai-fallback": "pnpm exec tsx tooling/workers/conversation-ai-fallback-dev.ts",

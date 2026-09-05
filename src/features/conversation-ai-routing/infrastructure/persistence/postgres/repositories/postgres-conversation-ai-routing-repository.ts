@@ -1,3 +1,5 @@
+import {scheduleMessageTranslation} from "@/features/conversation-translation/infrastructure/persistence/schedule-message-translation";
+import {translationLocale} from "@/features/conversation-translation/domain/types/translation";
 import {and, asc, desc, eq, gt, inArray, lte, max, sql} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
@@ -98,9 +100,13 @@ export class PostgresConversationAiRoutingRepository implements ConversationAiRo
       const rows = await transaction.select().from(conversationMessages)
         .where(eq(conversationMessages.conversationId, job.conversationId))
         .orderBy(desc(conversationMessages.position)).limit(40);
+      const language = await transaction.execute(sql`select coalesce(l.source_locale,i.source_locale) as locale
+        from conversations c join inquiries i on i.id=c.inquiry_id
+        left join conversation_message_languages l on l.message_id=${job.triggerMessageId} where c.id=${job.conversationId}`);
+      const sourceLocale = translationLocale(language.rows[0]?.locale);
       const messages: ConversationAiContextMessage[] = rows.reverse().map((row) => Object.freeze({
         id: row.id, position: row.position, senderType: row.senderType as ConversationAiContextMessage["senderType"],
-        channel: row.channel as ConversationAiContextMessage["channel"], body: row.body, createdAt: new Date(row.createdAt),
+        channel: row.channel as ConversationAiContextMessage["channel"], ...(row.id === job.triggerMessageId ? {sourceLocale} : {}), body: row.body, createdAt: new Date(row.createdAt),
       }));
       return {status: "eligible" as const, messages: Object.freeze(messages)};
     });
@@ -154,6 +160,10 @@ export class PostgresConversationAiRoutingRepository implements ConversationAiRo
           .where(and(eq(conversationMessages.id, message.id.value), eq(conversationMessages.conversationId, conversation.id), eq(conversationMessages.senderType, "AI_AGENT"), eq(conversationMessages.channel, "WEBSITE"))).limit(1);
         if (!existing) throw new Error("Conversation AI message identity conflict.");
       }
+      const language = await transaction.execute(sql`select coalesce(l.source_locale,i.source_locale) as locale
+        from conversations c join inquiries i on i.id=c.inquiry_id
+        left join conversation_message_languages l on l.message_id=${job.triggerMessageId} where c.id=${job.conversationId}`);
+      await scheduleMessageTranslation(transaction, conversation.id, message, translationLocale(language.rows[0]?.locale));
       const updated = await transaction.update(conversationAiResponseJobs).set({
         status: "SUCCEEDED", leaseToken: null, leasedUntil: null, terminalAt: input.now, updatedAt: input.now,
         version: sql`${conversationAiResponseJobs.version} + 1`,

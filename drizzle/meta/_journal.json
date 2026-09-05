@@ -127,6 +127,13 @@
       "when": 1788299908142,
       "tag": "0017_conversation_ai_fallback_routing",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788579651274,
+      "tag": "0018_conversation_translation",
+      "breakpoints": true
     }
   ]
 }

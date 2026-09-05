@@ -34,11 +34,12 @@ export class GenerateBasicConversationAiResponse implements ConversationAiRespon
 
   async generate(input: Readonly<{executionId: string; messages: readonly ConversationAiContextMessage[]}>) {
     try {
+      const customerLocale = input.messages.findLast((message) => message.senderType === "CUSTOMER")?.sourceLocale;
       return await this.gateway.execute({
         executionId: input.executionId,
         capability: "TEXT_GENERATION",
         messages: boundedMessages(input.messages),
-        systemInstruction: buildBasicFallbackSystemInstruction(this.brandName),
+        systemInstruction: buildBasicFallbackSystemInstruction(this.brandName) + (customerLocale ? ` Respond in locale ${customerLocale}.` : ""),
         generationSettings: {temperature: 0.2, maxOutputTokens: 600},
         timeoutMs: 20_000,
       });

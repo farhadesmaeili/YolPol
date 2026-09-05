@@ -21,7 +21,10 @@ export function subscribeToCustomerConversation(
   source.addEventListener("message", (event) => {
     try {
       const message = parseCustomerChatMessage(JSON.parse(event.data) as unknown);
-      if (message) onMessage(message);
+      if (message) {
+        const position = typeof event.lastEventId === "string" && /^(0|[1-9][0-9]*)$/u.test(event.lastEventId) ? Number(event.lastEventId) : null;
+        onMessage(position !== null && Number.isSafeInteger(position) ? {...message, position} : message);
+      }
     } catch { /* EventSource reconnects automatically; malformed events stay presentation-safe. */ }
   });
   if (onStaffTyping) {

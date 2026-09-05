@@ -71,8 +71,12 @@ export function customerChatReducer(state: CustomerChatState, action: CustomerCh
         failure: null,
         sentAnnouncement: true,
       });
-    case "realtime_message_received":
-      if (state.messages.some(({id}) => id === action.message.id)) return state;
-      return Object.freeze({...state, messages: Object.freeze([...state.messages, Object.freeze(action.message)])});
+    case "realtime_message_received": {
+      const existing = state.messages.find(({id}) => id === action.message.id);
+      if (existing && (action.message.position === undefined || existing.position === action.message.position)) return state;
+      const messages = existing ? state.messages.map((message) => message.id === action.message.id ? action.message : message) : [...state.messages, action.message];
+      if (action.message.position !== undefined) messages.sort((left, right) => (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER));
+      return Object.freeze({...state, messages: Object.freeze(messages)});
+    }
   }
 }

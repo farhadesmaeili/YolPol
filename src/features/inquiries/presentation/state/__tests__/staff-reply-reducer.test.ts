@@ -15,6 +15,16 @@ const persistedMessage: StaffConversationMessageDto = Object.freeze({
 });
 
 describe("Staff Reply state", () => {
+  it("refreshes translation state and new messages while preserving the current draft", () => {
+    const initialState = createInitialStaffReplyState({conversationCursor: 0, messages: [persistedMessage]});
+    const drafted = staffReplyReducer(initialState, {type: "draft_changed", value: "Unsent draft"});
+    const translated: StaffConversationMessageDto = {...persistedMessage, translation: {sourceLocale: "fa", customerTargetLocale: "tr", translations: [{targetLocale: "tr", status: "SUCCEEDED", body: "Translated text"}]}};
+    const refreshed = staffReplyReducer(drafted, {type: "translation_snapshot", messages: [translated, {...persistedMessage, id: "later"}]});
+    expect(refreshed.draft).toBe("Unsent draft");
+    expect(refreshed.messages.map(({id}) => id)).toEqual([persistedMessage.id, "later"]);
+    expect(refreshed.messages[0]?.body).toBe(persistedMessage.body);
+    expect(refreshed.messages[0]?.translation?.translations[0]?.status).toBe("SUCCEEDED");
+  });
   const initial = (messages: readonly StaffConversationMessageDto[] = [], conversationCursor = messages.length - 1) => (
     createInitialStaffReplyState({conversationCursor, messages})
   );

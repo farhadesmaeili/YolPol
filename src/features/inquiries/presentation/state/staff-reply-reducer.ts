@@ -15,6 +15,7 @@ export type StaffReplyState = Readonly<{
 }>;
 
 export type StaffReplyAction =
+  | Readonly<{type: "translation_snapshot"; messages: readonly StaffConversationMessageDto[]}>
   | Readonly<{type: "draft_changed"; value: string}>
   | Readonly<{type: "submission_started"; clientMessageId: string}>
   | Readonly<{type: "submission_failed"; failure: StaffReplyDraftFailure | StaffConversationReplyFailure; discardClientMessageId?: boolean}>
@@ -44,6 +45,10 @@ export function createInitialStaffReplyState(input: Readonly<{
 
 export function staffReplyReducer(state: StaffReplyState, action: StaffReplyAction): StaffReplyState {
   switch (action.type) {
+    case "translation_snapshot": {
+      const snapshot = new Map(action.messages.map((message) => [message.id, message]));
+      return Object.freeze({...state, messages: Object.freeze([...action.messages, ...state.messages.filter((message) => !snapshot.has(message.id))])});
+    }
     case "draft_changed":
       return Object.freeze({
         ...state,

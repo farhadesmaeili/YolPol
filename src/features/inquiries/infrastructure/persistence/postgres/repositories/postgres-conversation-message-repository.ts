@@ -1,3 +1,5 @@
+import {readMessageTranslations} from "@/features/conversation-translation/infrastructure/persistence/read-message-translations";
+import {scheduleMessageTranslation} from "@/features/conversation-translation/infrastructure/persistence/schedule-message-translation";
 import {createHash} from "node:crypto";
 
 import {and, asc, eq, gt, inArray, max, sql} from "drizzle-orm";
@@ -74,6 +76,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           createdAt: message.createdAt,
         }).onConflictDoNothing({target: conversationMessages.id}).returning({id: conversationMessages.id});
         if (inserted.length !== 1) return "duplicate";
+        await scheduleMessageTranslation(transaction, conversation.id, message);
 
         const [operationsPolicy] = message.senderType === "CUSTOMER" && aiFallbackJob
           ? await transaction.select({mode: aiOperationPolicy.mode}).from(aiOperationPolicy)
@@ -179,6 +182,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           createdAt: message.createdAt,
         }).onConflictDoNothing({target: conversationMessages.id}).returning({id: conversationMessages.id});
         if (inserted.length !== 1) return "duplicate";
+        await scheduleMessageTranslation(transaction, conversation.id, message);
         if (message.senderType === "INTERNAL_USER") await transaction.update(conversationAiResponseJobs).set({
           status: "CANCELLED", leaseToken: null, leasedUntil: null, terminalAt: message.createdAt,
           updatedAt: message.createdAt, version: sql`${conversationAiResponseJobs.version} + 1`,
@@ -238,11 +242,12 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         .from(conversationMessages)
         .where(eq(conversationMessages.conversationId, conversation.id))
         .orderBy(asc(conversationMessages.position));
+      const translations = await readMessageTranslations(this.database, conversation.id);
       return Object.freeze(rows.map((row) => {
         const senderType = messageSenderTypes.find((value) => value === row.senderType);
         const channel = conversationChannels.find((value) => value === row.channel);
         if (!senderType || !channel) throw new InquiryPersistenceError();
-        return Object.freeze({position: row.position, message: Message.create({...row, senderType, channel})});
+        return Object.freeze({position: row.position, translation: translations.get(row.id), message: Message.create({...row, senderType, channel})});
       }));
     } catch {
       throw new InquiryPersistenceError();
@@ -270,11 +275,12 @@ export class PostgresConversationMessageRepository implements ConversationMessag
         .where(and(eq(conversationMessages.conversationId, conversation.id), gt(conversationMessages.position, afterPosition)))
         .orderBy(asc(conversationMessages.position))
         .limit(limit);
+      const translations = await readMessageTranslations(this.database, conversation.id, rows.map(({id}) => id));
       return Object.freeze(rows.map((row) => {
         const senderType = messageSenderTypes.find((value) => value === row.senderType);
         const channel = conversationChannels.find((value) => value === row.channel);
         if (!senderType || !channel) throw new InquiryPersistenceError();
-        return Object.freeze({position: row.position, message: Message.create({...row, senderType, channel})});
+        return Object.freeze({position: row.position, translation: translations.get(row.id), message: Message.create({...row, senderType, channel})});
       }));
     } catch {
       throw new InquiryPersistenceError();

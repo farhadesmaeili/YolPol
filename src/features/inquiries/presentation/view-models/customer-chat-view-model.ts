@@ -4,6 +4,7 @@ export type CustomerChatMessage = Readonly<{
   id: string;
   body: string;
   sender: CustomerChatSender;
+  position?: number;
 }>;
 
 export type CustomerChatLabels = Readonly<{

@@ -53,6 +53,15 @@ describe("Customer message client", () => {
 });
 
 describe("Customer message history client", () => {
+  it("retains durable positions after skips and rejects duplicate or descending cursors", async () => {
+    const message = (position: number) => ({id: `message_${position}`, position, senderType: "CUSTOMER", channel: "WEBSITE", body: "Safe message", createdAt: "2026-08-25T08:00:00.000Z"});
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json({messages: [message(10), message(12), message(13)]}, 200));
+    expect(await loadCustomerMessageHistory(signal, fetcher)).toMatchObject({status: "loaded", messages: [{position: 10}, {position: 12}, {position: 13}]});
+    for (const positions of [[10, 10], [12, 10], [10, -1]]) {
+      fetcher.mockResolvedValueOnce(json({messages: positions.map(message)}, 200));
+      expect(await loadCustomerMessageHistory(signal, fetcher)).toEqual({status: "unavailable"});
+    }
+  });
   const history = {messages: [
     {id: "message_1", senderType: "CUSTOMER", channel: "WEBSITE", body: "Customer update", createdAt: "2026-08-25T08:00:00.000Z"},
     {id: "message_2", senderType: "INTERNAL_USER", channel: "TELEGRAM", body: "Support response", createdAt: "2026-08-25T08:05:00.000Z"},

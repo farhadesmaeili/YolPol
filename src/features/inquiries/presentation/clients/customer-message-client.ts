@@ -31,7 +31,8 @@ function isExactCreatedResponse(value: unknown): value is Readonly<{status: "cre
 }
 
 export function parseCustomerChatMessage(value: unknown): CustomerChatMessage | null {
-  if (!isPlainRecord(value) || Object.keys(value).sort().join(",") !== "body,channel,createdAt,id,senderType") return null;
+  if (!isPlainRecord(value) || !["body,channel,createdAt,id,senderType", "body,channel,createdAt,id,position,senderType"].includes(Object.keys(value).sort().join(","))) return null;
+  if (value.position !== undefined && (!Number.isSafeInteger(value.position) || Number(value.position) < 0)) return null;
   if (typeof value.id !== "string" || !messageIdPattern.test(value.id)) return null;
   const senderType = messageSenderTypes.find((candidate) => candidate === value.senderType);
   const channel = conversationChannels.find((candidate) => candidate === value.channel);
@@ -40,7 +41,7 @@ export function parseCustomerChatMessage(value: unknown): CustomerChatMessage | 
   if (typeof value.createdAt !== "string") return null;
   const createdAt = new Date(value.createdAt);
   if (!Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== value.createdAt) return null;
-  return Object.freeze({id: value.id, body: value.body, sender: senderType === "CUSTOMER" ? "customer" : "support"});
+  return Object.freeze({id: value.id, body: value.body, ...(value.position !== undefined ? {position: Number(value.position)} : {}), sender: senderType === "CUSTOMER" ? "customer" : "support"});
 }
 
 async function parseCustomerMessageHistoryResponse(response: Response): Promise<LoadCustomerMessageHistoryResult> {
@@ -55,6 +56,8 @@ async function parseCustomerMessageHistoryResponse(response: Response): Promise<
     for (const entry of value.messages) {
       const message = parseCustomerChatMessage(entry);
       if (!message) return {status: "unavailable"};
+      if (messages.some((existing) => existing.id === message.id)
+        || (message.position !== undefined && message.position <= (messages.at(-1)?.position ?? -1))) return {status: "unavailable"};
       messages.push(message);
     }
     return {status: "loaded", messages: Object.freeze(messages)};

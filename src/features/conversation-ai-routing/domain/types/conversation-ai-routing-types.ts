@@ -1,3 +1,4 @@
+import type {Locale} from "@/shared/types/locale";
 import type {AiProviderFailureCategory} from "@/features/ai-provider-gateway/domain/types/ai-provider-execution";
 
 export const conversationAiControlStates = ["AUTO", "PAUSED", "HUMAN_TAKEOVER"] as const;
@@ -22,6 +23,7 @@ export type ConversationAiContextMessage = Readonly<{
   senderType: "CUSTOMER" | "INTERNAL_USER" | "AI_AGENT" | "SYSTEM";
   channel: "WEBSITE" | "TELEGRAM" | "EMAIL" | "WHATSAPP";
   body: string;
+  sourceLocale?: Locale;
   createdAt: Date;
 }>;
 

@@ -194,6 +194,33 @@
   "InquiryPage": {"metadata":{"title":"Toptan Teklif İsteyin | YolPol","description":"Yayımlanmış YolPol ürünleri ve ticari gereksinimler için B2B toptan satış talebi gönderin."},"eyebrow":"B2B toptan satış talebi","heading":"Toptan teklif isteyin","introduction":"Yayımlanmış ürünleri seçin ve alıcının ayarladığı taşımacılık için iletişim, palet ve varış bilgilerinizi paylaşın.","pricing":"Ürün fiyatları ve ticari koşullar talep yoluyla kesinleştirilir.","form":{"customer":"İletişim bilgileri","fullName":"Ad soyad (zorunlu)","company":"Şirket adı (isteğe bağlı)","country":"Ülke (zorunlu)","countryPlaceholder":"Ülke seçin","city":"Şehir (isteğe bağlı)","email":"E-posta (zorunlu)","phone":"Ana telefon (zorunlu)","whatsappPhone":"WhatsApp numarası (zorunlu)","telegramUsername":"Telegram kullanıcı adı (zorunlu)","preferredContact":"Tercih edilen iletişim yöntemleri (bir veya daha fazla)","products":"Ürünler","product":"Ürün","removeProduct":"Ürünü kaldır","destination":"Alıcının ayarladığı taşımacılık için varış yeri","destinationCountry":"Varış ülkesi (isteğe bağlı)","destinationCity":"Varış şehri (isteğe bağlı)","message":"Mesaj (isteğe bağlı)"},"contactMethods":{"email":"E-posta","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"İran","TR":"Türkiye","IQ":"Irak","AM":"Ermenistan","AZ":"Azerbaycan","TM":"Türkmenistan","AF":"Afganistan","PK":"Pakistan","AE":"Birleşik Arap Emirlikleri","SA":"Suudi Arabistan","QA":"Katar","KW":"Kuveyt","BH":"Bahreyn","OM":"Umman"}},
   "Inquiry": {"customerInformation": "Müşteri bilgileri", "fullName": "Ad soyad", "company": "Şirket", "country": "Ülke", "city": "Şehir", "email": "E-posta", "phone": "Telefon veya WhatsApp", "telegramUsername": "Telegram kullanıcı adı", "preferredContact": "Tercih edilen iletişim yöntemi", "productSelection": "Ürün seçimi", "quantity": "Miktar", "units": {"pieces": "Adet", "packages": "Paket", "pallets": "Palet", "truckloads": "Kamyon yükü"}, "destination": "Varış yeri", "message": "Mesaj", "privacyConsent": "Belirtilen gizlilik koşullarını açıkça kabul ediyorum.", "validation": {"required": "Bu alan zorunludur.", "invalid": "Geçerli bir değer girin.", "productUnavailable": "Seçilen ürün kullanılamıyor."}, "submission": {"idle": "Hazır", "submitting": "Gönderiliyor", "accepted": "Talebiniz alındı.", "acceptedWithWarning": "Talebiniz alındı ancak bir veya daha fazla bildirim gönderilemedi.", "integrationUnavailable": "Talep gönderimi şu anda kullanılamıyor."}}
   ,"Staff": {
+    "translation": {
+      "original": "Özgün metin",
+      "translation": "Çeviri",
+      "pending": "Çevriliyor",
+      "failed": "Çeviri başarısız",
+      "ready": "Müşteriye iletime hazır",
+      "unknown": "Özgün dil bilinmiyor",
+      "authoring": "Yanıtları Farsça yazın. Gerektiğinde yanıtlar müşterinin diline çevrilir.",
+      "languages": {
+        "en": "İngilizce",
+        "tr": "Türkçe",
+        "fa": "Farsça",
+        "ar": "Arapça"
+      },
+      "blocked": "Bu mesajda müşteriye iletim duraklatıldı",
+      "cancelled": "Çeviri iptal edildi",
+      "skipped": "Atlandı — bu mesaj müşteriye iletilmeyecek",
+      "retry": "Çeviriyi yeniden dene",
+      "skip": "Bu mesajı müşteriye iletme",
+      "confirmSkip": "Atlamayı onayla",
+      "skipWarning": "Bu işlem, mesajın müşteriye iletilmesini kalıcı olarak engeller.",
+      "cancelAction": "Mesajı koru",
+      "actionError": "İşlem tamamlanamadı. Görüşmeyi yenileyip tekrar deneyin.",
+      "sourceLanguage": "Özgün mesajın dili",
+      "selectLanguage": "Özgün dili seçin",
+      "confirmLanguage": "Özgün dili onayla"
+    },
     "metadata": {"login":"Personel Girişi | YolPol","dashboard":"Personel Paneli | YolPol","inquiries":"Talepler | YolPol Personel","inquiryDetail":"Talep Detayı | YolPol Personel","team":"Ekip | YolPol Personel","activation":"Personel Etkinleştirme | YolPol"},
     "common": {"operations":"Personel operasyonları","displayName":"Görünen ad","role":"Rol","teamMemberId":"Ekip Üyesi Kimliği","signedInAs":"Oturum açan","customer":"Müşteri","route":"Rota","status":"Durum","assignment":"Atama","activity":"Hareket","created":"Oluşturulma","updated":"Güncellenme","assignedAt":"Atanma","open":"Aç","notProvided":"Belirtilmedi","items":"kalem","messages":"mesaj","unassigned":"Atanmamış","utc":"Saatler UTC olarak gösterilir","inquiryId":"Talep Kimliği","fullName":"Ad soyad","company":"Şirket","email":"E-posta","phone":"Telefon","whatsapp":"WhatsApp","telegram":"Telegram","preferredContact":"Tercih edilen iletişim","origin":"Çıkış","destination":"Varış","none":"Yok"},
     "navigation": {"label":"Personel menüsü","changeLanguage":"Dili değiştir","skipToContent":"Personel içeriğine geç","dashboard":"Panel","inquiries":"Talepler","aiOperations":"Yapay Zekâ Operasyonları","aiProviders":"Yapay Zekâ Sağlayıcıları","team":"Ekip"},
