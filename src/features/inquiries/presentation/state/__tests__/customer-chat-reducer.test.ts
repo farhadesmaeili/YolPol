@@ -4,6 +4,13 @@ import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/messa
 import {createInitialCustomerChatState, customerChatReducer, customerMessageDraftFailure} from "@/features/inquiries/presentation/state/customer-chat-reducer";
 
 describe("Customer chat presentation state", () => {
+  it("places a delayed translation before later local Customer activity and deduplicates its acknowledgement", () => {
+    let state = createInitialCustomerChatState([{id: "customer-1", body: "First", sender: "customer", position: 0}]);
+    state = customerChatReducer(state, {type: "submission_succeeded", message: {id: "customer-2", body: "Later", sender: "customer"}});
+    state = customerChatReducer(state, {type: "realtime_message_received", message: {id: "staff", body: "Translation", sender: "support", position: 1}});
+    state = customerChatReducer(state, {type: "realtime_message_received", message: {id: "customer-2", body: "Later", sender: "customer", position: 2}});
+    expect(state.messages.map(({id}) => id)).toEqual(["customer-1", "staff", "customer-2"]);
+  });
   it("validates empty and oversized drafts before communication", () => {
     expect(customerMessageDraftFailure("   ")).toBe("required");
     expect(customerMessageDraftFailure("x".repeat(messageBodyMaxLength + 1))).toBe("too_long");

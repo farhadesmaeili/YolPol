@@ -21,6 +21,17 @@ async function eligibleProfiles(options: Readonly<{providerEnabled?: boolean; pr
 }
 
 describe("AI provider registry use cases", () => {
+  it("excludes a TEXT_GENERATION-only profile from TRANSLATION eligibility", async () => {
+    const repository = new FakeAiProviderRegistryRepository(); const value = context(repository);
+    await new SaveAiProviderConfiguration(value).execute(providerInput());
+    await new SaveAiCredentialReference(value).execute(credentialInput());
+    const save = new SaveAiModelProfile(value);
+    await save.execute(profileInput());
+    const eligibility = new GetEligibleAiModelProfiles(repository);
+    expect(await eligibility.execute("TRANSLATION")).toEqual([]);
+    await save.execute({...profileInput(), expectedVersion: 1, capabilities: ["TEXT_GENERATION", "TRANSLATION"]});
+    expect((await eligibility.execute("TRANSLATION")).map(({profile}) => profile.id)).toEqual(["profile-a"]);
+  });
   it("creates and updates all entities with server-derived actors, versions, and audit intents", async () => { const repository = new FakeAiProviderRegistryRepository(); const value = context(repository); const saveProvider = new SaveAiProviderConfiguration(value); expect(await saveProvider.execute({...providerInput(), principal: {...principal("ADMIN"), displayName: "browser label"}})).toMatchObject({status: "saved", provider: {version: 1, updatedBy: "staff:member-1"}}); expect(await new SaveAiModelProfile(value).execute(profileInput())).toMatchObject({status: "saved", profile: {version: 1}}); expect(await new SaveAiCredentialReference(value).execute(credentialInput())).toMatchObject({status: "saved", credentialReference: {version: 1}}); expect(repository.events.map((event) => event.entityType)).toEqual(["PROVIDER", "MODEL_PROFILE", "CREDENTIAL_REFERENCE"]); value.clock.instant = new Date("2026-09-01T13:00:00Z"); expect(await saveProvider.execute({...providerInput(), expectedVersion: 1, enabled: false})).toMatchObject({status: "saved", provider: {version: 2, enabled: false}}); expect(repository.events.at(-1)?.changeType).toBe("DISABLED"); });
   it("enforces Super Admin credential management and Admin provider/profile management centrally", async () => { const repository = new FakeAiProviderRegistryRepository(); const value = context(repository); await expect(new SaveAiProviderConfiguration(value).execute(providerInput("SALES"))).resolves.toEqual({status: "forbidden"}); await new SaveAiProviderConfiguration(value).execute(providerInput("ADMIN")); await expect(new SaveAiCredentialReference(value).execute(credentialInput("ADMIN"))).resolves.toEqual({status: "forbidden"}); await expect(new SaveAiCredentialReference(value).execute(credentialInput("SUPER_ADMIN"))).resolves.toMatchObject({status: "saved"}); });
   it("allows every current Staff role to read safe registry data", async () => { const repository = new FakeAiProviderRegistryRepository(); for (const role of ["SUPER_ADMIN", "ADMIN", "SALES", "VIEWER"] as const) await expect(new GetAiProviderRegistry(repository, authorization).execute(principal(role))).resolves.toMatchObject({status: "found"}); });

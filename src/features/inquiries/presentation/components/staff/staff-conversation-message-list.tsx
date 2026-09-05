@@ -1,8 +1,10 @@
+import {MessageTranslation, type TranslationLabels} from "@/features/conversation-translation/presentation/components/message-translation";
 import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import {StaffDateTime} from "@/features/inquiries/presentation/components/staff/staff-ui";
 import type {Locale} from "@/shared/types/locale";
 
 export type StaffConversationLabels = Readonly<{
+  translation?: TranslationLabels;
   aiAgent: string;
   customer: string;
   emptyDescription: string;
@@ -36,12 +38,14 @@ export function resolveStaffMessageAuthor(
 
 export function StaffConversationMessageList({
   customerDisplayName,
+  inquiryId, canReply, onTranslationResolved,
   labels,
   locale,
   messages,
   teamMemberNames,
 }: Readonly<{
   customerDisplayName: string;
+  inquiryId?: string; canReply?: boolean; onTranslationResolved?: () => void;
   labels: StaffConversationLabels;
   locale: Locale;
   messages: readonly StaffConversationMessageDto[];
@@ -66,7 +70,10 @@ export function StaffConversationMessageList({
             </span>
             <span className="rounded-full bg-white px-2 py-1 text-stone-600">{labels.channels[message.channel]}</span>
           </div>
+          {labels.translation && message.translation ? <p className="mt-3 text-xs font-semibold">{labels.translation.original} · {message.translation.sourceLocale ? labels.translation.languages[message.translation.sourceLocale] : labels.translation.unknown}</p> : null}
           <p dir="auto" className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-stone-800">{message.body}</p>
+          {labels.translation && message.translation ? <MessageTranslation value={message.translation} labels={labels.translation} outbound={message.senderType !== "CUSTOMER"} canConfirmSource={message.senderType !== "SYSTEM"} inquiryId={inquiryId} messageId={message.id} canReply={canReply} onResolved={onTranslationResolved} /> : null}
+          {labels.translation && !message.translation && (message.senderType === "INTERNAL_USER" || message.senderType === "AI_AGENT") ? <p className="mt-2 text-sm">{labels.translation.unknown}</p> : null}
           <p className="mt-3 text-xs text-stone-500"><StaffDateTime locale={locale} value={message.createdAt} /></p>
         </li>
       ))}

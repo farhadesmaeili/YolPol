@@ -1,3 +1,4 @@
+import type {MessageTranslationView} from "@/features/conversation-translation/domain/types/translation";
 import type {Message} from "@/features/inquiries/domain/entities/message";
 import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
 
@@ -17,9 +18,10 @@ export interface CorrelatedConversationMessageWriter {
 
 export interface ConversationMessageReader {
   findForInquiry(inquiryId: string): Promise<readonly Message[] | null>;
+  findPositionedForInquiry?(inquiryId: string): Promise<readonly PositionedConversationMessage[] | null>;
 }
 
-export type PositionedConversationMessage = Readonly<{position: number; message: Message}>;
+export type PositionedConversationMessage = Readonly<{position: number; message: Message; translation?: MessageTranslationView}>;
 
 export interface PositionedConversationMessageReader {
   findPositionedForInquiry(inquiryId: string): Promise<readonly PositionedConversationMessage[] | null>;

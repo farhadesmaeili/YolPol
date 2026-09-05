@@ -31,7 +31,7 @@ export class GetTeamInquiryDetail {
           assignment: snapshot.assignment,
           workflowHistory: Object.freeze([...workflowHistory]),
           conversationCursor: conversationMessages?.at(-1)?.position ?? -1,
-          conversationMessages: Object.freeze((conversationMessages ?? []).map(({message}) => toStaffConversationMessageDto(message))),
+          conversationMessages: Object.freeze((conversationMessages ?? []).map(({message, translation}) => toStaffConversationMessageDto(message, translation))),
         }),
       });
     } catch { return {status: "persistence_failed"}; }

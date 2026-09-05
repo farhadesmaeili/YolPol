@@ -94,6 +94,17 @@ export function StaffReplyComposer({
     };
   }, [canReply, inquiryId]);
 
+  useEffect(() => {
+    dispatch({type: "translation_snapshot", messages: initialMessages});
+  }, [initialMessages]);
+
+  const pendingTranslations = state.messages.some((message) => message.translation?.translations.some((value) => value.status === "PENDING" || value.status === "RUNNING"));
+  useEffect(() => {
+    if (!pendingTranslations) return;
+    const timer = setInterval(() => router.refresh(), 5_000);
+    return () => clearInterval(timer);
+  }, [pendingTranslations, router]);
+
   async function submit() {
     if (submissionInFlight.current) return;
     const draftFailure = staffReplyDraftFailure(state.draft);
@@ -130,6 +141,7 @@ export function StaffReplyComposer({
     if (result.status === "sent") {
       typingHeartbeat.current?.stop();
       dispatch({type: "submission_succeeded", message: result.message});
+      router.refresh();
       requestAnimationFrame(() => textarea.current?.focus());
       return;
     }
@@ -166,6 +178,7 @@ export function StaffReplyComposer({
   return (
     <div className="min-w-0">
       <StaffConversationMessageList
+        inquiryId={inquiryId} canReply={canReply} onTranslationResolved={() => router.refresh()}
         customerDisplayName={customerDisplayName}
         labels={labels}
         locale={locale}
@@ -179,6 +192,7 @@ export function StaffReplyComposer({
 
       {canReply ? <form onSubmit={handleSubmit} noValidate className="min-w-0">
         <h3 className="text-base font-bold text-stone-950">{labels.replyToCustomer}</h3>
+        {labels.translation ? <p className="mt-2 text-sm">{labels.translation.authoring}</p> : null}
         <label htmlFor={textareaId} className="mt-4 block text-sm font-semibold text-stone-800">{labels.writeReply}</label>
         <textarea
           ref={textarea}

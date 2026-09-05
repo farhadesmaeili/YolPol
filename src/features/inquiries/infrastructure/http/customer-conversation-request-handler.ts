@@ -1,3 +1,4 @@
+import {customerWebsiteLocale} from "@/features/conversation-translation/infrastructure/http/customer-website-locale";
 import type {GetConversationMessageHistoryResult} from "@/features/inquiries/application/results/get-conversation-message-history-result";
 import type {ReceiveCustomerMessageInput} from "@/features/inquiries/application/dto/customer-message-dto";
 import type {ReceiveCustomerMessageResult} from "@/features/inquiries/application/results/receive-customer-message-result";
@@ -56,7 +57,7 @@ export function createCustomerConversationMessageRequestHandler(getResolver: () 
     if (access.status === "service_unavailable") return failure("service_unavailable", 503);
 
     let result: ReceiveCustomerMessageResult;
-    try { result = await getReceiver().execute({inquiryId: access.inquiryId, message: parsed.value.message}); }
+    try { result = await getReceiver().execute({inquiryId: access.inquiryId, message: parsed.value.message, ...customerWebsiteLocale(request)}); }
     catch { return failure("service_unavailable", 503); }
     switch (result.status) {
       case "created": return json({status: "created", messageId: result.messageId}, 201);

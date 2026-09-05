@@ -1,3 +1,4 @@
+import type {MessageTranslationView} from "@/features/conversation-translation/domain/types/translation";
 import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import type {Message} from "@/features/inquiries/domain/entities/message";
@@ -12,9 +13,10 @@ export function toConversationMessageDto(message: Message): ConversationMessageD
   });
 }
 
-export function toStaffConversationMessageDto(message: Message): StaffConversationMessageDto {
+export function toStaffConversationMessageDto(message: Message, translation?: MessageTranslationView): StaffConversationMessageDto {
   return Object.freeze({
     ...toConversationMessageDto(message),
     actorReference: message.actorReference?.value ?? null,
+    ...(translation ? {translation} : {}),
   });
 }

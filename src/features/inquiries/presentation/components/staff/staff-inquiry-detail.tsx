@@ -135,6 +135,23 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
               teamMemberNames={teamMemberNames}
               canReply={canReply}
               labels={{
+                translation: {
+                  original: t("translation.original"), translation: t("translation.translation"), pending: t("translation.pending"),
+                  failed: t("translation.failed"), ready: t("translation.ready"), unknown: t("translation.unknown"), authoring: t("translation.authoring"),
+                  blocked: t("translation.blocked"),
+                  cancelled: t("translation.cancelled"),
+                  skipped: t("translation.skipped"),
+                  retry: t("translation.retry"),
+                  skip: t("translation.skip"),
+                  confirmSkip: t("translation.confirmSkip"),
+                  skipWarning: t("translation.skipWarning"),
+                  cancelAction: t("translation.cancelAction"),
+                  actionError: t("translation.actionError"),
+                  sourceLanguage: t("translation.sourceLanguage"),
+                  selectLanguage: t("translation.selectLanguage"),
+                  confirmLanguage: t("translation.confirmLanguage"),
+                  languages: {en: t("translation.languages.en"), tr: t("translation.languages.tr"), fa: t("translation.languages.fa"), ar: t("translation.languages.ar")},
+                },
                 aiAgent: t("senders.AI_AGENT"),
                 customer: t("senders.CUSTOMER"),
                 system: t("senders.SYSTEM"),

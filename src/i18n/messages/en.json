@@ -204,6 +204,33 @@
   "InquiryPage": {"metadata":{"title":"Request a Wholesale Quote | YolPol","description":"Submit a B2B wholesale inquiry for published YolPol products and commercial requirements."},"eyebrow":"B2B wholesale inquiry","heading":"Request a wholesale quote","introduction":"Select published products and share your contact, pallet and destination details for buyer-arranged transportation.","pricing":"Product pricing and commercial terms are confirmed through inquiry.","form":{"customer":"Contact information","fullName":"Full name (required)","company":"Company name (optional)","country":"Country (required)","countryPlaceholder":"Select a country","city":"City (optional)","email":"Email (required)","phone":"Main phone (required)","whatsappPhone":"WhatsApp number (required)","telegramUsername":"Telegram username (required)","preferredContact":"Preferred contact methods (select one or more)","products":"Products","product":"Product","removeProduct":"Remove product","destination":"Destination for buyer-arranged transportation","destinationCountry":"Destination country (optional)","destinationCity":"Destination city (optional)","message":"Message (optional)"},"contactMethods":{"email":"Email","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"Iran","TR":"Türkiye","IQ":"Iraq","AM":"Armenia","AZ":"Azerbaijan","TM":"Turkmenistan","AF":"Afghanistan","PK":"Pakistan","AE":"United Arab Emirates","SA":"Saudi Arabia","QA":"Qatar","KW":"Kuwait","BH":"Bahrain","OM":"Oman"}},
   "Inquiry": {"customerInformation": "Customer information", "fullName": "Full name", "company": "Company", "country": "Country", "city": "City", "email": "Email", "phone": "Phone or WhatsApp", "telegramUsername": "Telegram username", "preferredContact": "Preferred contact method", "productSelection": "Product selection", "quantity": "Quantity", "units": {"pieces": "Pieces", "packages": "Packages", "pallets": "Pallets", "truckloads": "Truckloads"}, "destination": "Destination", "message": "Message", "privacyConsent": "I explicitly consent to the stated privacy terms.", "validation": {"required": "This field is required.", "invalid": "Enter a valid value.", "productUnavailable": "The selected product is unavailable."}, "submission": {"idle": "Ready", "submitting": "Submitting", "accepted": "Your inquiry was received.", "acceptedWithWarning": "Your inquiry was received, but one or more notifications could not be sent.", "integrationUnavailable": "Inquiry submission is not currently available."}},
   "Staff": {
+    "translation": {
+      "original": "Original",
+      "translation": "Translation",
+      "pending": "Translating",
+      "failed": "Translation unavailable",
+      "ready": "Ready for Customer delivery",
+      "unknown": "Original language unknown",
+      "authoring": "Write replies in Persian. Replies are translated into the customer's language when needed.",
+      "languages": {
+        "en": "English",
+        "tr": "Turkish",
+        "fa": "Persian",
+        "ar": "Arabic"
+      },
+      "blocked": "Customer delivery paused at this message",
+      "cancelled": "Translation cancelled",
+      "skipped": "Skipped — this message will not be delivered to the Customer",
+      "retry": "Retry translation",
+      "skip": "Skip this message for Customer",
+      "confirmSkip": "Confirm skip",
+      "skipWarning": "This permanently prevents Customer delivery of this message.",
+      "cancelAction": "Keep message",
+      "actionError": "Action could not be completed. Refresh the conversation and try again.",
+      "sourceLanguage": "Original message language",
+      "selectLanguage": "Select the original language",
+      "confirmLanguage": "Confirm original language"
+    },
     "metadata": {"login":"Staff Login | YolPol","dashboard":"Staff Dashboard | YolPol","inquiries":"Inquiries | YolPol Staff","inquiryDetail":"Inquiry Detail | YolPol Staff","team":"Team | YolPol Staff","activation":"Staff Activation | YolPol"},
     "common": {"operations":"Staff operations","displayName":"Display name","role":"Role","teamMemberId":"Team Member ID","signedInAs":"Signed in as","customer":"Customer","route":"Route","status":"Status","assignment":"Assignment","activity":"Activity","created":"Created","updated":"Updated","assignedAt":"Assigned","open":"Open","notProvided":"Not provided","items":"items","messages":"messages","unassigned":"Unassigned","utc":"Times shown in UTC","inquiryId":"Inquiry ID","fullName":"Full name","company":"Company","email":"Email","phone":"Phone","whatsapp":"WhatsApp","telegram":"Telegram","preferredContact":"Preferred contact","origin":"Origin","destination":"Destination","none":"None"},
     "navigation": {"label":"Staff navigation","changeLanguage":"Change language","skipToContent":"Skip to Staff content","dashboard":"Dashboard","inquiries":"Inquiries","aiOperations":"AI Operations","aiProviders":"AI Providers","team":"Team"},

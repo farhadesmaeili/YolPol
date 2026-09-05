@@ -17,6 +17,11 @@ export class GetConversationMessageHistory {
     }
 
     try {
+      if (this.messages.findPositionedForInquiry) {
+        const rows = await this.messages.findPositionedForInquiry(inquiryId);
+        if (rows === null) return {status: "conversation_not_found"};
+        return {status: "found", messages: rows.map(({message, position}) => ({...toConversationMessageDto(message), position}))};
+      }
       const messages = await this.messages.findForInquiry(inquiryId);
       if (messages === null) return {status: "conversation_not_found"};
       return Object.freeze({status: "found", messages: Object.freeze(messages.map(toConversationMessageDto))});

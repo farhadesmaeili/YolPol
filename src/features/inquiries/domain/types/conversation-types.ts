@@ -1,3 +1,5 @@
+import type {Locale} from "@/shared/types/locale";
+
 export const conversationChannels = ["WEBSITE", "TELEGRAM", "EMAIL", "WHATSAPP"] as const;
 export type ConversationChannel = (typeof conversationChannels)[number];
 
@@ -9,6 +11,7 @@ export type MessageCreateInput = Readonly<{
   senderType: MessageSenderType;
   channel: ConversationChannel;
   actorReference?: string | null;
+  sourceLocale?: Locale | null;
   body: string;
   createdAt: Date;
 }>;

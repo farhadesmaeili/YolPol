@@ -1,3 +1,4 @@
+import type {MessageTranslationView} from "@/features/conversation-translation/domain/types/translation";
 import type {ConversationMessageDto} from "@/features/inquiries/application/dto/conversation-message-dto";
 import type {ConversationMessageUpdateReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {ReadNewConversationMessagesResult} from "@/features/inquiries/application/results/read-new-conversation-messages-result";
@@ -10,7 +11,7 @@ export const conversationMessageReadBatchLimit = 100;
 export class ReadNewConversationMessages<TMessage extends ConversationMessageDto> {
   constructor(
     private readonly messages: ConversationMessageUpdateReader,
-    private readonly toDto: (message: Message) => TMessage,
+    private readonly toDto: (message: Message, translation?: MessageTranslationView) => TMessage,
   ) {}
 
   async execute(input: Readonly<{inquiryId: string; afterCursor: number; limit?: number}>): Promise<ReadNewConversationMessagesResult<TMessage>> {
@@ -31,7 +32,7 @@ export class ReadNewConversationMessages<TMessage extends ConversationMessageDto
       if (messages === null) return {status: "conversation_not_found"};
       return Object.freeze({
         status: "found",
-        updates: Object.freeze(messages.map(({position, message}) => Object.freeze({cursor: position, message: this.toDto(message)}))),
+        updates: Object.freeze(messages.map(({position, message, translation}) => Object.freeze({cursor: position, message: this.toDto(message, translation)}))),
       });
     } catch {
       return {status: "persistence_failed"};

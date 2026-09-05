@@ -21,6 +21,11 @@ function repository(finalResult: "succeeded" | "cancelled" | "superseded" = "suc
 }
 
 describe("Conversation AI routing use cases", () => {
+  it("uses the known Customer locale in its server-owned response policy", async () => {
+    const gateway = new FakeConversationAiGateway();
+    await new GenerateBasicConversationAiResponse(gateway, "YolPol").generate({executionId: "execution", messages: [{id: "customer", position: 0, senderType: "CUSTOMER", channel: "WEBSITE", body: "Hello", sourceLocale: "ar", createdAt: now}]});
+    expect(gateway.requests[0]?.systemInstruction).toContain("Respond in locale ar.");
+  });
   it("schedules exactly one stable plan only when AI Operations supplies a not-before instant", async () => {
     const planner = new ScheduleCustomerAiFallback({execute: vi.fn().mockResolvedValue({status: "scheduled", notBefore: new Date(now.getTime() + 60_000)})}, {generate: () => "ai_job_job_1"});
     await expect(planner.plan({triggerMessageId: "message-1", triggeredAt: now})).resolves.toMatchObject({id: "ai_job_job_1", triggerMessageId: "message-1", executionId: "ai_fallback_ai_job_job_1"});

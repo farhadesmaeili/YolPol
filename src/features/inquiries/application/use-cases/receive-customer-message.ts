@@ -40,6 +40,7 @@ export class ReceiveCustomerMessage {
         senderType: "CUSTOMER",
         channel: "WEBSITE",
         body,
+        sourceLocale: input.sourceLocale,
         createdAt: this.clock.now(),
       });
     } catch {

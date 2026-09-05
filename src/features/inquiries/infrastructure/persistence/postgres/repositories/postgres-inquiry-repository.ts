@@ -1,3 +1,4 @@
+import {scheduleMessageTranslation} from "@/features/conversation-translation/infrastructure/persistence/schedule-message-translation";
 import {asc, eq} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
@@ -61,6 +62,7 @@ export class PostgresInquiryRepository implements InquiryRepository {
             await transaction.insert(conversationAccess).values({conversationId: access.conversationId.value, tokenLookup: access.tokenLookup, tokenHash: access.tokenHash, createdAt: access.createdAt, expiresAt: access.expiresAt});
           }
           if (conversation.messages.length > 0) await transaction.insert(conversationMessages).values(conversation.messages.map((message, position) => ({id: message.id.value, conversationId: conversation.id.value, position, senderType: message.senderType, channel: message.channel, actorReference: message.actorReference?.value ?? null, body: message.body, createdAt: message.createdAt})));
+          for (const message of conversation.messages) await scheduleMessageTranslation(transaction, conversation.id.value, message, message.senderType === "CUSTOMER" && message.channel === "WEBSITE" ? record.sourceLocale : undefined);
           if (aiFallbackJob) {
             const [operationsPolicy] = await transaction.select({mode: aiOperationPolicy.mode}).from(aiOperationPolicy)
               .where(eq(aiOperationPolicy.id, "global")).limit(1).for("share");

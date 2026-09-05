@@ -1,3 +1,4 @@
+import {PostgresCustomerMessageReader} from "@/features/conversation-translation/infrastructure/persistence/postgres-customer-message-reader";
 import "server-only";
 
 import {randomUUID} from "node:crypto";
@@ -28,6 +29,6 @@ export function getCustomerMessageReceiver(): ReceiveCustomerMessage {
 }
 
 export function getCustomerMessageHistory(): GetConversationMessageHistory {
-  history ??= new GetConversationMessageHistory(getConversationMessages());
+  history ??= new GetConversationMessageHistory(new PostgresCustomerMessageReader(getInquiryPostgresPool()));
   return history;
 }

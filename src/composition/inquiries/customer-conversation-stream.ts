@@ -5,7 +5,7 @@ import {toConversationMessageDto} from "@/features/inquiries/application/mappers
 import {ReadNewConversationMessages} from "@/features/inquiries/application/use-cases/read-new-conversation-messages";
 import {StreamConversationUpdates} from "@/features/inquiries/application/use-cases/stream-conversation-updates";
 import {getInquiryPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
-import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
+import {PostgresCustomerMessageReader} from "@/features/conversation-translation/infrastructure/persistence/postgres-customer-message-reader";
 import {InMemoryConversationUpdateStreamRegistry} from "@/features/inquiries/infrastructure/streaming/in-memory-conversation-update-stream-registry";
 import {TimerConversationPollingDelay} from "@/features/inquiries/infrastructure/streaming/timer-conversation-polling-delay";
 
@@ -15,7 +15,7 @@ let streamer: StreamConversationUpdates<ConversationMessageDto> | undefined;
 export function getCustomerConversationStreamer(): StreamConversationUpdates<ConversationMessageDto> {
   streamer ??= new StreamConversationUpdates(
     new ReadNewConversationMessages(
-      new PostgresConversationMessageRepository(getInquiryPostgresPool()),
+      new PostgresCustomerMessageReader(getInquiryPostgresPool()),
       toConversationMessageDto,
     ),
     streams,
