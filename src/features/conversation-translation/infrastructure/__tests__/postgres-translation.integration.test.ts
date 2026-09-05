@@ -77,6 +77,65 @@ describe("durable Conversation translation", () => {
     expect(languages.rows).toEqual([{source_locale: locale}, {source_locale: locale}]);
     expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(locale === "fa" ? 0 : 2);
   });
+  it("reproduces Turkish Customer to Persian Staff live delivery across history and SSE", async () => {
+    await seed("tr");
+    await pool.query(`insert into conversation_messages
+      (id,conversation_id,position,sender_type,channel,body,created_at)
+      values ('historical-unknown','translation-conversation',0,'INTERNAL_USER','WEBSITE','Historical Staff original',$1)`, [now]);
+    await pool.query(`insert into conversation_message_languages
+      (message_id,source_locale,customer_target_locale) values ('historical-unknown',null,'tr')`);
+
+    await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({
+      id: "turkish-customer", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "tr",
+      body: "Turkish Customer original", createdAt: at(1),
+    }));
+    const jobs = new PostgresTranslationJobRepository(pool);
+    const inbound = (await jobs.claim(at(2)))!;
+    expect(inbound).toMatchObject({messageId: "turkish-customer", sourceLocale: "tr", targetLocale: "fa"});
+    expect(await jobs.finish(inbound, {body: "Persian Staff-facing translation"}, at(3))).toBe(true);
+    expect((await messages().findPositionedForInquiry("translation-inquiry"))?.[1]).toMatchObject({
+      position: 1,
+      translation: {translations: [{targetLocale: "fa", status: "SUCCEEDED", body: "Persian Staff-facing translation"}]},
+    });
+
+    await messages().appendForInquiry("translation-inquiry", reply("persian-staff"));
+    const outbound = (await jobs.claim(at(4)))!;
+    expect(outbound).toMatchObject({messageId: "persian-staff", sourceLocale: "fa", targetLocale: "tr"});
+    const reader = new PostgresCustomerMessageReader(pool);
+    const history = new GetConversationMessageHistory(reader);
+    expect(await history.execute({inquiryId: "translation-inquiry"})).toMatchObject({
+      messages: [{id: "turkish-customer", position: 1, body: "Turkish Customer original"}],
+    });
+
+    const controller = new AbortController();
+    const received: {cursor: number; message: ConversationMessageDto}[] = [];
+    let polls = 0;
+    const streamer = new StreamConversationUpdates(
+      new ReadNewConversationMessages(reader, toConversationMessageDto),
+      new InMemoryConversationUpdateStreamRegistry<ConversationMessageDto>(),
+      {wait: async () => {
+        polls += 1;
+        if (polls === 1) expect(await jobs.finish(outbound, {body: "Turkish Customer-facing translation"}, at(5))).toBe(true);
+        else controller.abort();
+      }},
+    );
+    const opened = streamer.open({
+      conversationId: "translation-conversation", inquiryId: "translation-inquiry", afterCursor: -1,
+      signal: controller.signal, onUpdate: (update) => received.push(update), onUnavailable: () => { throw new Error("Stream unavailable"); },
+    });
+    expect(opened.status).toBe("opened");
+    if (opened.status !== "opened") throw new Error("Stream unavailable");
+    await opened.session.completed;
+    expect(received.map(({cursor, message}) => ({cursor, id: message.id, body: message.body}))).toEqual([
+      {cursor: 1, id: "turkish-customer", body: "Turkish Customer original"},
+      {cursor: 2, id: "persian-staff", body: "Turkish Customer-facing translation"},
+    ]);
+    expect(await history.execute({inquiryId: "translation-inquiry"})).toMatchObject({messages: [
+      {id: "turkish-customer", position: 1, body: "Turkish Customer original"},
+      {id: "persian-staff", position: 2, body: "Turkish Customer-facing translation"},
+    ]});
+    expect(JSON.stringify(received)).not.toContain("Staff original");
+  });
   it("captures latest Customer locale for future replies without retargeting history", async () => {
     await seed("tr");
     await messages().appendForInquiry("translation-inquiry", reply("staff-tr"));
@@ -109,6 +168,26 @@ describe("durable Conversation translation", () => {
     await messages().appendForInquiry("translation-inquiry", Message.create({id: "ai", senderType: "AI_AGENT", channel: "WEBSITE", body: "AI Turkish original", sourceLocale: "tr", createdAt: at(2)}));
     expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((m) => m.body)).toEqual(["Staff original", "AI Turkish original"]);
     expect((await pool.query("select target_locale from conversation_message_translations order by message_id")).rows).toEqual([{target_locale: "fa"}, {target_locale: "fa"}]);
+  });
+  it("delivers fa Customer and fa Staff originals without provider translation in history and SSE", async () => {
+    await seed("fa");
+    await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({
+      id: "fa-customer", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "fa",
+      body: "Persian Customer original", createdAt: at(1),
+    }));
+    await messages().appendForInquiry("translation-inquiry", reply("fa-staff", "fa"));
+    const reader = new PostgresCustomerMessageReader(pool);
+    const history = await new GetConversationMessageHistory(reader).execute({inquiryId: "translation-inquiry"});
+    const updates = await new ReadNewConversationMessages(reader, toConversationMessageDto).execute({inquiryId: "translation-inquiry", afterCursor: -1});
+    expect(history).toMatchObject({messages: [
+      {id: "fa-customer", position: 0, body: "Persian Customer original"},
+      {id: "fa-staff", position: 1, body: "Staff original"},
+    ]});
+    expect(updates).toMatchObject({updates: [
+      {cursor: 0, message: {id: "fa-customer", body: "Persian Customer original"}},
+      {cursor: 1, message: {id: "fa-staff", body: "Staff original"}},
+    ]});
+    expect((await pool.query("select count(*)::int as count from conversation_message_translations")).rows[0].count).toBe(0);
   });
   it("deduplicates scheduling and prevents concurrent claims and stale finalization", async () => {
     await seed(); const message = reply("one"); await messages().appendForInquiry("translation-inquiry", message);

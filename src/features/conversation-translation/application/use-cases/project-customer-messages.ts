@@ -10,9 +10,10 @@ export function projectCustomerMessages(rows: readonly TranslatableMessage[]): r
     const original = row.message;
     if (original.senderType === "CUSTOMER") { visible.push(row); continue; }
     if (row.translation?.deliveryState === "SKIPPED") continue;
-    // SYSTEM and unknown authored languages are never safe outbound fallbacks.
+    // SYSTEM and unknown authored languages are never safe outbound fallbacks, but
+    // they must not suppress unrelated Customer-safe content later in the history.
     const language = row.translation;
-    if (original.senderType === "SYSTEM" || !language?.sourceLocale || !language.customerTargetLocale) break;
+    if (original.senderType === "SYSTEM" || !language?.sourceLocale || !language.customerTargetLocale) continue;
     if (language.sourceLocale === language.customerTargetLocale) { visible.push(row); continue; }
     const translation = language.translations.find((value) => value.targetLocale === language.customerTargetLocale);
     if (translation?.status !== "SUCCEEDED" || !translation.body) break;

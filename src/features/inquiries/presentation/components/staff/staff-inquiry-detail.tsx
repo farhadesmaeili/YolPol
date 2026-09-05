@@ -137,7 +137,7 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
               labels={{
                 translation: {
                   original: t("translation.original"), translation: t("translation.translation"), pending: t("translation.pending"),
-                  failed: t("translation.failed"), ready: t("translation.ready"), unknown: t("translation.unknown"), authoring: t("translation.authoring"),
+                  failed: t("translation.failed"), ready: t("translation.ready"), sameLanguage: t("translation.sameLanguage"), unknown: t("translation.unknown"), authoring: t("translation.authoring"),
                   blocked: t("translation.blocked"),
                   cancelled: t("translation.cancelled"),
                   skipped: t("translation.skipped"),

@@ -28,21 +28,26 @@ export class PostgresCustomerMessageReader {
     if (!Number.isSafeInteger(afterPosition) || afterPosition < -1 || !Number.isSafeInteger(limit) || limit < 1) throw new Error("Invalid delivery cursor.");
     const conversation = await this.pool.query<{id: string}>("select id from conversations where inquiry_id=$1", [inquiryId]);
     if (!conversation.rows[0]) return null;
-    // Scan only indexed ordering/locale/status metadata for the first barrier, never all message/translation bodies.
-    // The barrier includes positions before a supplied cursor: callers cannot bypass a held reply.
+    // Scan only indexed ordering/locale/status metadata for the first actionable
+    // translation barrier, never all message/translation bodies. Unknown and SYSTEM
+    // originals remain withheld gaps rather than suppressing unrelated safe content.
+    // The barrier includes positions before a supplied cursor: callers cannot bypass
+    // a known held reply.
     const result = await this.pool.query<CustomerRow>(`with barrier as (
       select min(m.position) as position from conversation_messages m
       left join conversation_message_languages l on l.message_id=m.id
       left join conversation_message_translations t on t.message_id=m.id and t.target_locale=l.customer_target_locale
       where m.conversation_id=$1 and m.sender_type<>'CUSTOMER' and coalesce(l.delivery_state,'ACTIVE')<>'SKIPPED'
-      and not coalesce(m.sender_type<>'SYSTEM' and l.source_locale is not null and l.customer_target_locale is not null
-        and (l.source_locale=l.customer_target_locale or t.status='SUCCEEDED'),false)
+      and l.source_locale is not null and l.customer_target_locale is not null
+      and l.source_locale<>l.customer_target_locale and t.status is distinct from 'SUCCEEDED'
     ) select m.id,m.position,m.sender_type,m.channel,m.body,m.created_at,l.source_locale,l.customer_target_locale,t.status,t.body as translated_body
       from conversation_messages m cross join barrier b
       left join conversation_message_languages l on l.message_id=m.id
       left join conversation_message_translations t on t.message_id=m.id and t.target_locale=l.customer_target_locale
       where m.conversation_id=$1 and m.position>$2 and (b.position is null or m.position<b.position)
       and (m.sender_type='CUSTOMER' or coalesce(l.delivery_state,'ACTIVE')<>'SKIPPED')
+      and (m.sender_type='CUSTOMER' or (m.sender_type<>'SYSTEM' and l.source_locale is not null
+        and l.customer_target_locale is not null and (l.source_locale=l.customer_target_locale or t.status='SUCCEEDED')))
       order by m.position limit $3`, [conversation.rows[0].id, afterPosition, limit]);
     const rows = result.rows.map((row) => {
       const senderType = messageSenderTypes.find((value) => value === row.sender_type);

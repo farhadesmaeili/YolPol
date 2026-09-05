@@ -42,6 +42,9 @@ describe("Staff translation presentation", () => {
     const value = {sourceLocale: "fa" as const, customerTargetLocale: "tr" as const, translations: [{targetLocale: "tr" as const, status: "SUCCEEDED" as const, body: "Merhaba"}]};
     const markup = renderToStaticMarkup(<MessageTranslation value={value} labels={en.Staff.translation} />);
     expect(markup).toContain('lang="tr" dir="ltr"'); expect(markup).toContain(en.Staff.translation.ready);
+    expect(en.Staff.translation.ready).toBe("Translation ready");
+    const sameLanguage = renderToStaticMarkup(<MessageTranslation value={{sourceLocale: "fa", customerTargetLocale: "fa", translations: []}} labels={en.Staff.translation} />);
+    expect(sameLanguage).toContain(en.Staff.translation.sameLanguage); expect(sameLanguage).not.toContain(en.Staff.translation.ready);
     expect(parseMessageTranslation({...value, provider: "private"})).toBeNull();
   });
 });
