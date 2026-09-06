@@ -92,6 +92,7 @@ export const conversationMessages = pgTable("conversation_messages", {
   body: text("body").notNull(),
   createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
 }, (table) => [
+  uniqueIndex("conversation_messages_id_conversation_uidx").on(table.id, table.conversationId),
   uniqueIndex("conversation_messages_position_uidx").on(table.conversationId, table.position),
   check("conversation_messages_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,160}$'`),
   check("conversation_messages_position_check", sql`${table.position} >= 0`),

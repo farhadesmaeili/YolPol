@@ -18,6 +18,7 @@ export default defineConfig({
     "./src/features/ai-provider-registry/infrastructure/persistence/postgres/schema/ai-provider-registry-schema.ts",
     "./src/features/ai-provider-gateway/infrastructure/persistence/postgres/schema/ai-provider-gateway-schema.ts",
     "./src/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema.ts",
+    "./src/features/conversation-channels/infrastructure/persistence/postgres/schema/conversation-channel-schema.ts",
   ],
   out: "./drizzle",
   dbCredentials: {url: databaseUrl},
