@@ -141,6 +141,13 @@
       "when": 1788645666173,
       "tag": "0019_conversation_ai_agent_escalations",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788711786541,
+      "tag": "0020_conversation_channel_foundation",
+      "breakpoints": true
     }
   ]
 }
