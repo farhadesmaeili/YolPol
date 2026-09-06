@@ -143,6 +143,53 @@ describe("GroqAiProviderAdapter", () => {
     });
   });
 
+  it("normalizes absent content for a valid Groq tool call without exposing provider reasoning", async () => {
+    const {adapter} = adapterReturning({
+      choices: [{
+        finish_reason: "tool_calls",
+        message: {
+          reasoning: "provider private reasoning",
+          tool_calls: [{
+            id: "call_valid_123",
+            type: "function",
+            function: {name: "search_products", arguments: '{"capacityMl":500}'},
+          }],
+        },
+      }],
+    });
+
+    const result = await adapter.execute({
+      ...execution,
+      request: {
+        ...execution.request,
+        capability: "TOOL_CALLING",
+        tools: [{
+          name: "search_products",
+          description: "Search public products.",
+          inputSchema: {type: "object", properties: {capacityMl: {type: "integer"}}, additionalProperties: false},
+        }],
+      },
+    });
+
+    expect(result).toEqual({
+      content: "",
+      finishReason: "TOOL_CALL",
+      toolCalls: [{id: "call_valid_123", name: "search_products", arguments: '{"capacityMl":500}'}],
+    });
+    expect(JSON.stringify(result)).not.toContain("reasoning");
+    expect(JSON.stringify(result)).not.toContain("provider private reasoning");
+  });
+
+  it.each([
+    {description: "absent", message: {}},
+    {description: "null", message: {content: null}},
+    {description: "empty", message: {content: ""}},
+    {description: "whitespace-only", message: {content: " \t\n"}},
+  ])("rejects $description content for an ordinary text response", async ({message}) => {
+    await expect(adapterReturning({choices: [{finish_reason: "stop", message}]}).adapter.execute(execution))
+      .rejects.toMatchObject({category: "MALFORMED_RESPONSE"});
+  });
+
   it.each([
     [new APIConnectionTimeoutError(), "TIMEOUT"],
     [new APIConnectionError({message: "network", cause: new Error("network")}), "NETWORK"],
