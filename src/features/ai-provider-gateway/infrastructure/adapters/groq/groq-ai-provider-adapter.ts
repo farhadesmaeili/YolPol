@@ -83,7 +83,9 @@ function mapResponse(value: unknown, toolsAllowed: boolean): AiProviderAdapterRe
   const toolCalls = parseToolCalls(choice.message.tool_calls);
   const finishReason = mapFinishReason(choice.finish_reason);
   if ((toolCalls !== undefined) !== (finishReason === "TOOL_CALL") || (toolCalls && !toolsAllowed)) throw new AiProviderFailure("MALFORMED_RESPONSE");
-  const content = choice.message.content === null && toolCalls ? "" : choice.message.content;
+  const content = toolCalls && (choice.message.content === null || choice.message.content === undefined)
+    ? ""
+    : choice.message.content;
   if (typeof content !== "string" || (!toolCalls && content.trim().length === 0)) throw new AiProviderFailure("MALFORMED_RESPONSE");
   const providerRequestId = parseProviderRequestId(value);
   const tokenUsage = parseUsage(value.usage);
