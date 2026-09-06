@@ -94,7 +94,7 @@ export class ExecuteAiProviderRequest {
     }
     assertNotCancelled(request, input.signal);
 
-    const candidates = await this.dependencies.candidates.getEligibleCandidates(request.capability);
+    const candidates = await this.dependencies.candidates.getEligibleCandidates(request.requiredCapabilities ?? [request.capability]);
     if (candidates.length === 0) throw new AiProviderGatewayError("NO_ELIGIBLE_CANDIDATES", request.executionId, Object.freeze([]));
 
     const attempts: AiProviderExecutionAttempt[] = [];
@@ -151,6 +151,7 @@ export class ExecuteAiProviderRequest {
             return Object.freeze({
               executionId: request.executionId,
               content: result.content,
+              ...(result.toolCalls === undefined ? {} : {toolCalls: Object.freeze([...result.toolCalls])}),
               finishReason: result.finishReason,
               providerConfigurationId: candidate.providerConfigurationId,
               modelProfileId: candidate.modelProfileId,

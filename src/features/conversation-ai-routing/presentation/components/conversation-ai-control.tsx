@@ -5,6 +5,7 @@ import {useState, useTransition} from "react";
 import type {ConversationAiStatusDto} from "@/features/conversation-ai-routing/application/dto/conversation-ai-routing-dto";
 import type {ConversationAiControlState, ConversationAiJobStatus} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
 import {updateConversationAiControl} from "@/features/conversation-ai-routing/presentation/clients/conversation-ai-control-client";
+import {ConversationAgentEscalationIndicator} from "@/features/conversation-ai-agent/presentation/components/conversation-agent-escalation-indicator";
 
 export type ConversationAiControlLabels = Readonly<{
   title: string;
@@ -13,6 +14,7 @@ export type ConversationAiControlLabels = Readonly<{
   jobState: string;
   jobs: Readonly<Record<ConversationAiJobStatus, string>>;
   noJob: string;
+  escalated: string;
   pause: string;
   takeover: string;
   resume: string;
@@ -41,6 +43,7 @@ export function ConversationAiControlPanel({inquiryId, initialStatus, canControl
         <div><dt className="text-xs text-stone-500">{labels.currentState}</dt><dd className="font-semibold text-stone-900">{labels.states[status.state]}</dd></div>
         <div><dt className="text-xs text-stone-500">{labels.jobState}</dt><dd className="font-semibold text-stone-900">{status.latestJob ? labels.jobs[status.latestJob.status] : labels.noJob}</dd></div>
       </dl>
+      <ConversationAgentEscalationIndicator visible={status.latestJob?.decision === "ESCALATE"} label={labels.escalated} />
       {canControl ? <div className="flex flex-wrap gap-2">
         {status.state === "AUTO" ? <>
           <button type="button" disabled={pending} onClick={() => change("PAUSED")} className="min-h-11 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold disabled:opacity-60">{pending ? labels.working : labels.pause}</button>

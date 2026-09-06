@@ -247,7 +247,7 @@
       "title": "Görüşme yapay zekâsı", "currentState": "Otomasyon durumu", "jobState": "Son yedek yanıt",
       "states": {"AUTO": "Otomatik yedek", "PAUSED": "Duraklatıldı", "HUMAN_TAKEOVER": "İnsan devraldı"},
       "jobs": {"PENDING": "İnsan yanıtı bekleniyor", "RUNNING": "Yapay zekâ oluşturuyor", "SUCCEEDED": "Tamamlandı", "CANCELLED": "Personel tarafından engellendi", "SUPERSEDED": "Yeni müşteri mesajıyla geçersiz", "FAILED": "Bu tur için yapay zekâ kullanılamıyor"},
-      "noJob": "Bekleyen yedek yanıt yok", "pause": "Yapay zekâyı duraklat", "takeover": "İnsan devralsın", "resume": "Yapay zekâyı sürdür", "working": "Güncelleniyor…", "error": "Görüşme yapay zekâsı denetimi güncellenemedi. Yenileyip tekrar deneyin."
+      "noJob": "Bekleyen yedek yanıt yok", "escalated": "Yapay zekâ aracısı son yanıt için Personel incelemesi istedi.", "pause": "Yapay zekâyı duraklat", "takeover": "İnsan devralsın", "resume": "Yapay zekâyı sürdür", "working": "Güncelleniyor…", "error": "Görüşme yapay zekâsı denetimi güncellenemedi. Yenileyip tekrar deneyin."
     },
     "senders": {"CUSTOMER":"Müşteri","INTERNAL_USER":"Personel","AI_AGENT":"Yapay zekâ aracısı","SYSTEM":"Sistem"},
     "channels": {"WEBSITE":"Web sitesi","TELEGRAM":"Telegram","EMAIL":"E-posta","WHATSAPP":"WhatsApp"}

@@ -7,6 +7,7 @@ import type {Pool} from "pg";
 import type {AiOperationsAvailabilityEvaluator, ConversationAiLeaseTokenGenerator, ConversationAiRoutingRepository} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
 import {conversationAiMessageId} from "@/features/conversation-ai-routing/domain/services/conversation-ai-identities";
 import {conversationAiControlStates, conversationAiJobStatuses, type ClaimedConversationAiJob, type ConversationAiContextMessage, type ConversationAiControlState, type ConversationAiFailureCategory} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
+import {conversationAgentEscalationReasons, type ConversationAgentEscalationReason} from "@/features/conversation-ai-agent/domain/types/conversation-agent-types";
 import {conversationAiControlEvents, conversationAiControls, conversationAiResponseJobs, conversationAiRoutingPostgresSchema} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema";
 import {aiOperationPolicy, aiOperationsPostgresSchema} from "@/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema";
 import {Message} from "@/features/inquiries/domain/entities/message";
@@ -123,7 +124,10 @@ export class PostgresConversationAiRoutingRepository implements ConversationAiRo
     }).where(and(eq(conversationAiResponseJobs.id, input.job.id), eq(conversationAiResponseJobs.status, "RUNNING"), eq(conversationAiResponseJobs.leaseToken, input.job.leaseToken)));
   }
 
-  async finalize(input: Readonly<{job: ClaimedConversationAiJob; body: string; now: Date}>) {
+  async finalize(input: Readonly<{job: ClaimedConversationAiJob; body: string; decision: "RESPOND" | "ESCALATE"; escalationReason?: ConversationAgentEscalationReason; now: Date}>) {
+    if ((input.decision !== "RESPOND" && input.decision !== "ESCALATE")
+      || (input.decision === "ESCALATE") !== (input.escalationReason !== undefined)
+      || (input.escalationReason !== undefined && !(conversationAgentEscalationReasons as readonly string[]).includes(input.escalationReason))) throw new TypeError("Conversation AI decision metadata is invalid.");
     const message = Message.create({id: conversationAiMessageId(input.job.id), senderType: "AI_AGENT", channel: "WEBSITE", body: input.body, createdAt: input.now});
     return this.database.transaction(async (transaction) => {
       await transaction.select({id: aiOperationPolicy.id}).from(aiOperationPolicy).where(eq(aiOperationPolicy.id, "global")).limit(1).for("share");
@@ -166,6 +170,7 @@ export class PostgresConversationAiRoutingRepository implements ConversationAiRo
       await scheduleMessageTranslation(transaction, conversation.id, message, translationLocale(language.rows[0]?.locale));
       const updated = await transaction.update(conversationAiResponseJobs).set({
         status: "SUCCEEDED", leaseToken: null, leasedUntil: null, terminalAt: input.now, updatedAt: input.now,
+        agentDecision: input.decision, escalationReason: input.escalationReason ?? null,
         version: sql`${conversationAiResponseJobs.version} + 1`,
       }).where(and(eq(conversationAiResponseJobs.id, input.job.id), eq(conversationAiResponseJobs.status, "RUNNING"), eq(conversationAiResponseJobs.leaseToken, input.job.leaseToken)))
         .returning({id: conversationAiResponseJobs.id});
@@ -178,13 +183,19 @@ export class PostgresConversationAiRoutingRepository implements ConversationAiRo
     const [conversation] = await this.database.select({id: conversations.id}).from(conversations).where(eq(conversations.inquiryId, inquiryId)).limit(1);
     if (!conversation) return null;
     const [control] = await this.database.select().from(conversationAiControls).where(eq(conversationAiControls.conversationId, conversation.id)).limit(1);
-    const [job] = await this.database.select({status: conversationAiResponseJobs.status, notBefore: conversationAiResponseJobs.notBefore, updatedAt: conversationAiResponseJobs.updatedAt})
+    const [job] = await this.database.select({status: conversationAiResponseJobs.status, agentDecision: conversationAiResponseJobs.agentDecision, escalationReason: conversationAiResponseJobs.escalationReason, notBefore: conversationAiResponseJobs.notBefore, updatedAt: conversationAiResponseJobs.updatedAt})
       .from(conversationAiResponseJobs).where(eq(conversationAiResponseJobs.conversationId, conversation.id))
       .orderBy(desc(conversationAiResponseJobs.createdAt), desc(conversationAiResponseJobs.id)).limit(1);
     return Object.freeze({
       state: control ? controlState(control.state) : "AUTO",
       version: control?.version ?? 0,
-      latestJob: job ? Object.freeze({status: jobStatus(job.status), notBefore: job.notBefore.toISOString(), updatedAt: job.updatedAt.toISOString()}) : null,
+      latestJob: job ? Object.freeze({
+        status: jobStatus(job.status),
+        decision: job.agentDecision === "RESPOND" || job.agentDecision === "ESCALATE" ? job.agentDecision : null,
+        escalationReason: job.escalationReason && (conversationAgentEscalationReasons as readonly string[]).includes(job.escalationReason) ? job.escalationReason as ConversationAgentEscalationReason : null,
+        notBefore: job.notBefore.toISOString(),
+        updatedAt: job.updatedAt.toISOString(),
+      }) : null,
     });
   }
 

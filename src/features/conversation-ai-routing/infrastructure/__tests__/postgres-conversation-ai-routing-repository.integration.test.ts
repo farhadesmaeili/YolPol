@@ -1,4 +1,5 @@
 import {resolve} from "node:path";
+import {readFileSync} from "node:fs";
 import {drizzle} from "drizzle-orm/node-postgres";
 import {migrate} from "drizzle-orm/node-postgres/migrator";
 import {Pool} from "pg";
@@ -51,6 +52,31 @@ beforeEach(async () => { await clean(); leaseSequence = 0; globalAllowed = true;
 afterAll(async () => { if (pool) { await clean(); await pool.end(); } });
 
 describe("PostgresConversationAiRoutingRepository", () => {
+  it.each([
+    ["PENDING", "RESPOND", null], ["PENDING", null, "PRICE_QUOTATION"],
+    ["SUCCEEDED", "UNKNOWN", null], ["SUCCEEDED", "ESCALATE", null],
+    ["SUCCEEDED", "RESPOND", "PRICE_QUOTATION"], ["SUCCEEDED", "ESCALATE", "CUSTOMER_SUPPLIED_REASON"],
+  ])("rejects invalid decision metadata (%s, %s, %s)", async (status, decision, reason) => {
+    await expect(pool.query("update conversation_ai_response_jobs set status=$1, agent_decision=$2, escalation_reason=$3, terminal_at=$4, updated_at=$5 where id='ai_job_turn_1'", [status, decision, reason, status === "SUCCEEDED" ? at(1) : null, at(1)]))
+      .rejects.toMatchObject({code: "23514"});
+  });
+
+  it("backfills pre-Agent successful rows before adding the new constraints", async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("alter table conversation_ai_response_jobs drop column agent_decision cascade, drop column escalation_reason cascade");
+      await client.query("update conversation_ai_response_jobs set status='SUCCEEDED', terminal_at=$1, updated_at=$1 where id='ai_job_turn_1'", [at(1)]);
+      await client.query(readFileSync(resolve("drizzle/0019_conversation_ai_agent_escalations.sql"), "utf8"));
+      expect((await client.query("select agent_decision, escalation_reason from conversation_ai_response_jobs")).rows).toEqual([{agent_decision: "RESPOND", escalation_reason: null}]);
+    } finally { await client.query("rollback"); client.release(); }
+  });
+
+  it("rejects successful jobs without a decision at the database boundary", async () => {
+    await expect(pool.query("update conversation_ai_response_jobs set status='SUCCEEDED', terminal_at=$1, updated_at=$1 where id='ai_job_turn_1'", [at(1)]))
+      .rejects.toMatchObject({code: "23514", constraint: "conversation_ai_response_jobs_decision_check"});
+  });
+
   it("uses SKIP LOCKED leases, recovers expiry, and rejects stale lease finalization", async () => {
     const first = repository();
     const second = repository();
@@ -63,7 +89,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     const recovered = await second.claimDue({limit: 1, now: at(12), leaseMilliseconds: 10_000});
     expect(recovered).toHaveLength(1);
     expect(recovered[0]?.attempts).toBe(2);
-    await expect(first.finalize({job: stale, body: "Stale response", now: at(13)})).resolves.toBe("stale_lease");
+    await expect(first.finalize({job: stale, body: "Stale response", decision: "RESPOND", now: at(13)})).resolves.toBe("stale_lease");
     expect((await pool.query("select count(*)::int as count from conversation_messages where sender_type='AI_AGENT'")).rows[0].count).toBe(0);
   });
 
@@ -73,7 +99,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     expect((await routing.prepare({job: job!, now: at(2), maximumAgeMilliseconds: 86_400_000})).status).toBe("eligible");
     const staff = Message.create({id: "staff-1", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member-1", body: "A human answer", createdAt: at(3)});
     await new PostgresConversationMessageRepository(pool).appendForInquiry("inquiry-1", staff);
-    await expect(routing.finalize({job: job!, body: "Losing AI response", now: at(4)})).resolves.toBe("stale_lease");
+    await expect(routing.finalize({job: job!, body: "Losing AI response", decision: "RESPOND", now: at(4)})).resolves.toBe("stale_lease");
     const rows = await pool.query("select sender_type, body from conversation_messages order by position");
     expect(rows.rows).toEqual([{sender_type: "CUSTOMER", body: "Customer question"}, {sender_type: "INTERNAL_USER", body: "A human answer"}]);
   });
@@ -83,7 +109,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
     const customer = Message.create({id: "customer-2", senderType: "CUSTOMER", channel: "WEBSITE", body: "New question", createdAt: at(2)});
     await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {id: "ai_job_turn_2", triggerMessageId: "customer-2", notBefore: at(3), executionId: "ai_fallback_ai_job_turn_2", createdAt: at(2)});
-    await expect(routing.finalize({job: job!, body: "Stale AI response", now: at(4)})).resolves.toBe("stale_lease");
+    await expect(routing.finalize({job: job!, body: "Stale AI response", decision: "RESPOND", now: at(4)})).resolves.toBe("stale_lease");
     const jobs = await pool.query("select id,status from conversation_ai_response_jobs order by id");
     expect(jobs.rows).toEqual([{id: "ai_job_turn_1", status: "SUPERSEDED"}, {id: "ai_job_turn_2", status: "PENDING"}]);
   });
@@ -91,17 +117,27 @@ describe("PostgresConversationAiRoutingRepository", () => {
   it("commits AI exactly once before a later Staff reply and exposes it through normal positions", async () => {
     const routing = repository();
     const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
-    await expect(routing.finalize({job: job!, body: "AI response", now: at(2)})).resolves.toBe("succeeded");
+    await expect(routing.finalize({job: job!, body: "AI response", decision: "RESPOND", now: at(2)})).resolves.toBe("succeeded");
     const staff = Message.create({id: "staff-2", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member-1", body: "Follow-up", createdAt: at(3)});
     await new PostgresConversationMessageRepository(pool).appendForInquiry("inquiry-1", staff);
     expect((await pool.query("select position,sender_type from conversation_messages order by position")).rows).toEqual([
       {position: 0, sender_type: "CUSTOMER"}, {position: 1, sender_type: "AI_AGENT"}, {position: 2, sender_type: "INTERNAL_USER"},
     ]);
     expect((await pool.query("select count(*)::int as count from conversation_messages where sender_type='AI_AGENT'")).rows[0].count).toBe(1);
+    expect((await pool.query("select agent_decision,escalation_reason from conversation_ai_response_jobs where id='ai_job_turn_1'")).rows).toEqual([{agent_decision: "RESPOND", escalation_reason: null}]);
+    expect((await pool.query("select source_locale,customer_target_locale from conversation_message_languages where message_id='ai_response_ai_job_turn_1'")).rows).toEqual([{source_locale: "en", customer_target_locale: "en"}]);
     const streamed = await new PostgresConversationMessageRepository(pool).findAfterPositionForInquiry("inquiry-1", 0, 10);
     expect(streamed?.map(({position, message}) => ({position, senderType: message.senderType, body: message.body}))).toEqual([
       {position: 1, senderType: "AI_AGENT", body: "AI response"}, {position: 2, senderType: "INTERNAL_USER", body: "Follow-up"},
     ]);
+  });
+
+  it("persists content-free typed escalation metadata for Staff visibility", async () => {
+    const routing = repository();
+    const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
+    await expect(routing.finalize({job: job!, body: "Staff review is required.", decision: "ESCALATE", escalationReason: "PRICE_QUOTATION", now: at(2)})).resolves.toBe("succeeded");
+    await expect(routing.readStatus("inquiry-1")).resolves.toMatchObject({latestJob: {status: "SUCCEEDED", decision: "ESCALATE", escalationReason: "PRICE_QUOTATION"}});
+    expect((await pool.query("select agent_decision,escalation_reason from conversation_ai_response_jobs where id='ai_job_turn_1'")).rows).toEqual([{agent_decision: "ESCALATE", escalation_reason: "PRICE_QUOTATION"}]);
   });
 
   it("keeps pause and takeover auditable, versioned, and resume-only-for-future-turns", async () => {
@@ -129,13 +165,13 @@ describe("PostgresConversationAiRoutingRepository", () => {
       const routing = repository();
       const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
       await routing.changeControl({inquiryId: "inquiry-1", state: state as "PAUSED" | "HUMAN_TAKEOVER", expectedVersion: 0, actorReference: "staff:member-1", eventId: `event-${index}`, now: at(2)});
-      await expect(routing.finalize({job: job!, body: "Suppressed", now: at(3)})).resolves.toBe("stale_lease");
+      await expect(routing.finalize({job: job!, body: "Suppressed", decision: "RESPOND", now: at(3)})).resolves.toBe("stale_lease");
     }
     await clean(); await seed();
     const routing = repository();
     const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
     globalAllowed = false;
-    await expect(routing.finalize({job: job!, body: "Disabled", now: at(2)})).resolves.toBe("cancelled");
+    await expect(routing.finalize({job: job!, body: "Disabled", decision: "RESPOND", now: at(2)})).resolves.toBe("cancelled");
     expect((await pool.query("select count(*)::int as count from conversation_messages where sender_type='AI_AGENT'")).rows[0].count).toBe(0);
   });
 

@@ -9,9 +9,11 @@ type EligibilityReader = Readonly<{
 export class AiProviderRegistryCandidateSource implements AiProviderCandidateSource {
   constructor(private readonly eligibility: EligibilityReader) {}
 
-  async getEligibleCandidates(capability: AiProviderCapability): Promise<readonly AiProviderExecutionCandidate[]> {
-    const eligible = await this.eligibility.execute(capability);
-    return Object.freeze(eligible.map(({provider, profile, credentialReferences}) => Object.freeze({
+  async getEligibleCandidates(capabilities: readonly AiProviderCapability[]): Promise<readonly AiProviderExecutionCandidate[]> {
+    const [primary] = capabilities;
+    if (!primary) return Object.freeze([]);
+    const eligible = await this.eligibility.execute(primary);
+    return Object.freeze(eligible.filter(({profile}) => capabilities.every((capability) => profile.capabilities.includes(capability))).map(({provider, profile, credentialReferences}) => Object.freeze({
       providerConfigurationId: provider.id,
       modelProfileId: profile.id,
       adapterKey: provider.adapterKey,

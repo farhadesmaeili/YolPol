@@ -2,6 +2,7 @@ import type {AiGenerationSettings, AiProviderCapability} from "@/features/ai-pro
 import type {
   AiProviderExecutionRequest,
   AiProviderFinishReason,
+  AiProviderToolCall,
   AiProviderTokenUsage,
   AiRuntimeHealthPermit,
   AiRuntimeHealthSnapshot,
@@ -21,7 +22,7 @@ export type AiProviderExecutionCandidate = Readonly<{
 }>;
 
 export interface AiProviderCandidateSource {
-  getEligibleCandidates(capability: AiProviderCapability): Promise<readonly AiProviderExecutionCandidate[]>;
+  getEligibleCandidates(capabilities: readonly AiProviderCapability[]): Promise<readonly AiProviderExecutionCandidate[]>;
 }
 
 export type AiProviderAdapterExecution = Readonly<{
@@ -34,6 +35,7 @@ export type AiProviderAdapterExecution = Readonly<{
 export type AiProviderAdapterResult = Readonly<{
   content: string;
   finishReason: AiProviderFinishReason;
+  toolCalls?: readonly AiProviderToolCall[];
   providerRequestId?: string;
   tokenUsage?: AiProviderTokenUsage;
 }>;

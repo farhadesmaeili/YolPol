@@ -11,6 +11,21 @@ import {
 } from "@/features/ai-provider-gateway/domain/services/ai-provider-failure-policy";
 
 describe("AI provider gateway domain", () => {
+  it.each(["TEXT_GENERATION", "TRANSLATION"] as const)("keeps %s requests free of tool requirements", (capability) => {
+    const result = parseAiProviderExecutionRequest({executionId: "regression", capability, messages: [{role: "USER", content: "Hello"}]});
+    expect(result.requiredCapabilities).toEqual([capability]);
+    expect(result.tools).toBeUndefined();
+    expect(result.toolChoice).toBeUndefined();
+  });
+
+  it.each([
+    [{role: "TOOL", name: "search_products", toolCallId: "orphan", content: "{}"}],
+    [{role: "ASSISTANT", content: "", toolCalls: [{id: "call_1", name: "search_products", arguments: "{}"}]}],
+    [{role: "ASSISTANT", content: "", toolCalls: [{id: "call_1", name: "search_products", arguments: "{}"}]}, {role: "TOOL", name: "wrong", toolCallId: "call_1", content: "{}"}],
+  ].map((messages) => ({messages})))("rejects orphan, incomplete or mismatched tool conversations %#", ({messages}) => {
+    expect(() => parseAiProviderExecutionRequest({executionId: "bad_tools", capability: "TOOL_CALLING", tools: [{name: "search_products", description: "Search", inputSchema: {type: "object", additionalProperties: false}}], messages})).toThrowError(expect.objectContaining({category: "INVALID_REQUEST"}));
+  });
+
   it("parses a bounded provider-neutral request without changing content", () => {
     const request = parseAiProviderExecutionRequest({
       executionId: "execution_01",
@@ -22,6 +37,23 @@ describe("AI provider gateway domain", () => {
     });
     expect(request).toMatchObject({executionId: "execution_01", capability: "TEXT_GENERATION", timeoutMs: 5_000});
     expect(request.messages[0]?.content).toBe(" Hello ");
+    expect(request.requiredCapabilities).toEqual(["TEXT_GENERATION"]);
+  });
+
+  it("parses strict provider-neutral tool definitions, calls, and results with an explicit capability set", () => {
+    const request = parseAiProviderExecutionRequest({
+      executionId: "agent_01", capability: "TOOL_CALLING", requiredCapabilities: ["TOOL_CALLING", "TEXT_GENERATION"],
+      systemInstruction: "Use tools safely.",
+      tools: [{name: "search_products", description: "Search public products.", inputSchema: {type: "object", properties: {query: {type: "string"}}, additionalProperties: false}}],
+      messages: [
+        {role: "USER", content: "Find a bottle"},
+        {role: "ASSISTANT", content: "", toolCalls: [{id: "call_1", name: "search_products", arguments: '{"query":"bottle"}'}]},
+        {role: "TOOL", toolCallId: "call_1", name: "search_products", content: '{"products":[]}'},
+      ],
+    });
+    expect(request.requiredCapabilities).toEqual(["TOOL_CALLING", "TEXT_GENERATION"]);
+    expect(request.tools?.[0]?.name).toBe("search_products");
+    expect(request.messages[1]).toMatchObject({role: "ASSISTANT", toolCalls: [{id: "call_1"}]});
   });
 
   it.each([
@@ -29,6 +61,8 @@ describe("AI provider gateway domain", () => {
     {executionId: "ok", capability: "UNKNOWN", messages: [{role: "USER", content: "Hello"}]},
     {executionId: "ok", capability: "STRUCTURED_OUTPUT", messages: [{role: "USER", content: "Hello"}]},
     {executionId: "ok", capability: "TOOL_CALLING", messages: [{role: "USER", content: "Hello"}]},
+    {executionId: "ok", capability: "TOOL_CALLING", requiredCapabilities: ["TOOL_CALLING", "TOOL_CALLING"], tools: [{name: "x", description: "x", inputSchema: {type: "object", additionalProperties: false}}], messages: [{role: "USER", content: "Hello"}]},
+    {executionId: "ok", capability: "TEXT_GENERATION", tools: [{name: "x", description: "x", inputSchema: {type: "object", additionalProperties: false}}], messages: [{role: "USER", content: "Hello"}]},
     {executionId: "ok", capability: "TEXT_GENERATION", messages: []},
     {executionId: "ok", capability: "TEXT_GENERATION", messages: [{role: "TOOL", content: "Hello"}]},
     {executionId: "ok", capability: "TEXT_GENERATION", messages: [{role: "USER", content: " "}]},

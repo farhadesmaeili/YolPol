@@ -252,7 +252,7 @@ is present in that DTO, and the index was not refreshed or staged to hide the en
 - `src/composition/inquiries/customer-message.ts`
 - `src/features/ai-provider-registry/application/__tests__/ai-provider-registry-use-cases.test.ts`
 - `src/features/conversation-ai-routing/application/__tests__/conversation-ai-routing-use-cases.test.ts`
-- `src/features/conversation-ai-routing/application/use-cases/generate-basic-conversation-ai-response.ts`
+- `src/features/conversation-ai-agent/application/use-cases/generate-conversation-agent-response.ts`
 - `src/features/conversation-ai-routing/domain/types/conversation-ai-routing-types.ts`
 - `src/features/conversation-ai-routing/infrastructure/__tests__/postgres-conversation-ai-routing-repository.integration.test.ts`
 - `src/features/conversation-ai-routing/infrastructure/persistence/postgres/repositories/postgres-conversation-ai-routing-repository.ts`

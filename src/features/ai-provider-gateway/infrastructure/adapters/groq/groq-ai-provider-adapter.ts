@@ -19,7 +19,7 @@ import type {
   AiProviderAdapterResult,
 } from "@/features/ai-provider-gateway/application/ports/ai-provider-gateway-ports";
 import {AiProviderFailure} from "@/features/ai-provider-gateway/domain/errors/ai-provider-gateway-errors";
-import type {AiProviderFinishReason, AiProviderTokenUsage} from "@/features/ai-provider-gateway/domain/types/ai-provider-execution";
+import type {AiProviderFinishReason, AiProviderTokenUsage, AiProviderToolCall} from "@/features/ai-provider-gateway/domain/types/ai-provider-execution";
 
 export type GroqClientOptions = Readonly<{
   apiKey: string;
@@ -76,18 +76,45 @@ function parseProviderRequestId(response: Readonly<Record<string, unknown>>): st
   return metadata.id;
 }
 
-function mapResponse(value: unknown): AiProviderAdapterResult {
+function mapResponse(value: unknown, toolsAllowed: boolean): AiProviderAdapterResult {
   if (!isRecord(value) || !Array.isArray(value.choices) || value.choices.length === 0) throw new AiProviderFailure("MALFORMED_RESPONSE");
   const choice = value.choices[0];
-  if (!isRecord(choice) || !isRecord(choice.message) || typeof choice.message.content !== "string") throw new AiProviderFailure("MALFORMED_RESPONSE");
+  if (!isRecord(choice) || !isRecord(choice.message)) throw new AiProviderFailure("MALFORMED_RESPONSE");
+  const toolCalls = parseToolCalls(choice.message.tool_calls);
+  const finishReason = mapFinishReason(choice.finish_reason);
+  if ((toolCalls !== undefined) !== (finishReason === "TOOL_CALL") || (toolCalls && !toolsAllowed)) throw new AiProviderFailure("MALFORMED_RESPONSE");
+  const content = choice.message.content === null && toolCalls ? "" : choice.message.content;
+  if (typeof content !== "string" || (!toolCalls && content.trim().length === 0)) throw new AiProviderFailure("MALFORMED_RESPONSE");
   const providerRequestId = parseProviderRequestId(value);
   const tokenUsage = parseUsage(value.usage);
   return Object.freeze({
-    content: choice.message.content,
-    finishReason: mapFinishReason(choice.finish_reason),
+    content,
+    ...(toolCalls === undefined ? {} : {toolCalls}),
+    finishReason,
     ...(providerRequestId === undefined ? {} : {providerRequestId}),
     ...(tokenUsage === undefined ? {} : {tokenUsage}),
   });
+}
+
+const safeToolIdentifierPattern = /^[A-Za-z0-9_-]{1,64}$/;
+function parseToolCalls(value: unknown): readonly AiProviderToolCall[] | undefined {
+  if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) return undefined;
+  if (!Array.isArray(value) || value.length > 16) throw new AiProviderFailure("MALFORMED_RESPONSE");
+  const ids = new Set<string>();
+  return Object.freeze(value.map((toolCall): AiProviderToolCall => {
+    if (!isRecord(toolCall) || toolCall.type !== "function" || !isRecord(toolCall.function)) throw new AiProviderFailure("MALFORMED_RESPONSE");
+    const {id} = toolCall;
+    const name = toolCall.function.name;
+    const argumentsText = toolCall.function.arguments;
+    if (typeof id !== "string" || !safeToolIdentifierPattern.test(id)
+      || typeof name !== "string" || !safeToolIdentifierPattern.test(name)
+      || typeof argumentsText !== "string" || argumentsText.length < 1 || argumentsText.length > 32_000) {
+      throw new AiProviderFailure("MALFORMED_RESPONSE");
+    }
+    if (ids.has(id)) throw new AiProviderFailure("MALFORMED_RESPONSE");
+    ids.add(id);
+    return Object.freeze({id, name, arguments: argumentsText});
+  }));
 }
 
 function retryAfterMilliseconds(error: APIError): number | undefined {
@@ -133,9 +160,14 @@ function mapMessages(input: AiProviderAdapterExecution): ChatCompletionCreatePar
   const messages: ChatCompletionCreateParamsNonStreaming["messages"] = [];
   if (input.request.systemInstruction !== undefined) messages.push({role: "system", content: input.request.systemInstruction});
   for (const message of input.request.messages) {
-    if (message.role === "SYSTEM") messages.push({role: "system", content: message.content});
+    if (message.role === "TOOL") messages.push({role: "tool", content: message.content, tool_call_id: message.toolCallId});
+    else if (message.role === "SYSTEM") messages.push({role: "system", content: message.content});
     else if (message.role === "USER") messages.push({role: "user", content: message.content});
-    else messages.push({role: "assistant", content: message.content});
+    else messages.push({
+      role: "assistant",
+      content: message.content || null,
+      ...(message.toolCalls ? {tool_calls: message.toolCalls.map((toolCall) => ({id: toolCall.id, type: "function" as const, function: {name: toolCall.name, arguments: toolCall.arguments}}))} : {}),
+    });
   }
   return messages;
 }
@@ -151,6 +183,11 @@ function createRequest(input: AiProviderAdapterExecution): ChatCompletionCreateP
     messages: mapMessages(input),
     stream: false,
     max_completion_tokens: maxOutputTokens,
+    ...(input.request.tools ? {
+      tools: input.request.tools.map((tool) => ({type: "function" as const, function: {name: tool.name, description: tool.description, parameters: tool.inputSchema}})),
+      tool_choice: input.request.toolChoice === "NONE" ? "none" as const : "auto" as const,
+      parallel_tool_calls: false,
+    } : {}),
     ...(temperature === undefined ? {} : {temperature}),
     ...(topP === undefined ? {} : {top_p: topP}),
   };
@@ -173,7 +210,7 @@ export class GroqAiProviderAdapter implements AiProviderAdapter {
         timeout: input.request.timeoutMs,
         ...(input.signal ? {signal: input.signal} : {}),
       });
-      return mapResponse(response);
+      return mapResponse(response, !!input.request.tools?.length && input.request.toolChoice !== "NONE");
     } catch (error) {
       throw mapGroqFailure(error);
     }
