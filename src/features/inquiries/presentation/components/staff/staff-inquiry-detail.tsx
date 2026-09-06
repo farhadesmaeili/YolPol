@@ -105,7 +105,7 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
                 title: t("conversationAi.title"), currentState: t("conversationAi.currentState"), jobState: t("conversationAi.jobState"),
                 states: {AUTO: t("conversationAi.states.AUTO"), PAUSED: t("conversationAi.states.PAUSED"), HUMAN_TAKEOVER: t("conversationAi.states.HUMAN_TAKEOVER")},
                 jobs: {PENDING: t("conversationAi.jobs.PENDING"), RUNNING: t("conversationAi.jobs.RUNNING"), SUCCEEDED: t("conversationAi.jobs.SUCCEEDED"), CANCELLED: t("conversationAi.jobs.CANCELLED"), SUPERSEDED: t("conversationAi.jobs.SUPERSEDED"), FAILED: t("conversationAi.jobs.FAILED")},
-                noJob: t("conversationAi.noJob"), pause: t("conversationAi.pause"), takeover: t("conversationAi.takeover"), resume: t("conversationAi.resume"), working: t("conversationAi.working"), error: t("conversationAi.error"),
+                noJob: t("conversationAi.noJob"), escalated: t("conversationAi.escalated"), pause: t("conversationAi.pause"), takeover: t("conversationAi.takeover"), resume: t("conversationAi.resume"), working: t("conversationAi.working"), error: t("conversationAi.error"),
               }}
             />
           </StaffPanel>

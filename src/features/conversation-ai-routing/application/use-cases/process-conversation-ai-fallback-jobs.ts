@@ -2,6 +2,8 @@ import {maximumAiFallbackSchedulingHorizonMs} from "@/features/ai-operations/app
 import type {AiOperationsAvailabilityEvaluator, ConversationAiClock, ConversationAiResponseGenerator, ConversationAiRoutingRepository} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
 import {ConversationAiGenerationError} from "@/features/conversation-ai-routing/domain/errors/conversation-ai-routing-errors";
 import type {ConversationAiFailureCategory} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
+import {ConversationAgentExecutionError} from "@/features/conversation-ai-agent/domain/errors/conversation-agent-errors";
+import {conversationAgentFinalizationReserveMs, conversationAgentMaximumExecutionMs} from "@/features/conversation-ai-agent/application/use-cases/generate-conversation-agent-response";
 
 export type ProcessConversationAiFallbackJobsResult = Readonly<{claimed: number; succeeded: number; cancelled: number; superseded: number; failed: number}>;
 
@@ -31,13 +33,21 @@ export class ProcessConversationAiFallbackJobs {
         continue;
       }
       try {
-        const response = await this.generator.generate({executionId: job.executionId, messages: prepared.messages});
-        const final = await this.repository.finalize({job, body: response.content, now: this.clock.now()});
+        const startedAt = this.clock.now();
+        const deadline = new Date(Math.min(job.leasedUntil.getTime() - conversationAgentFinalizationReserveMs, startedAt.getTime() + conversationAgentMaximumExecutionMs));
+        const response = await this.generator.generate({executionId: job.executionId, messages: prepared.messages, deadline});
+        const final = await this.repository.finalize({
+          job,
+          body: response.body,
+          decision: response.type,
+          ...(response.type === "ESCALATE" ? {escalationReason: response.reason} : {}),
+          now: this.clock.now(),
+        });
         if (final === "succeeded") counts.succeeded += 1;
         else if (final === "superseded") counts.superseded += 1;
         else if (final === "cancelled") counts.cancelled += 1;
       } catch (error) {
-        const category = (error instanceof ConversationAiGenerationError ? error.category : "INFRASTRUCTURE_FAILURE") as ConversationAiFailureCategory;
+        const category = (error instanceof ConversationAiGenerationError || error instanceof ConversationAgentExecutionError ? error.category : "INFRASTRUCTURE_FAILURE") as ConversationAiFailureCategory;
         await this.repository.fail({job, category, now: this.clock.now()});
         counts.failed += 1;
       }

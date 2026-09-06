@@ -134,6 +134,13 @@
       "when": 1788579651274,
       "tag": "0018_conversation_translation",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788645666173,
+      "tag": "0019_conversation_ai_agent_escalations",
+      "breakpoints": true
     }
   ]
 }

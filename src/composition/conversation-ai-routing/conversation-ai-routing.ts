@@ -4,16 +4,15 @@ import {randomUUID} from "node:crypto";
 
 import {getAiOperations} from "@/composition/ai-operations/ai-operations";
 import {getAiProviderGateway} from "@/composition/ai-provider-gateway/ai-provider-gateway";
+import {createConversationAiAgent} from "@/composition/conversation-ai-agent/conversation-ai-agent-factory";
 import {createConversationAiRouting, type ConversationAiRouting} from "@/composition/conversation-ai-routing/conversation-ai-routing-factory";
 import {ChangeConversationAiControl} from "@/features/conversation-ai-routing/application/use-cases/change-conversation-ai-control";
-import {GenerateBasicConversationAiResponse} from "@/features/conversation-ai-routing/application/use-cases/generate-basic-conversation-ai-response";
 import {GetConversationAiStatus} from "@/features/conversation-ai-routing/application/use-cases/get-conversation-ai-status";
 import {ProcessConversationAiFallbackJobs} from "@/features/conversation-ai-routing/application/use-cases/process-conversation-ai-fallback-jobs";
 import {ScheduleCustomerAiFallback} from "@/features/conversation-ai-routing/application/use-cases/schedule-customer-ai-fallback";
 import {PostgresConversationAiRoutingRepository} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/repositories/postgres-conversation-ai-routing-repository";
 import {getInquiryPostgresPool} from "@/features/inquiries/infrastructure/database/postgres-pool";
 import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
-import {siteConfig} from "@/shared/config/site";
 
 const safeUuid = () => randomUUID().replaceAll("-", "_");
 const jobIds = {generate: () => `ai_job_${safeUuid()}`};
@@ -35,7 +34,7 @@ export function getConversationAiRouting(): ConversationAiRouting {
     scheduler: new ScheduleCustomerAiFallback(operations.planFallback, jobIds),
     getStatus: new GetConversationAiStatus(repository, authorization),
     changeControl: new ChangeConversationAiControl(repository, authorization, eventIds, clock),
-    worker: new ProcessConversationAiFallbackJobs(repository, operations.evaluateAvailability, new GenerateBasicConversationAiResponse(getAiProviderGateway(), siteConfig.identity.publicName), clock),
+    worker: new ProcessConversationAiFallbackJobs(repository, operations.evaluateAvailability, createConversationAiAgent(getAiProviderGateway()), clock),
   });
   return routing;
 }

@@ -1,17 +1,40 @@
 import type {AiProviderCapability} from "@/features/ai-provider-registry/domain/types/ai-provider-registry-types";
 
-export const aiProviderMessageRoles = ["SYSTEM", "USER", "ASSISTANT"] as const;
+export const aiProviderMessageRoles = ["SYSTEM", "USER", "ASSISTANT", "TOOL"] as const;
 export type AiProviderMessageRole = (typeof aiProviderMessageRoles)[number];
 
-export type AiProviderMessage = Readonly<{
-  role: AiProviderMessageRole;
-  content: string;
+export type AiProviderToolCall = Readonly<{
+  id: string;
+  name: string;
+  arguments: string;
+}>;
+
+export type AiProviderMessage =
+  | Readonly<{
+      role: "SYSTEM" | "USER" | "ASSISTANT";
+      content: string;
+      toolCalls?: readonly AiProviderToolCall[];
+    }>
+  | Readonly<{
+      role: "TOOL";
+      content: string;
+      toolCallId: string;
+      name: string;
+    }>;
+
+export type AiProviderToolDefinition = Readonly<{
+  name: string;
+  description: string;
+  inputSchema: Readonly<Record<string, unknown>>;
 }>;
 
 export type AiProviderExecutionRequest = Readonly<{
   executionId: string;
   capability: AiProviderCapability;
+  requiredCapabilities?: readonly AiProviderCapability[];
   messages: readonly AiProviderMessage[];
+  tools?: readonly AiProviderToolDefinition[];
+  toolChoice?: "AUTO" | "NONE";
   systemInstruction?: string;
   generationSettings?: Readonly<{
     temperature?: number;
@@ -19,6 +42,11 @@ export type AiProviderExecutionRequest = Readonly<{
     maxOutputTokens?: number;
   }>;
   timeoutMs: number;
+}>;
+
+export type AiProviderTextMessage = Readonly<{
+  role: "SYSTEM" | "USER" | "ASSISTANT";
+  content: string;
 }>;
 
 export type AiProviderFinishReason = "STOP" | "LENGTH" | "TOOL_CALL" | "UNKNOWN";
@@ -68,6 +96,7 @@ export type AiProviderExecutionAttempt = Readonly<{
 export type AiProviderExecutionResult = Readonly<{
   executionId: string;
   content: string;
+  toolCalls?: readonly AiProviderToolCall[];
   finishReason: AiProviderFinishReason;
   providerConfigurationId: string;
   modelProfileId: string;

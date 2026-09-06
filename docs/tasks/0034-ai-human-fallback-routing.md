@@ -32,7 +32,7 @@ A missing control row means `AUTO` version `0` and does not cause a write. Expli
 
 ## Basic responder and privacy boundary
 
-The responder uses `TEXT_GENERATION` only, no tools or structured output. It maps `CUSTOMER` to `USER`, `INTERNAL_USER` and `AI_AGENT` to `ASSISTANT`, and excludes Conversation `SYSTEM` messages. Context is limited to 12 relevant messages and 12,000 aggregate characters. The server-owned policy identifies YOLPOL as a B2B wholesale glass-bottle supplier, keeps sales inquiry-only, and prohibits invented pricing, availability, delivery, legal/customs, payment, discount, or completed-action claims.
+The original basic `TEXT_GENERATION` responder was replaced by the bounded provider-neutral Conversation AI Agent documented in `0037-conversation-ai-agent.md`. Fallback scheduling, control states, worker leasing, and atomic finalization remain owned by this routing feature.
 
 Jobs, controls, and audit rows contain routing metadata only. They contain no prompt, transcript, generated draft, provider request/response, or secret. Generated content is stored only if it wins finalization, as the normal durable Conversation message used by the existing Website SSE cursor.
 

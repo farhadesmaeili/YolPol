@@ -50,6 +50,29 @@ function adapterThrowing(error: unknown) {
 }
 
 describe("GroqAiProviderAdapter", () => {
+  it("preserves multiple provider-neutral tool identities and rejects tool requests from text-only execution", async () => {
+    const calls = ["search_products", "get_pickup_process"].map((name, index) => ({id: `call_${index}`, type: "function", function: {name, arguments: "{}"}}));
+    const {adapter} = adapterReturning({choices: [{finish_reason: "tool_calls", message: {content: null, tool_calls: calls}}], internal_provider_payload: "must-not-escape"});
+    await expect(adapter.execute(execution)).rejects.toMatchObject({category: "MALFORMED_RESPONSE"});
+    const result = await adapter.execute({...execution, request: {...execution.request, capability: "TOOL_CALLING", tools: calls.map(({function: fn}) => ({name: fn.name, description: "Safe tool", inputSchema: {type: "object", additionalProperties: false}}))}});
+    expect(result.toolCalls).toEqual(calls.map(({id, function: fn}) => ({id, name: fn.name, arguments: fn.arguments})));
+    expect(JSON.stringify(result)).not.toContain("must-not-escape");
+  });
+
+  it.each([null, []])("preserves ordinary text responses with empty optional tool_calls (%j)", async (toolCalls) => {
+    await expect(adapterReturning({choices: [{finish_reason: "stop", message: {content: "Answer", tool_calls: toolCalls}}]}).adapter.execute(execution))
+      .resolves.toEqual({content: "Answer", finishReason: "STOP"});
+  });
+
+  it.each([
+    {finish_reason: "stop", calls: [{id: "call_1", type: "function", function: {name: "search_products", arguments: "{}"}}]},
+    {finish_reason: "tool_calls", calls: undefined},
+    {finish_reason: "tool_calls", calls: [{id: "call_1", type: "function", function: {name: "search_products", arguments: "{}"}}, {id: "call_1", type: "function", function: {name: "get_pickup_process", arguments: "{}"}}]},
+  ])("rejects inconsistent or uncorrelatable provider tool output %#", async ({finish_reason, calls}) => {
+    await expect(adapterReturning({choices: [{finish_reason, message: {content: "Answer", tool_calls: calls}}]}).adapter.execute({...execution, request: {...execution.request, capability: "TOOL_CALLING", tools: [{name: "search_products", description: "Search", inputSchema: {type: "object", additionalProperties: false}}]}}))
+      .rejects.toMatchObject({category: "MALFORMED_RESPONSE"});
+  });
+
   it("maps the neutral request, configured model, settings, response, usage, request ID, timeout, and safety controls", async () => {
     const {adapter, create, factory} = adapterReturning({
       choices: [{finish_reason: "stop", message: {content: "Provider answer"}}],
@@ -86,6 +109,38 @@ describe("GroqAiProviderAdapter", () => {
     expect(body).toMatchObject({model: "configured/model-a", max_completion_tokens: 256});
     expect(body).not.toHaveProperty("temperature");
     expect(body).not.toHaveProperty("top_p");
+  });
+
+  it("maps neutral tools and tool-result messages to Groq and maps tool calls back to the neutral result", async () => {
+    const {adapter, create} = adapterReturning({
+      choices: [{finish_reason: "tool_calls", message: {content: null, tool_calls: [{id: "call_1", type: "function", function: {name: "search_products", arguments: '{"capacityMl":500}'}}]}}],
+    });
+    const toolExecution: AiProviderAdapterExecution = {
+      ...execution,
+      request: {
+        ...execution.request,
+        capability: "TOOL_CALLING",
+        requiredCapabilities: ["TOOL_CALLING", "TEXT_GENERATION"],
+        tools: [{name: "search_products", description: "Search public products.", inputSchema: {type: "object", properties: {capacityMl: {type: "integer"}}, additionalProperties: false}}],
+        toolChoice: "AUTO",
+        messages: [
+          {role: "USER", content: "Find 500 ml"},
+          {role: "ASSISTANT", content: "", toolCalls: [{id: "prior_1", name: "search_products", arguments: '{"capacityMl":250}'}]},
+          {role: "TOOL", name: "search_products", toolCallId: "prior_1", content: '{"products":[]}'},
+        ],
+      },
+    };
+    await expect(adapter.execute(toolExecution)).resolves.toMatchObject({content: "", finishReason: "TOOL_CALL", toolCalls: [{id: "call_1", name: "search_products", arguments: '{"capacityMl":500}'}]});
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      tool_choice: "auto", parallel_tool_calls: false,
+      tools: [{type: "function", function: {name: "search_products", description: "Search public products.", parameters: {type: "object", additionalProperties: false}}}],
+      messages: [
+        {role: "system", content: "System instruction"},
+        {role: "user", content: "Find 500 ml"},
+        {role: "assistant", content: null, tool_calls: [{id: "prior_1", type: "function", function: {name: "search_products", arguments: '{"capacityMl":250}'}}]},
+        {role: "tool", content: '{"products":[]}', tool_call_id: "prior_1"},
+      ],
+    });
   });
 
   it.each([

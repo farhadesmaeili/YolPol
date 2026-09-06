@@ -257,7 +257,7 @@
       "title": "Conversation AI", "currentState": "Automation state", "jobState": "Latest fallback",
       "states": {"AUTO": "Automatic fallback", "PAUSED": "Paused", "HUMAN_TAKEOVER": "Human takeover"},
       "jobs": {"PENDING": "Waiting for human", "RUNNING": "AI generating", "SUCCEEDED": "Completed", "CANCELLED": "Suppressed by Staff", "SUPERSEDED": "Superseded by newer customer message", "FAILED": "AI unavailable for this turn"},
-      "noJob": "No pending fallback", "pause": "Pause AI", "takeover": "Human takeover", "resume": "Resume AI", "working": "Updating…", "error": "Conversation AI control could not be updated. Refresh and try again."
+      "noJob": "No pending fallback", "escalated": "The AI Agent requested Staff review for the latest response.", "pause": "Pause AI", "takeover": "Human takeover", "resume": "Resume AI", "working": "Updating…", "error": "Conversation AI control could not be updated. Refresh and try again."
     },
     "senders": {"CUSTOMER":"Customer","INTERNAL_USER":"Staff","AI_AGENT":"AI agent","SYSTEM":"System"},
     "channels": {"WEBSITE":"Website","TELEGRAM":"Telegram","EMAIL":"Email","WHATSAPP":"WhatsApp"}

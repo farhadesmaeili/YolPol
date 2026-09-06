@@ -170,8 +170,23 @@ describe("ExecuteAiProviderRequest", () => {
       {provider: {id: "provider-a", adapterKey: "groq", displayName: "A", enabled: true, priority: 10, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}, profile: {id: "profile-a", providerId: "provider-a", name: "A", modelIdentifier: "model/a", enabled: true, priority: 10, capabilities: ["TEXT_GENERATION" as const], generationSettings: {temperature: null, topP: null, maxOutputTokens: 10}, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}, credentialReferences: [{id: "credential-a", providerId: "provider-a", alias: "A", credentialReference: "secret://a/a", enabled: true, priority: 10, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}]},
     ];
     const source = new AiProviderRegistryCandidateSource({execute: async () => eligible});
-    const mapped = await source.getEligibleCandidates("TEXT_GENERATION");
+    const mapped = await source.getEligibleCandidates(["TEXT_GENERATION"]);
     expect(mapped.map(({providerConfigurationId}) => providerConfigurationId)).toEqual(["provider-z", "provider-a"]);
     expect(mapped[0]?.credentialReferences.map(({id}) => id)).toEqual(["credential-b", "credential-a"]);
+  });
+
+  it("requires every requested capability while preserving Registry ordering", async () => {
+    const shared = {provider: {id: "provider-a", adapterKey: "groq", displayName: "A", enabled: true, priority: 10, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}, credentialReferences: [{id: "credential-a", providerId: "provider-a", alias: "A", credentialReference: "secret://a/a", enabled: true, priority: 10, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}]};
+    const eligible = [
+      {...shared, profile: {id: "tool-only", providerId: "provider-a", name: "Tool only", modelIdentifier: "model/tool", enabled: true, priority: 1, capabilities: ["TOOL_CALLING" as const], generationSettings: {temperature: null, topP: null, maxOutputTokens: 10}, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}},
+      {...shared, profile: {id: "agent", providerId: "provider-a", name: "Agent", modelIdentifier: "model/agent", enabled: true, priority: 2, capabilities: ["TEXT_GENERATION" as const, "TOOL_CALLING" as const], generationSettings: {temperature: null, topP: null, maxOutputTokens: 10}, version: 1, createdAt: "", updatedAt: "", updatedBy: "staff:a"}},
+    ];
+    const source = new AiProviderRegistryCandidateSource({execute: async () => eligible});
+    const mapped = await source.getEligibleCandidates(["TOOL_CALLING", "TEXT_GENERATION"]);
+    expect(mapped.map(({modelProfileId}) => modelProfileId)).toEqual(["agent"]);
+    for (const capabilities of [["TEXT_GENERATION"], ["TRANSLATION"]] as const) {
+      const ineligible = new AiProviderRegistryCandidateSource({execute: async () => [{...eligible[0]!, profile: {...eligible[0]!.profile, capabilities}}]});
+      await expect(ineligible.getEligibleCandidates(["TOOL_CALLING", "TEXT_GENERATION"])).resolves.toEqual([]);
+    }
   });
 });
