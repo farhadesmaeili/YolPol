@@ -212,6 +212,58 @@ describe("GroqAiProviderAdapter", () => {
     expect(JSON.stringify(failure)).not.toContain("must-not-escape");
   });
 
+  it("classifies Groq tool-call generation failures without retaining failed generation content", async () => {
+    const failure = await adapterThrowing(new BadRequestError(400, {
+      error: {
+        message: "Failed to call a function.",
+        type: "invalid_request_error",
+        code: "tool_use_failed",
+        failed_generation: "private malformed provider generation",
+      },
+    }, "bad input", new Headers({"x-request-id": "request-safe"}))).execute(execution).catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      category: "INVALID_REQUEST",
+      reason: "TOOL_CALL_GENERATION_FAILED",
+      providerRequestId: "request-safe",
+    });
+    expect(JSON.stringify(failure)).not.toContain("private malformed provider generation");
+    expect(String(failure)).not.toContain("private malformed provider generation");
+    expect(failure).not.toHaveProperty("cause");
+    expect(failure).not.toHaveProperty("error");
+  });
+
+  it.each([
+    {},
+    {message: "tool_use_failed failed_generation"},
+    {code: "invalid_request", failed_generation: "private generation"},
+    {code: "tool_use_failed"},
+    ...[undefined, null, 123, true, {}, [], "", " \t\n"].map((failed_generation) => ({code: "tool_use_failed", failed_generation})),
+  ])("does not classify an incomplete or malformed tool-generation error %# for recovery", async (detail) => {
+    const failure = await adapterThrowing(new BadRequestError(400, {error: detail}, undefined, new Headers()))
+      .execute(execution).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(AiProviderFailure);
+    expect(failure).toMatchObject({category: "INVALID_REQUEST", reason: undefined});
+  });
+
+  it("does not fall back to outer markers when the error envelope is malformed", async () => {
+    const failure = await adapterThrowing(new BadRequestError(400, {
+      error: [], code: "tool_use_failed", failed_generation: "private generation",
+    }, undefined, new Headers())).execute(execution).catch((error: unknown) => error);
+    expect(failure).toMatchObject({category: "INVALID_REQUEST", reason: undefined});
+  });
+
+  it("maps NONE and rejects a provider tool call despite tools being defined", async () => {
+    const {adapter, create} = adapterReturning({choices: [{finish_reason: "tool_calls", message: {
+      content: null, tool_calls: [{id: "call_1", type: "function", function: {name: "search_products", arguments: "{}"}}],
+    }}]});
+    await expect(adapter.execute({...execution, request: {...execution.request, capability: "TOOL_CALLING",
+      tools: [{name: "search_products", description: "Search", inputSchema: {type: "object", additionalProperties: false}}],
+      toolChoice: "NONE",
+    }})).rejects.toMatchObject({category: "MALFORMED_RESPONSE"});
+    expect(create.mock.calls[0]?.[0]).toMatchObject({tool_choice: "none", parallel_tool_calls: false});
+  });
+
   it("rejects malformed responses and preserves a typed safety rejection from a reliable transport mapping", async () => {
     await expect(adapterReturning({choices: []}).adapter.execute(execution)).rejects.toMatchObject({category: "MALFORMED_RESPONSE"});
     await expect(adapterThrowing(new AiProviderFailure("SAFETY_REJECTION")).execute(execution)).rejects.toMatchObject({category: "SAFETY_REJECTION"});

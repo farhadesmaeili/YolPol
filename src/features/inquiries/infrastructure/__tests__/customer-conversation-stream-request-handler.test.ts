@@ -39,11 +39,31 @@ describe("Customer conversation stream request handler", () => {
     streamInput!.onUpdate(update);
     const frame = new TextDecoder().decode((await reader.read()).value);
     expect(frame).toContain("id: 4\nevent: message\n");
-    expect(frame).toContain(JSON.stringify(update.message));
+    expect(JSON.parse(frame.match(/^data: (.*)$/mu)![1]!)).toEqual({...update.message, position: 4});
     expect(frame).not.toContain(token);
     expect(frame).not.toMatch(/actorReference|staff:admin-main|admin-main/u);
     await reader.cancel();
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it.each([-1, 19])("uses safe resume cursor %i while carrying the message's durable position", async (resumeCursor) => {
+    let streamInput: StreamInput | undefined;
+    const response = await createCustomerConversationStreamRequestHandler(
+      () => ({execute: vi.fn().mockResolvedValue(resolved)}),
+      () => ({open: (input: StreamInput) => {
+        streamInput = input;
+        return {status: "opened", session: {close: vi.fn(), completed: new Promise<void>(() => undefined)}} as const;
+      }}),
+      {heartbeatIntervalMs: 60_000},
+    )(request(), context());
+    const reader = response.body!.getReader();
+    await reader.read();
+    streamInput!.onUpdate({...update, cursor: 25, resumeCursor});
+    const frame = new TextDecoder().decode((await reader.read()).value);
+    if (resumeCursor === -1) expect(frame).not.toMatch(/^id:/mu);
+    else expect(frame).toContain("id: 19\nevent: message");
+    expect(JSON.parse(frame.match(/^data: (.*)$/mu)![1]!)).toMatchObject({id: "message-4", position: 25});
+    await reader.cancel();
   });
 
   it("multiplexes safe ephemeral Staff typing without advancing the persisted message cursor", async () => {

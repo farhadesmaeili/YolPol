@@ -203,6 +203,7 @@
       "sameLanguage": "نیازی به ترجمه نیست",
       "unknown": "زبان اصلی نامشخص است",
       "authoring": "پاسخ‌ها را به فارسی بنویسید. در صورت نیاز، پاسخ به زبان مشتری ترجمه می‌شود.",
+      "authoringManual": "پاسخ‌ها را به فارسی بنویسید. تحویل میان‌زبانی به مشتری تا درخواست صریح ترجمه منتظر می‌ماند.",
       "languages": {
         "en": "انگلیسی",
         "tr": "ترکی",
@@ -220,7 +221,11 @@
       "actionError": "عملیات انجام نشد. گفتگو را تازه‌سازی کنید و دوباره تلاش کنید.",
       "sourceLanguage": "زبان متن اصلی پیام",
       "selectLanguage": "زبان اصلی را انتخاب کنید",
-      "confirmLanguage": "تأیید زبان اصلی"
+      "confirmLanguage": "تأیید زبان اصلی",
+      "translate": "ترجمه",
+      "translateForStaff": "ترجمه برای کارکنان",
+      "translateForCustomer": "ترجمه برای مشتری",
+      "customerLanguageResponse": "پاسخ به زبان مشتری — نیازی به ترجمه برای مشتری نیست"
     },
     "metadata": {"login":"ورود کارکنان | یول‌پل","dashboard":"پنل کارکنان | یول‌پل","inquiries":"درخواست‌ها | کارکنان یول‌پل","inquiryDetail":"جزئیات درخواست | کارکنان یول‌پل","team":"تیم | کارکنان یول‌پل","activation":"فعال‌سازی کارکنان | یول‌پل"},
     "common": {"operations":"عملیات کارکنان","displayName":"نام نمایشی","role":"نقش","teamMemberId":"شناسه عضو تیم","signedInAs":"واردشده به‌عنوان","customer":"مشتری","route":"مسیر","status":"وضعیت","assignment":"تخصیص","activity":"فعالیت","created":"ایجادشده","updated":"به‌روزشده","assignedAt":"زمان تخصیص","open":"مشاهده","notProvided":"ارائه نشده","items":"قلم","messages":"پیام","unassigned":"تخصیص‌نیافته","utc":"زمان‌ها بر پایه UTC نمایش داده می‌شوند","inquiryId":"شناسه درخواست","fullName":"نام کامل","company":"شرکت","email":"ایمیل","phone":"تلفن","whatsapp":"واتس‌اپ","telegram":"تلگرام","preferredContact":"روش تماس ترجیحی","origin":"مبدأ","destination":"مقصد","none":"ندارد"},
@@ -243,6 +248,21 @@
     "units": {"pieces":"عدد","packages":"بسته","pallets":"پالت","truckloads":"کامیون"},
     "workflowEvents": {"INQUIRY_CREATED":"درخواست ایجاد شد","STATUS_CHANGED":"وضعیت تغییر کرد","ASSIGNED":"تخصیص داده شد","UNASSIGNED":"تخصیص برداشته شد"},
     "reply": {"replyToCustomer":"پاسخ به مشتری","writeReply":"پاسخ را بنویسید","characters":"تعداد نویسه‌های استفاده‌شده","keyboardHint":"برای ارسال Ctrl+Enter یا Command+Enter را بزنید. Enter خط جدید ایجاد می‌کند.","sendReply":"ارسال پاسخ","sending":"در حال ارسال…","sent":"پیام ارسال شد.","messageList":"تاریخچه گفتگو","yolpolTeam":"تیم یول‌پل","errors":{"required":"پیش از ارسال، پیام را بنویسید.","tooLong":"پیام باید حداکثر ۱۰٬۰۰۰ نویسه باشد.","invalidMessage":"پیام نامعتبر است. آن را بررسی و دوباره تلاش کنید.","sessionExpired":"نشست کارکنان شما منقضی شده است. دوباره وارد شوید.","permissionDenied":"اجازه ارسال این پاسخ را ندارید.","conversationUnavailable":"گفتگوی این درخواست در دسترس نیست.","retryConflict":"این تلاش مجدد به‌صورت امن تطبیق داده نشد. دوباره ارسال کنید.","messageTooLarge":"حجم پیام برای ارسال بیش از حد است.","unsupportedRequest":"درخواست پاسخ پذیرفته نشد.","rateLimited":"تعداد تلاش‌های ارسال زیاد است. بعداً دوباره امتحان کنید.","serviceUnavailable":"سرویس پاسخ موقتاً در دسترس نیست. پیام شما حفظ شده است."}},
+    "translationControl": {
+      "title": "تنظیمات ترجمه",
+      "description": "زمان‌بندی ترجمه ارائه‌دهنده را برای هر جهت انتخاب کنید. ایمنی زبان مشتری همیشه اجرا می‌شود.",
+      "customerToStaff": "پیام‌های مشتری ← کارکنان",
+      "customerToStaffDescription": "حالت دستی متن اصلی مشتری را نمایش می‌دهد و فقط با درخواست کارکنان ترجمه می‌کند.",
+      "staffToCustomer": "پاسخ کارکنان ← مشتری",
+      "staffToCustomerDescription": "حالت دستی تحویل میان‌زبانی به مشتری را تا درخواست و تکمیل ترجمه مسدود نگه می‌دارد.",
+      "aiToStaff": "پاسخ هوش مصنوعی ← کارکنان",
+      "aiToStaffDescription": "حالت درخواستی تا زمان درخواست کارکنان از هزینه ترجمه کمکی جلوگیری می‌کند.",
+      "auto": "خودکار",
+      "manual": "دستی",
+      "onDemand": "درخواستی",
+      "working": "در حال به‌روزرسانی…",
+      "error": "تنظیمات ترجمه به‌روزرسانی نشد. صفحه را تازه کنید و دوباره تلاش کنید."
+    },
     "conversationAi": {
       "title": "هوش مصنوعی گفتگو", "currentState": "وضعیت خودکارسازی", "jobState": "آخرین پاسخ جایگزین",
       "states": {"AUTO": "پاسخ جایگزین خودکار", "PAUSED": "متوقف‌شده", "HUMAN_TAKEOVER": "واگذاری به انسان"},

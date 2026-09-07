@@ -7,6 +7,7 @@ import {StaffInquiryDetail} from "@/features/inquiries/presentation/components/s
 import {StaffState} from "@/features/inquiries/presentation/components/staff/staff-ui";
 import {isLocale} from "@/i18n/locale";
 import {getConversationAiRouting} from "@/composition/conversation-ai-routing/conversation-ai-routing";
+import {getConversationTranslationControl} from "@/composition/conversation-translation/conversation-translation-control";
 
 type StaffInquiryDetailPageProps = Readonly<{params: Promise<{locale: string; inquiryId: string}>}>;
 
@@ -23,17 +24,18 @@ export default async function StaffInquiryDetailPage({params}: StaffInquiryDetai
   const access = await resolveStaffPanelAccess();
   if (access.status !== "authorized") return null;
   const operations = getStaffPanelTeamOperations();
-  const [result, teamMembersResult, conversationAiResult] = await Promise.all([
+  const [result, teamMembersResult, conversationAiResult, translationControlResult] = await Promise.all([
     operations.getInquiryDetail.execute({inquiryId}),
     operations.listAssignableTeamMembers.execute(),
     getConversationAiRouting().getStatus.execute({inquiryId, principal: access.principal}),
+    getConversationTranslationControl().get.execute({inquiryId, principal: access.principal}),
   ]);
   if (result.status === "inquiry_not_found" || result.status === "validation_failed") notFound();
   if (result.status !== "found") {
     const t = await getTranslations({locale, namespace: "Staff"});
     return <StaffState title={t("states.serviceUnavailableTitle")} description={t("states.serviceUnavailableDescription")} />;
   }
-  if (conversationAiResult.status !== "found") {
+  if (conversationAiResult.status !== "found" || translationControlResult.status !== "found") {
     const t = await getTranslations({locale, namespace: "Staff"});
     return <StaffState title={t("states.serviceUnavailableTitle")} description={t("states.serviceUnavailableDescription")} />;
   }
@@ -43,5 +45,5 @@ export default async function StaffInquiryDetailPage({params}: StaffInquiryDetai
       : []),
     [access.principal.teamMemberId, access.principal.displayName] as const,
   ]));
-  return <StaffInquiryDetail detail={result.detail} locale={locale} teamMemberNames={teamMemberNames} canReply={access.capabilities.mayReplyToCustomerConversation} conversationAiStatus={conversationAiResult.value} canControlConversationAi={access.capabilities.mayControlConversationAi} />;
+  return <StaffInquiryDetail detail={result.detail} locale={locale} teamMemberNames={teamMemberNames} canReply={access.capabilities.mayReplyToCustomerConversation} conversationAiStatus={conversationAiResult.value} canControlConversationAi={access.capabilities.mayControlConversationAi} translationControl={translationControlResult.value} />;
 }

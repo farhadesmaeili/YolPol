@@ -31,7 +31,9 @@ function readAfterCursor(request: Request): number | null {
 }
 
 function messageFrame(update: ConversationMessageUpdate): Uint8Array {
-  return encoder.encode(`id: ${update.cursor}\nevent: message\ndata: ${JSON.stringify(update.message)}\n\n`);
+  const resumeCursor = update.resumeCursor ?? update.cursor;
+  const id = resumeCursor < 0 ? "" : `id: ${resumeCursor}\n`;
+  return encoder.encode(`${id}event: message\ndata: ${JSON.stringify({...update.message, position: update.cursor})}\n\n`);
 }
 
 function typingFrame(isTyping: boolean): Uint8Array {

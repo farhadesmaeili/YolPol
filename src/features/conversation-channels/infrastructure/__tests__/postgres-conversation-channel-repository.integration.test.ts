@@ -11,6 +11,7 @@ import {ScheduleConversationChannelDelivery} from "@/features/conversation-chann
 import {PostgresConversationChannelRepository} from "@/features/conversation-channels/infrastructure/persistence/postgres/repositories/postgres-conversation-channel-repository";
 import {FakeConversationChannelOutboundAdapter} from "@/features/conversation-channels/testing/fakes/conversation-channel-fakes";
 import {PostgresTranslationJobRepository} from "@/features/conversation-translation/infrastructure/persistence/postgres-translation-job-repository";
+import {PostgresTranslationRemediationRepository} from "@/features/conversation-translation/infrastructure/persistence/postgres-translation-remediation-repository";
 import {Conversation} from "@/features/inquiries/domain/entities/conversation";
 import {Message} from "@/features/inquiries/domain/entities/message";
 import {PostgresConversationMessageRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-conversation-message-repository";
@@ -35,6 +36,7 @@ const identity = {
 async function clean(): Promise<void> {
   await pool.query(`truncate table
     conversation_channel_deliveries,conversation_channel_inbound_messages,conversation_channel_bindings,
+    conversation_translation_control_events,conversation_translation_controls,
     conversation_translation_events,conversation_translation_jobs,conversation_message_translations,conversation_message_languages,
     conversation_ai_control_events,conversation_ai_controls,conversation_ai_response_jobs,
     ai_schedule_windows,ai_policy_events,ai_operation_policy,telegram_connection_requests,telegram_staff_links,
@@ -311,6 +313,39 @@ describe("PostgreSQL Conversation Channel foundation", () => {
     expect(await new ProcessConversationChannelDeliveries(repository, adapter, clock).execute()).toMatchObject({delivered: 1});
     expect(adapter.requests.map(({text}) => text)).toEqual(["Customer-safe Turkish text"]);
     expect((await pool.query("select body from conversation_messages where id='staff-pending'")).rows[0].body).toBe("Staff original must stay private");
+  });
+
+  it("keeps MANUAL cross-language Staff source out of channels until explicit translation succeeds", async () => {
+    const {conversationId, inquiryId} = await seed("manual");
+    await pool.query(`insert into conversation_translation_controls
+      (conversation_id,customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode,version,updated_at,updated_by)
+      values ($1,'AUTO','MANUAL','AUTO',1,$2,'staff:member')`, [conversationId, currentTime]);
+    const repository = new PostgresConversationChannelRepository(pool, leases);
+    const binding = await new CreateConversationChannelBinding(repository, ids, clock).execute({conversationId, ...identity});
+    if (binding.status !== "created") throw new Error("Binding setup failed.");
+    await new PostgresConversationMessageRepository(pool).appendForConversation(conversationId, Message.create({
+      id: "manual-staff-channel", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member",
+      sourceLocale: "fa", body: "Persian Staff source must stay private", createdAt: new Date(currentTime.getTime() + 1),
+    }));
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs where message_id='manual-staff-channel'")).rows[0].count).toBe(0);
+    const schedule = new ScheduleConversationChannelDelivery(repository, ids, clock);
+    expect(await schedule.execute({messageId: "manual-staff-channel", bindingId: binding.bindingId})).toEqual({status: "translation_not_ready"});
+    expect(await repository.claimDue({limit: 10, now: currentTime, leaseMilliseconds: 60_000})).toEqual([]);
+
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    expect(await remediation.remediate({
+      inquiryId, messageId: "manual-staff-channel", action: "REQUEST", expectedVersion: 1, actorReference: "staff:member",
+    })).toBe("updated");
+    const translations = new PostgresTranslationJobRepository(pool);
+    const translationTime = new Date("2099-01-01T00:00:00.000Z");
+    const job = await translations.claim(translationTime);
+    expect(job).toMatchObject({messageId: "manual-staff-channel", targetLocale: "tr"});
+    expect(await translations.finish(job!, {body: "Customer-safe Turkish body"}, new Date(translationTime.getTime() + 1_000))).toBe(true);
+    expect(await schedule.execute({messageId: "manual-staff-channel", bindingId: binding.bindingId})).toMatchObject({status: "scheduled"});
+    const adapter = new FakeConversationChannelOutboundAdapter();
+    expect(await new ProcessConversationChannelDeliveries(repository, adapter, clock).execute()).toMatchObject({delivered: 1});
+    expect(adapter.requests.map(({text}) => text)).toEqual(["Customer-safe Turkish body"]);
+    expect(JSON.stringify(adapter.requests)).not.toContain("Persian Staff source");
   });
 
   it("claims once, sends only projected text, retries bounded failures, and fences stale leases", async () => {

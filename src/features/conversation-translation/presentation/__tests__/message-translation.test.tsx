@@ -47,4 +47,17 @@ describe("Staff translation presentation", () => {
     expect(sameLanguage).toContain(en.Staff.translation.sameLanguage); expect(sameLanguage).not.toContain(en.Staff.translation.ready);
     expect(parseMessageTranslation({...value, provider: "private"})).toBeNull();
   });
+  it("shows truthful manual and AI on-demand actions without a fake translating state", () => {
+    const customer = {id: "customer", senderType: "CUSTOMER" as const, channel: "WEBSITE" as const, actorReference: null, body: "Merhaba", createdAt: "2026-09-07T00:00:00Z",
+      translation: {sourceLocale: "tr" as const, customerTargetLocale: null, deliveryState: "ACTIVE" as const, version: 1, translations: []}};
+    const ai = {id: "ai", senderType: "AI_AGENT" as const, channel: "WEBSITE" as const, actorReference: null, body: "Merhaba", createdAt: "2026-09-07T00:00:01Z",
+      translation: {sourceLocale: "tr" as const, customerTargetLocale: "tr" as const, deliveryState: "ACTIVE" as const, version: 1, translations: []}};
+    const html = renderToStaticMarkup(<StaffConversationMessageList locale="en" customerDisplayName="Customer" teamMemberNames={{}} inquiryId="inquiry" canReply
+      translationControl={{customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL", aiToStaffMode: "ON_DEMAND", version: 1}}
+      labels={{translation: en.Staff.translation, aiAgent: "AI", customer: "Customer", system: "System", yolpolTeam: "Team", emptyDescription: "Empty", emptyTitle: "Empty", messageList: "Messages", channels: en.Staff.channels}}
+      messages={[customer, ai]} />);
+    expect(html).toContain(en.Staff.translation.translateForStaff);
+    expect(html).toContain(en.Staff.translation.customerLanguageResponse);
+    expect(html).not.toContain(en.Staff.translation.pending);
+  });
 });

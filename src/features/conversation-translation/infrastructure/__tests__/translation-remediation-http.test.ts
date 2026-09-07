@@ -24,13 +24,15 @@ describe("Staff translation remediation boundary", () => {
     expect((await handler(request(payload), context)).status).toBe(200);
     expect(repository.remediate).toHaveBeenCalledWith({...payload, inquiryId: "inquiry", messageId: "message", actorReference: "staff:member"});
   });
-  it.each(["RETRY", "SKIP", "CONFIRM_LANGUAGE"])("denies VIEWER for %s before persistence", async (action) => {
+  it.each(["REQUEST", "RETRY", "SKIP", "CONFIRM_LANGUAGE"])("denies VIEWER for %s before persistence", async (action) => {
     const {handler, repository} = setup("VIEWER");
     expect((await handler(request({action, expectedVersion: 1}), context)).status).toBe(403);
     expect(repository.remediate).not.toHaveBeenCalled();
   });
   it.each([
     {action: "SKIP", expectedVersion: 1, actorReference: "staff:forged"},
+    {action: "REQUEST", expectedVersion: 1, targetLocale: "tr"},
+    {action: "REQUEST", expectedVersion: 1, provider: "private"},
     {action: "RETRY", expectedVersion: 1, targetLocale: "tr", body: "Injected source"},
     {action: "RETRY", expectedVersion: 0, targetLocale: "tr"},
     {action: "CONFIRM_LANGUAGE", expectedVersion: 1, sourceLocale: "de"},

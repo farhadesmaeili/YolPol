@@ -90,7 +90,12 @@ export class ExecuteAiProviderRequest {
       request = parseAiProviderExecutionRequest(input);
     } catch (error) {
       const category = error instanceof AiProviderFailure ? error.category : "INVALID_REQUEST";
-      throw new AiProviderGatewayError(category, safeExecutionId(input.executionId), Object.freeze([]));
+      throw new AiProviderGatewayError(
+        category,
+        safeExecutionId(input.executionId),
+        Object.freeze([]),
+        error instanceof AiProviderFailure ? error.reason : undefined,
+      );
     }
     assertNotCancelled(request, input.signal);
 
@@ -177,7 +182,7 @@ export class ExecuteAiProviderRequest {
               await this.dependencies.health.releaseWithoutHealthChange(permit, finishedAt);
             }
             if (isTerminalAiProviderFailure(failure.category)) {
-              throw new AiProviderGatewayError(failure.category, request.executionId, Object.freeze([...attempts]));
+              throw new AiProviderGatewayError(failure.category, request.executionId, Object.freeze([...attempts]), failure.reason);
             }
             const canRetry = isRetryableAiProviderFailure(failure.category) && retryIndex + 1 < maxAttemptsPerCredential;
             if (canRetry) continue;

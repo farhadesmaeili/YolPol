@@ -30,7 +30,7 @@ describe("Conversation Channel migration", () => {
     const previous = JSON.parse(readFileSync("drizzle/meta/0019_snapshot.json", "utf8"));
     const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
     expect(snapshot.prevId).toBe(previous.id);
-    expect(journal.entries.at(-1)).toMatchObject({idx: 20, tag: "0020_conversation_channel_foundation"});
+    expect(journal.entries.find((entry: {idx: number}) => entry.idx === 20)).toMatchObject({idx: 20, tag: "0020_conversation_channel_foundation"});
     const dialect = new PgDialect();
     for (const table of Object.values(conversationChannelPostgresSchema)) {
       const config = getTableConfig(table);

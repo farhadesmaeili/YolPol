@@ -64,14 +64,21 @@ export class StreamConversationUpdates<TMessage extends ConversationMessageDto> 
     signal: AbortSignal;
     publish: (updates: readonly ConversationMessageUpdate<TMessage>[]) => void;
   }>): Promise<void> {
-    let afterCursor = input.afterCursor;
+    let scanCursor = input.afterCursor;
+    let resumeCursor = input.afterCursor;
     while (!input.signal.aborted) {
-      const result = await this.readNewMessages.execute({inquiryId: input.inquiryId, afterCursor, limit: conversationMessageReadBatchLimit});
+      const result = await this.readNewMessages.execute({inquiryId: input.inquiryId, afterCursor: scanCursor, limit: conversationMessageReadBatchLimit});
       if (result.status !== "found") throw new Error("Conversation updates are unavailable.");
-      if (result.updates.length > 0) {
+      if (scanCursor > resumeCursor && result.updates.some((update) => (update.resumeCursor ?? update.cursor) > resumeCursor)) {
+        // A repair may be behind this page. Read it before advancing Last-Event-ID.
+        scanCursor = resumeCursor;
+      } else if (result.updates.length > 0) {
         input.publish(result.updates);
-        afterCursor = result.updates[result.updates.length - 1]!.cursor;
-      }
+        scanCursor = result.updates[result.updates.length - 1]!.cursor;
+        for (const update of result.updates) resumeCursor = Math.max(resumeCursor, update.resumeCursor ?? update.cursor);
+        // Revisit all held positions, including repairs behind a still-held first row.
+        if (result.updates.length < conversationMessageReadBatchLimit) scanCursor = resumeCursor;
+      } else scanCursor = resumeCursor;
       await this.delay.wait(conversationUpdatePollingIntervalMs, input.signal);
     }
   }

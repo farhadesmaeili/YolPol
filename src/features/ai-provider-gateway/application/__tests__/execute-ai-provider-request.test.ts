@@ -123,6 +123,20 @@ describe("ExecuteAiProviderRequest", () => {
     expect(health.releases).toHaveLength(1);
   });
 
+  it("propagates a safe terminal provider reason without persisting provider error content", async () => {
+    const {useCase} = harness([candidate("a")], [
+      new AiProviderFailure("INVALID_REQUEST", undefined, "request-safe", "TOOL_CALL_GENERATION_FAILED"),
+    ]);
+    const failure = await gatewayFailure(useCase.execute(request));
+    expect(failure).toMatchObject({category: "INVALID_REQUEST", reason: "TOOL_CALL_GENERATION_FAILED"});
+    expect(failure.attempts[0]).toEqual(expect.objectContaining({
+      outcome: "FAILURE",
+      failureCategory: "INVALID_REQUEST",
+      providerRequestId: "request-safe",
+    }));
+    expect(failure.attempts[0]).not.toHaveProperty("reason");
+  });
+
   it("moves from a missing secret to the next credential without retry", async () => {
     const {useCase, adapter, sleeps} = harness([candidate("a", ["primary", "backup"])], [new AiProviderFailure("MISSING_SECRET"), success("backup")]);
     expect((await useCase.execute(request)).credentialReferenceId).toBe("a-backup");

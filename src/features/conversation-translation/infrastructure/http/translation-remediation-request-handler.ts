@@ -23,7 +23,7 @@ export function createTranslationRemediationRequestHandler(getAccess: () => Acce
       const body = await readJsonBodyWithinLimit(request, 1024, "Translation request exceeds limit.");
       if (body.status !== "success") return response(body.status === "too_large" ? 413 : 400, "invalid_request");
       const result = await getRemediation().execute({...await context.params, principal: session.principal, payload: body.value});
-      const status = result.status === "updated" ? 200 : result.status === "forbidden" ? 403 : result.status === "not_found" ? 404
+      const status = result.status === "updated" || result.status === "unchanged" ? 200 : result.status === "forbidden" ? 403 : result.status === "not_found" ? 404
         : result.status === "conflict" ? 409 : result.status === "validation_failed" ? 400 : 503;
       return response(status, result.status);
     } catch { return response(503, "service_unavailable"); }
