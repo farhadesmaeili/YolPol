@@ -99,7 +99,36 @@ export class GenerateConversationAgentResponse {
           }), Math.min(maximumProviderTurnMs, remainingMs), signal);
         } catch (error) {
           if (error instanceof ConversationAgentExecutionError) throw error;
-          throw new ConversationAgentExecutionError(error instanceof AiProviderGatewayError ? error.category : "UNKNOWN_PROVIDER_ERROR");
+          const canFinalizeWithoutTools = error instanceof AiProviderGatewayError
+            && error.category === "INVALID_REQUEST"
+            && error.reason === "TOOL_CALL_GENERATION_FAILED"
+            && observations.size > 0
+            && turn < conversationAgentMaximumModelTurns;
+          if (!canFinalizeWithoutTools) {
+            throw new ConversationAgentExecutionError(error instanceof AiProviderGatewayError ? error.category : "UNKNOWN_PROVIDER_ERROR");
+          }
+
+          turn += 1;
+          const recoveryRemainingMs = absoluteDeadlineMs - this.clock.now().getTime();
+          if (signal.aborted) throw new ConversationAgentExecutionError("TIMEOUT");
+          if (recoveryRemainingMs < 100) return this.escalate.execute(locale, "EXECUTION_DEADLINE_REACHED");
+          try {
+            response = await withConversationAgentDeadline((turnSignal) => this.gateway.execute({
+              executionId: turnExecutionId(input.executionId, turn),
+              capability: "TOOL_CALLING",
+              requiredCapabilities: ["TOOL_CALLING", "TEXT_GENERATION"],
+              messages: Object.freeze([...messages]),
+              tools: this.tools.definitions(),
+              toolChoice: "NONE",
+              systemInstruction: buildConversationAgentSystemInstruction(locale),
+              generationSettings: {temperature: 0, maxOutputTokens: 800},
+              timeoutMs: Math.max(100, Math.min(maximumProviderTurnMs, recoveryRemainingMs)),
+              signal: turnSignal,
+            }), Math.min(maximumProviderTurnMs, recoveryRemainingMs), signal);
+          } catch (recoveryError) {
+            if (recoveryError instanceof ConversationAgentExecutionError) throw recoveryError;
+            throw new ConversationAgentExecutionError(recoveryError instanceof AiProviderGatewayError ? recoveryError.category : "UNKNOWN_PROVIDER_ERROR");
+          }
         }
         if (signal.aborted) throw new ConversationAgentExecutionError("TIMEOUT");
         if (this.clock.now().getTime() >= absoluteDeadlineMs) return this.escalate.execute(locale, "EXECUTION_DEADLINE_REACHED");

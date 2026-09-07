@@ -53,7 +53,9 @@ export function customerChatReducer(state: CustomerChatState, action: CustomerCh
       return Object.freeze({...state, historyStatus: "loading", historyFailure: null});
     case "history_succeeded": {
       const historyIds = new Set(action.messages.map(({id}) => id));
-      return Object.freeze({...state, messages: Object.freeze([...action.messages, ...state.messages.filter(({id}) => !historyIds.has(id))]), historyStatus: "loaded", historyFailure: null});
+      const messages = [...action.messages, ...state.messages.filter(({id}) => !historyIds.has(id))];
+      messages.sort((left, right) => (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER));
+      return Object.freeze({...state, messages: Object.freeze(messages), historyStatus: "loaded", historyFailure: null});
     }
     case "history_failed":
       return Object.freeze({...state, historyStatus: "failed", historyFailure: action.failure});

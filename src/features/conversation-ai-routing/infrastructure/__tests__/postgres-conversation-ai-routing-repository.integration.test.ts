@@ -24,7 +24,7 @@ function repository() {
 }
 
 async function clean() {
-  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 async function seed(jobId = "ai_job_turn_1") {
@@ -52,6 +52,28 @@ beforeEach(async () => { await clean(); leaseSequence = 0; globalAllowed = true;
 afterAll(async () => { if (pool) { await clean(); await pool.end(); } });
 
 describe("PostgresConversationAiRoutingRepository", () => {
+  it("finalizes successive AI turns in ON_DEMAND without Staff translation jobs", async () => {
+    await pool.query(`insert into conversation_translation_controls
+      (conversation_id,customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode,version,updated_at,updated_by)
+      values ('conversation-1','MANUAL','MANUAL','ON_DEMAND',1,$1,'staff:member-1')`, [at(0)]);
+    const routing = repository();
+    const messages = new PostgresConversationMessageRepository(pool);
+    for (let index = 0; index < 3; index += 1) {
+      if (index > 0) await messages.appendCustomerWebsiteForInquiry("inquiry-1", Message.create({
+        id: `on-demand-customer-${index}`, senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en",
+        body: "Next customer question", createdAt: at(index * 10),
+      }), {id: `ai_job_on_demand_${index}`, triggerMessageId: `on-demand-customer-${index}`, notBefore: at(index * 10),
+        executionId: `on-demand-execution-${index}`, createdAt: at(index * 10)});
+      const [job] = await routing.claimDue({limit: 1, now: at(index * 10 + 1), leaseMilliseconds: 60_000});
+      expect(job).toBeDefined();
+      expect(await routing.finalize({job: job!, body: "English AI response", decision: "RESPOND", now: at(index * 10 + 2)})).toBe("succeeded");
+    }
+    expect((await pool.query("select count(*)::int as count from conversation_messages where sender_type='AI_AGENT'")).rows[0].count).toBe(3);
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(0);
+    expect((await pool.query(`select l.source_locale,l.customer_target_locale from conversation_message_languages l
+      join conversation_messages m on m.id=l.message_id where m.sender_type='AI_AGENT'`)).rows)
+      .toEqual(Array.from({length: 3}, () => ({source_locale: "en", customer_target_locale: "en"})));
+  });
   it.each([
     ["PENDING", "RESPOND", null], ["PENDING", null, "PRICE_QUOTATION"],
     ["SUCCEEDED", "UNKNOWN", null], ["SUCCEEDED", "ESCALATE", null],

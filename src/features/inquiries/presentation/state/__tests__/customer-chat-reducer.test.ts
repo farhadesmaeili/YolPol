@@ -4,6 +4,17 @@ import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/messa
 import {createInitialCustomerChatState, customerChatReducer, customerMessageDraftFailure} from "@/features/inquiries/presentation/state/customer-chat-reducer";
 
 describe("Customer chat presentation state", () => {
+  it("keeps a repaired SSE row ordered when an older history request completes afterwards", () => {
+    const safe = {id: "ai", body: "Safe AI", sender: "support" as const, position: 25};
+    const repaired = {id: "staff", body: "Safe translation", sender: "support" as const, position: 20};
+    let state = createInitialCustomerChatState();
+    state = customerChatReducer(state, {type: "realtime_message_received", message: safe});
+    state = customerChatReducer(state, {type: "realtime_message_received", message: repaired});
+    state = customerChatReducer(state, {type: "history_succeeded", messages: [safe]});
+    state = customerChatReducer(state, {type: "realtime_message_received", message: repaired});
+    expect(state.messages).toEqual([repaired, safe]);
+  });
+
   it("places a delayed translation before later local Customer activity and deduplicates its acknowledgement", () => {
     let state = createInitialCustomerChatState([{id: "customer-1", body: "First", sender: "customer", position: 0}]);
     state = customerChatReducer(state, {type: "submission_succeeded", message: {id: "customer-2", body: "Later", sender: "customer"}});

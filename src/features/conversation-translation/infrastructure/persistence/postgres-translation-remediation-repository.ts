@@ -2,7 +2,9 @@ import {randomUUID} from "node:crypto";
 import type {Pool} from "pg";
 import type {TranslationRemediationRepository, RemediationResult} from "@/features/conversation-translation/application/ports/translation-remediation-repository";
 import type {TranslationRemediation} from "@/features/conversation-translation/domain/types/translation-remediation";
-import {translationIdentity, translationLocale, translationTargets} from "@/features/conversation-translation/domain/types/translation";
+import {automaticTranslationTargets, requestedTranslationTarget} from "@/features/conversation-translation/domain/services/translation-scheduling-policy";
+import {defaultConversationTranslationPolicy, type ConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {translationIdentity, translationLocale} from "@/features/conversation-translation/domain/types/translation";
 import {staffWorkingLocale} from "@/shared/config/conversation-translation";
 
 export class PostgresTranslationRemediationRepository implements TranslationRemediationRepository {
@@ -21,9 +23,30 @@ export class PostgresTranslationRemediationRepository implements TranslationReme
       if (!selected.rowCount) { await client.query("rollback"); return "not_found"; }
       const language = selected.rows[0];
       const conflict = async (): Promise<RemediationResult> => { await client.query("rollback"); return "conflict"; };
-      if (language.version !== input.expectedVersion || language.delivery_state === "SKIPPED") return await conflict();
+      if (language.delivery_state === "SKIPPED") return await conflict();
       const jobs = await client.query("select id,status,target_locale from conversation_translation_jobs where message_id=$1 order by id for update", [input.messageId]);
       const translations = await client.query("select id,status,target_locale from conversation_message_translations where message_id=$1 order by id for update", [input.messageId]);
+      if (input.action === "REQUEST") {
+        const sourceLocale = language.source_locale === null ? null : translationLocale(language.source_locale);
+        const customerTargetLocale = language.customer_target_locale === null ? null : translationLocale(language.customer_target_locale);
+        const targetLocale = requestedTranslationTarget({
+          senderType: language.sender_type,
+          sourceLocale,
+          customerTargetLocale,
+          staffTargetLocale: staffWorkingLocale,
+        });
+        if (!targetLocale) return await conflict();
+        const existingTranslation = translations.rows.find((row) => row.target_locale === targetLocale);
+        const existingJob = jobs.rows.find((row) => row.target_locale === targetLocale);
+        if (existingTranslation || existingJob) {
+          if (existingTranslation && existingJob && existingTranslation.id === existingJob.id) {
+            await client.query("commit");
+            return "unchanged";
+          }
+          return await conflict();
+        }
+      }
+      if (language.version !== input.expectedVersion) return await conflict();
       const eventId = randomUUID();
       let previousState = "ACTIVE";
       let newState = "SKIPPED";
@@ -37,6 +60,27 @@ export class PostgresTranslationRemediationRepository implements TranslationReme
         await client.query(`update conversation_translation_jobs set status='PENDING',attempts=0,lease_token=null,leased_until=null,
           failure_category=null,execution_id=$2,updated_at=greatest(updated_at,clock_timestamp()),version=version+1 where id=$1`, [translationId, `tx_${eventId}`]);
         await client.query("update conversation_message_translations set status='PENDING',body=null,updated_at=greatest(updated_at,clock_timestamp()),version=version+1 where id=$1", [translationId]);
+      } else if (input.action === "REQUEST") {
+        const sourceLocale = language.source_locale === null ? null : translationLocale(language.source_locale);
+        const customerTargetLocale = language.customer_target_locale === null ? null : translationLocale(language.customer_target_locale);
+        const targetLocale = requestedTranslationTarget({
+          senderType: language.sender_type,
+          sourceLocale,
+          customerTargetLocale,
+          staffTargetLocale: staffWorkingLocale,
+        });
+        if (!targetLocale) return await conflict();
+        translationId = translationIdentity(input.messageId, targetLocale);
+        await client.query(`insert into conversation_message_translations
+          (id,message_id,source_locale,target_locale,status,created_at,updated_at)
+          values ($1,$2,$3,$4,'PENDING',clock_timestamp(),clock_timestamp())`,
+        [translationId, input.messageId, sourceLocale, targetLocale]);
+        await client.query(`insert into conversation_translation_jobs
+          (id,message_id,target_locale,execution_id,status,created_at,updated_at)
+          values ($1,$2,$3,$4,'PENDING',clock_timestamp(),clock_timestamp())`,
+        [translationId, input.messageId, targetLocale, `tx_${eventId}`]);
+        previousState = "NOT_REQUESTED";
+        newState = "PENDING";
       } else {
         if (!["INTERNAL_USER", "AI_AGENT", "SYSTEM"].includes(language.sender_type)) return await conflict();
         const targetTranslation = translations.rows.find((row) => row.target_locale === language.customer_target_locale);
@@ -60,7 +104,23 @@ export class PostgresTranslationRemediationRepository implements TranslationReme
             where m.id=$1 and c.id=$2`, [input.messageId, conversation.rows[0].id, language.customer_target_locale]);
           const target = translationLocale(targetResult.rows[0]?.locale);
           await client.query("update conversation_message_languages set source_locale=$2,customer_target_locale=$3 where message_id=$1", [input.messageId, input.sourceLocale, target]);
-          for (const locale of translationTargets(input.sourceLocale, target, staffWorkingLocale)) {
+          const configured = await client.query<{
+            customer_to_staff_mode: ConversationTranslationPolicy["customerToStaffMode"];
+            staff_to_customer_mode: ConversationTranslationPolicy["staffToCustomerMode"];
+            ai_to_staff_mode: ConversationTranslationPolicy["aiToStaffMode"];
+          }>("select customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode from conversation_translation_controls where conversation_id=$1", [conversation.rows[0].id]);
+          const policy = configured.rows[0] ? {
+            customerToStaffMode: configured.rows[0].customer_to_staff_mode,
+            staffToCustomerMode: configured.rows[0].staff_to_customer_mode,
+            aiToStaffMode: configured.rows[0].ai_to_staff_mode,
+          } : defaultConversationTranslationPolicy;
+          for (const locale of automaticTranslationTargets({
+            senderType: language.sender_type,
+            sourceLocale: input.sourceLocale,
+            customerTargetLocale: target,
+            staffTargetLocale: staffWorkingLocale,
+            policy,
+          })) {
             const id = translationIdentity(input.messageId, locale);
             await client.query(`insert into conversation_message_translations (id,message_id,source_locale,target_locale,status,created_at,updated_at)
               values ($1,$2,$3,$4,'PENDING',clock_timestamp(),clock_timestamp())`, [id, input.messageId, input.sourceLocale, locale]);

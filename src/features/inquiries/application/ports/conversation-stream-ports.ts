@@ -2,6 +2,7 @@ import type {ConversationMessageDto} from "@/features/inquiries/application/dto/
 
 export type ConversationMessageUpdate<TMessage extends ConversationMessageDto = ConversationMessageDto> = Readonly<{
   cursor: number;
+  resumeCursor?: number;
   message: TMessage;
 }>;
 

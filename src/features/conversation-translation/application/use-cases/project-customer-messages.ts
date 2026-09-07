@@ -16,9 +16,10 @@ export function projectCustomerMessages(rows: readonly TranslatableMessage[]): r
     if (original.senderType === "SYSTEM" || !language?.sourceLocale || !language.customerTargetLocale) continue;
     if (language.sourceLocale === language.customerTargetLocale) { visible.push(row); continue; }
     const translation = language.translations.find((value) => value.targetLocale === language.customerTargetLocale);
-    if (translation?.status !== "SUCCEEDED" || !translation.body) break;
-    visible.push({position: row.position, message: Message.create({id: original.id.value, senderType: original.senderType,
-      channel: original.channel, body: translation.body, createdAt: original.createdAt})});
+    if (translation?.status !== "SUCCEEDED" || !translation.body) continue;
+    visible.push({position: row.position, ...(row.resumePosition === undefined ? {} : {resumePosition: row.resumePosition}),
+      message: Message.create({id: original.id.value, senderType: original.senderType,
+        channel: original.channel, body: translation.body, createdAt: original.createdAt})});
   }
   return Object.freeze(visible);
 }

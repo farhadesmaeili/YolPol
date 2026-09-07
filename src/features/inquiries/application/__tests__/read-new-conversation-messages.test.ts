@@ -17,6 +17,15 @@ describe("ReadNewConversationMessages", () => {
     expect(findAfterPositionForInquiry).toHaveBeenCalledWith("inquiry-1", 1, conversationMessageReadBatchLimit);
   });
 
+  it("preserves a safe reconnect position separately from the message position", async () => {
+    const findAfterPositionForInquiry = vi.fn<ConversationMessageUpdateReader["findAfterPositionForInquiry"]>()
+      .mockResolvedValue([{position: 25, resumePosition: 19, message}]);
+    await expect(new ReadNewConversationMessages({findAfterPositionForInquiry}, toConversationMessageDto)
+      .execute({inquiryId: "inquiry-1", afterCursor: 19})).resolves.toMatchObject({
+      updates: [{cursor: 25, resumeCursor: 19, message: {id: "message-2"}}],
+    });
+  });
+
   it("rejects invalid cursors and oversized reads before persistence", async () => {
     const findAfterPositionForInquiry = vi.fn<ConversationMessageUpdateReader["findAfterPositionForInquiry"]>();
     const useCase = new ReadNewConversationMessages({findAfterPositionForInquiry}, toConversationMessageDto);

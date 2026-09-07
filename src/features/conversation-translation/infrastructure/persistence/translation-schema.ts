@@ -1,6 +1,46 @@
 import {sql} from "drizzle-orm";
 import {check, foreignKey, index, integer, pgTable, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
-import {conversationMessages} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
+import {conversationMessages, conversations} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
+
+export const conversationTranslationControls = pgTable("conversation_translation_controls", {
+  conversationId: varchar("conversation_id", {length: 128}).primaryKey().references(() => conversations.id, {onDelete: "cascade"}),
+  customerToStaffMode: varchar("customer_to_staff_mode", {length: 16}).notNull().default("AUTO"),
+  staffToCustomerMode: varchar("staff_to_customer_mode", {length: 16}).notNull().default("AUTO"),
+  aiToStaffMode: varchar("ai_to_staff_mode", {length: 16}).notNull().default("AUTO"),
+  version: integer("version").notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
+  updatedBy: varchar("updated_by", {length: 166}).notNull(),
+}, (t) => [
+  check("conversation_translation_controls_customer_staff_check", sql`${t.customerToStaffMode} in ('AUTO','MANUAL')`),
+  check("conversation_translation_controls_staff_customer_check", sql`${t.staffToCustomerMode} in ('AUTO','MANUAL')`),
+  check("conversation_translation_controls_ai_staff_check", sql`${t.aiToStaffMode} in ('AUTO','ON_DEMAND')`),
+  check("conversation_translation_controls_version_check", sql`${t.version} >= 1`),
+  check("conversation_translation_controls_actor_check", sql`${t.updatedBy} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
+]);
+
+export const conversationTranslationControlEvents = pgTable("conversation_translation_control_events", {
+  id: varchar("id", {length: 128}).primaryKey(),
+  conversationId: varchar("conversation_id", {length: 128}).notNull().references(() => conversations.id, {onDelete: "cascade"}),
+  previousCustomerToStaffMode: varchar("previous_customer_to_staff_mode", {length: 16}).notNull(),
+  newCustomerToStaffMode: varchar("new_customer_to_staff_mode", {length: 16}).notNull(),
+  previousStaffToCustomerMode: varchar("previous_staff_to_customer_mode", {length: 16}).notNull(),
+  newStaffToCustomerMode: varchar("new_staff_to_customer_mode", {length: 16}).notNull(),
+  previousAiToStaffMode: varchar("previous_ai_to_staff_mode", {length: 16}).notNull(),
+  newAiToStaffMode: varchar("new_ai_to_staff_mode", {length: 16}).notNull(),
+  previousVersion: integer("previous_version").notNull(),
+  newVersion: integer("new_version").notNull(),
+  actorReference: varchar("actor_reference", {length: 166}).notNull(),
+  occurredAt: timestamp("occurred_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (t) => [
+  index("conversation_translation_control_events_conversation_idx").on(t.conversationId, t.occurredAt, t.id),
+  check("conversation_translation_control_events_id_check", sql`${t.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("conversation_translation_control_events_customer_staff_check", sql`${t.previousCustomerToStaffMode} in ('AUTO','MANUAL') and ${t.newCustomerToStaffMode} in ('AUTO','MANUAL')`),
+  check("conversation_translation_control_events_staff_customer_check", sql`${t.previousStaffToCustomerMode} in ('AUTO','MANUAL') and ${t.newStaffToCustomerMode} in ('AUTO','MANUAL')`),
+  check("conversation_translation_control_events_ai_staff_check", sql`${t.previousAiToStaffMode} in ('AUTO','ON_DEMAND') and ${t.newAiToStaffMode} in ('AUTO','ON_DEMAND')`),
+  check("conversation_translation_control_events_changed_check", sql`${t.previousCustomerToStaffMode} <> ${t.newCustomerToStaffMode} or ${t.previousStaffToCustomerMode} <> ${t.newStaffToCustomerMode} or ${t.previousAiToStaffMode} <> ${t.newAiToStaffMode}`),
+  check("conversation_translation_control_events_version_check", sql`${t.previousVersion} >= 0 and ${t.newVersion} = ${t.previousVersion} + 1`),
+  check("conversation_translation_control_events_actor_check", sql`${t.actorReference} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
+]);
 
 export const conversationMessageLanguages = pgTable("conversation_message_languages", {
   messageId: varchar("message_id", {length: 160}).primaryKey().references(() => conversationMessages.id, {onDelete: "cascade"}),
@@ -27,7 +67,7 @@ export const conversationTranslationEvents = pgTable("conversation_translation_e
   createdAt: timestamp("created_at", {withTimezone: true}).notNull(),
 }, (t) => [
   index("translation_event_message_idx").on(t.messageId, t.createdAt),
-  check("translation_event_action_check", sql`${t.action} in ('RETRY','SKIP','CONFIRM_LANGUAGE')`),
+  check("translation_event_action_check", sql`${t.action} in ('REQUEST','RETRY','SKIP','CONFIRM_LANGUAGE')`),
   check("translation_event_version_check", sql`${t.previousVersion} > 0 and ${t.newVersion} = ${t.previousVersion} + 1`),
   check("translation_event_actor_check", sql`${t.actorReference} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
 ]);

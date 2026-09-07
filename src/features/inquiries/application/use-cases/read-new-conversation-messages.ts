@@ -32,7 +32,11 @@ export class ReadNewConversationMessages<TMessage extends ConversationMessageDto
       if (messages === null) return {status: "conversation_not_found"};
       return Object.freeze({
         status: "found",
-        updates: Object.freeze(messages.map(({position, message, translation}) => Object.freeze({cursor: position, message: this.toDto(message, translation)}))),
+        updates: Object.freeze(messages.map(({position, resumePosition, message, translation}) => Object.freeze({
+          cursor: position,
+          ...(resumePosition === undefined ? {} : {resumeCursor: resumePosition}),
+          message: this.toDto(message, translation),
+        }))),
       });
     } catch {
       return {status: "persistence_failed"};

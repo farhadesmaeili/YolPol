@@ -213,6 +213,7 @@
       "sameLanguage": "No translation required",
       "unknown": "Original language unknown",
       "authoring": "Write replies in Persian. Replies are translated into the customer's language when needed.",
+      "authoringManual": "Write replies in Persian. Cross-language Customer delivery waits until you explicitly request translation.",
       "languages": {
         "en": "English",
         "tr": "Turkish",
@@ -230,7 +231,11 @@
       "actionError": "Action could not be completed. Refresh the conversation and try again.",
       "sourceLanguage": "Original message language",
       "selectLanguage": "Select the original language",
-      "confirmLanguage": "Confirm original language"
+      "confirmLanguage": "Confirm original language",
+      "translate": "Translate",
+      "translateForStaff": "Translate for Staff",
+      "translateForCustomer": "Translate for Customer",
+      "customerLanguageResponse": "Customer-language response — no Customer translation required"
     },
     "metadata": {"login":"Staff Login | YolPol","dashboard":"Staff Dashboard | YolPol","inquiries":"Inquiries | YolPol Staff","inquiryDetail":"Inquiry Detail | YolPol Staff","team":"Team | YolPol Staff","activation":"Staff Activation | YolPol"},
     "common": {"operations":"Staff operations","displayName":"Display name","role":"Role","teamMemberId":"Team Member ID","signedInAs":"Signed in as","customer":"Customer","route":"Route","status":"Status","assignment":"Assignment","activity":"Activity","created":"Created","updated":"Updated","assignedAt":"Assigned","open":"Open","notProvided":"Not provided","items":"items","messages":"messages","unassigned":"Unassigned","utc":"Times shown in UTC","inquiryId":"Inquiry ID","fullName":"Full name","company":"Company","email":"Email","phone":"Phone","whatsapp":"WhatsApp","telegram":"Telegram","preferredContact":"Preferred contact","origin":"Origin","destination":"Destination","none":"None"},
@@ -253,6 +258,21 @@
     "units": {"pieces":"pieces","packages":"packages","pallets":"pallets","truckloads":"truckloads"},
     "workflowEvents": {"INQUIRY_CREATED":"Inquiry created","STATUS_CHANGED":"Status changed","ASSIGNED":"Assigned","UNASSIGNED":"Unassigned"},
     "reply": {"replyToCustomer":"Reply to customer","writeReply":"Write a reply","characters":"Characters used","keyboardHint":"Press Ctrl+Enter or Command+Enter to send. Enter adds a new line.","sendReply":"Send reply","sending":"Sending…","sent":"Message sent.","messageList":"Conversation history","yolpolTeam":"YOLPOL Team","errors":{"required":"Write a message before sending.","tooLong":"The message must be 10,000 characters or fewer.","invalidMessage":"The message is invalid. Review it and try again.","sessionExpired":"Your Staff session has expired. Sign in again.","permissionDenied":"You do not have permission to send this reply.","conversationUnavailable":"The Inquiry conversation is unavailable.","retryConflict":"This retry could not be matched safely. Try sending again.","messageTooLarge":"The message is too large to send.","unsupportedRequest":"The reply request could not be accepted.","rateLimited":"Too many replies were attempted. Try again later.","serviceUnavailable":"The reply service is temporarily unavailable. Your message has been kept."}},
+    "translationControl": {
+      "title": "Translation settings",
+      "description": "Choose when provider translation is scheduled for each direction. Customer-language safety is always enforced.",
+      "customerToStaff": "Customer messages → Staff",
+      "customerToStaffDescription": "Manual keeps the Customer original visible and translates only when Staff requests it.",
+      "staffToCustomer": "Staff replies → Customer",
+      "staffToCustomerDescription": "Manual blocks cross-language Customer delivery until Staff requests and completes translation.",
+      "aiToStaff": "AI replies → Staff",
+      "aiToStaffDescription": "On demand avoids Staff convenience translation cost until Staff requests it.",
+      "auto": "Auto",
+      "manual": "Manual",
+      "onDemand": "On demand",
+      "working": "Updating…",
+      "error": "Translation settings could not be updated. Refresh and try again."
+    },
     "conversationAi": {
       "title": "Conversation AI", "currentState": "Automation state", "jobState": "Latest fallback",
       "states": {"AUTO": "Automatic fallback", "PAUSED": "Paused", "HUMAN_TAKEOVER": "Human takeover"},

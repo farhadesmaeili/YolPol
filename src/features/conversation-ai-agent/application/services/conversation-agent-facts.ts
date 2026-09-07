@@ -4,7 +4,7 @@ export function productFacts(product: PublicConversationAgentProduct, copy: Conv
   const identity = `${copy.product}: ${product.name} (${copy.sku}: ${product.sku})`;
   const facts: ConversationAgentFact[] = [{id: `product_${index}.identity`, sourceKey: `product:${product.id}:identity`, text: identity}];
   const add = (field: string, label: string, value: string | number | undefined) => {
-    if (value !== undefined) facts.push({id: `product_${index}.${field}`, sourceKey: `product:${product.id}:${field}`, text: `${identity}\n${label}: ${value}`});
+    if (value !== undefined) facts.push({id: `product_${index}.${field}`, sourceKey: `product:${product.id}:${field}`, text: `${label}: ${value}`});
   };
   const specs = product.specifications;
   add("capacityMl", copy.capacityMl, specs.capacityMl);
@@ -32,7 +32,9 @@ export function renderConversationAgentAnswer(content: string, observations: Rea
   let plan: unknown;
   try { plan = JSON.parse(content); } catch { return null; }
   if (!isRecord(plan) || Object.keys(plan).length !== 2 || plan.type !== "GROUNDED" || !Array.isArray(plan.facts) || plan.facts.length < 1 || plan.facts.length > 12) return null;
-  const selected: string[] = [];
+  const selected: string[][] = [];
+  const productGroups = new Map<string, string[]>();
+  const renderedFacts = new Set<string>();
   const references = new Set<string>();
   for (const reference of plan.facts) {
     if (!isRecord(reference) || Object.keys(reference).length !== 2 || typeof reference.observationId !== "string" || typeof reference.factId !== "string") return null;
@@ -41,9 +43,27 @@ export function renderConversationAgentAnswer(content: string, observations: Rea
     references.add(key);
     const fact = observations.get(reference.observationId)?.find(({id}) => id === reference.factId);
     if (!fact || fact.text.trim().length === 0) return null;
-    selected.push(fact.text);
+    const observation = observations.get(reference.observationId)!;
+    const fieldSeparator = fact.sourceKey.lastIndexOf(":");
+    if (fact.sourceKey.startsWith("product:") && fieldSeparator > 7) {
+      const identity = observation.find(({sourceKey}) => sourceKey === `${fact.sourceKey.slice(0, fieldSeparator)}:identity`);
+      if (!identity || identity.text.trim().length === 0) return null;
+      let group = productGroups.get(identity.sourceKey);
+      if (!group) {
+        group = [identity.text];
+        productGroups.set(identity.sourceKey, group);
+        selected.push(group);
+      }
+      if (fact.sourceKey !== identity.sourceKey && !renderedFacts.has(fact.sourceKey)) {
+        group.push(fact.text);
+        renderedFacts.add(fact.sourceKey);
+      }
+    } else if (!renderedFacts.has(fact.sourceKey)) {
+      selected.push([fact.text]);
+      renderedFacts.add(fact.sourceKey);
+    }
   }
-  const body = selected.join("\n\n");
+  const body = selected.flat().join("\n\n");
   return body.length <= 8_000 ? body : null;
 }
 

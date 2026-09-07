@@ -5,7 +5,7 @@ import {describe, expect, it, vi} from "vitest";
 
 import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
 import {StaffReplyComposer, type StaffReplyComposerLabels} from "@/features/inquiries/presentation/components/staff/staff-reply-composer";
-import {resolveStaffMessageAuthor} from "@/features/inquiries/presentation/components/staff/staff-conversation-message-list";
+import {resolveStaffMessageAuthor, StaffConversationMessageList} from "@/features/inquiries/presentation/components/staff/staff-conversation-message-list";
 import enMessages from "@/i18n/messages/en.json";
 import faMessages from "@/i18n/messages/fa.json";
 
@@ -57,6 +57,18 @@ function labels(catalog: typeof enMessages.Staff, customerTyping = enMessages.Co
 }
 
 describe("Staff Reply Composer presentation", () => {
+  it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("keeps unscheduled %s translation requestable after returning to AUTO", (senderType) => {
+    const translation = {sourceLocale: senderType === "INTERNAL_USER" ? "fa" as const : "tr" as const,
+      customerTargetLocale: senderType === "CUSTOMER" ? null : "tr" as const,
+      deliveryState: "ACTIVE" as const, version: 1, translations: []};
+    const html = renderToStaticMarkup(<StaffConversationMessageList canReply customerDisplayName="Buyer" inquiryId="inquiry-1"
+      labels={{...labels(enMessages.Staff), translation: enMessages.Staff.translation}} locale="en" teamMemberNames={{}}
+      messages={[{...message, senderType, translation}]} />);
+    expect(html).toContain(senderType === "INTERNAL_USER" ? enMessages.Staff.translation.translateForCustomer : enMessages.Staff.translation.translateForStaff);
+    expect(html).not.toContain(enMessages.Staff.translation.pending);
+    if (senderType === "INTERNAL_USER") expect(html).toContain(enMessages.Staff.translation.blocked);
+    if (senderType === "AI_AGENT") expect(html).toContain(enMessages.Staff.translation.customerLanguageResponse);
+  });
   it("renders a localized accessible multiline composer with mobile-safe controls", () => {
     const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={-1} initialMessages={[]} inquiryId="inquiry-1" labels={labels(enMessages.Staff)} locale="en" teamMemberNames={{}} />);
     expect(html).toContain("Reply to customer");
@@ -110,5 +122,13 @@ describe("Staff Reply Composer presentation", () => {
       join(directory, "state", "staff-reply-reducer.ts"),
     ].map((file) => readFileSync(file, "utf8")).join("\n");
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/u);
+  });
+  it("states truthfully that MANUAL cross-language delivery waits for explicit translation", () => {
+    const catalog = labels(enMessages.Staff);
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={-1}
+      initialMessages={[]} inquiryId="inquiry-1" labels={{...catalog, translation: enMessages.Staff.translation}} locale="en"
+      teamMemberNames={{}} translationControl={{customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO", version: 1}} />);
+    expect(html).toContain(enMessages.Staff.translation.authoringManual);
+    expect(html).not.toContain(enMessages.Staff.translation.authoring);
   });
 });

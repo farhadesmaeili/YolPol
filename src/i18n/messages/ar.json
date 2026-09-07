@@ -203,6 +203,7 @@
       "sameLanguage": "لا حاجة إلى الترجمة",
       "unknown": "لغة النص الأصلي غير معروفة",
       "authoring": "اكتب الردود بالفارسية. تُترجم الردود إلى لغة العميل عند الحاجة.",
+      "authoringManual": "اكتب الردود بالفارسية. ينتظر التسليم بين اللغات حتى تطلب الترجمة صراحةً.",
       "languages": {
         "en": "الإنجليزية",
         "tr": "التركية",
@@ -220,7 +221,11 @@
       "actionError": "تعذر إتمام الإجراء. حدّث المحادثة وحاول مجددًا.",
       "sourceLanguage": "لغة الرسالة الأصلية",
       "selectLanguage": "اختر اللغة الأصلية",
-      "confirmLanguage": "تأكيد اللغة الأصلية"
+      "confirmLanguage": "تأكيد اللغة الأصلية",
+      "translate": "ترجمة",
+      "translateForStaff": "ترجمة للموظفين",
+      "translateForCustomer": "ترجمة للعميل",
+      "customerLanguageResponse": "رد بلغة العميل — لا يحتاج العميل إلى ترجمة"
     },
     "metadata": {"login":"دخول الموظفين | YolPol","dashboard":"لوحة الموظفين | YolPol","inquiries":"الاستفسارات | موظفو YolPol","inquiryDetail":"تفاصيل الاستفسار | موظفو YolPol","team":"الفريق | موظفو YolPol","activation":"تفعيل الموظفين | YolPol"},
     "common": {"operations":"عمليات الموظفين","displayName":"الاسم المعروض","role":"الدور","teamMemberId":"معرّف عضو الفريق","signedInAs":"مسجّل الدخول باسم","customer":"العميل","route":"المسار","status":"الحالة","assignment":"التعيين","activity":"النشاط","created":"تاريخ الإنشاء","updated":"تاريخ التحديث","assignedAt":"تاريخ التعيين","open":"فتح","notProvided":"غير متوفر","items":"عناصر","messages":"رسائل","unassigned":"غير معيّن","utc":"تُعرض الأوقات بتوقيت UTC","inquiryId":"معرّف الاستفسار","fullName":"الاسم الكامل","company":"الشركة","email":"البريد الإلكتروني","phone":"الهاتف","whatsapp":"واتساب","telegram":"تلغرام","preferredContact":"التواصل المفضل","origin":"المنشأ","destination":"الوجهة","none":"لا يوجد"},
@@ -243,6 +248,21 @@
     "units": {"pieces":"قطع","packages":"عبوات","pallets":"منصات","truckloads":"حمولات شاحنة"},
     "workflowEvents": {"INQUIRY_CREATED":"تم إنشاء الاستفسار","STATUS_CHANGED":"تغيرت الحالة","ASSIGNED":"تم التعيين","UNASSIGNED":"أُلغي التعيين"},
     "reply": {"replyToCustomer":"الرد على العميل","writeReply":"اكتب ردًا","characters":"الأحرف المستخدمة","keyboardHint":"اضغط Ctrl+Enter أو Command+Enter للإرسال. يضيف Enter سطرًا جديدًا.","sendReply":"إرسال الرد","sending":"جارٍ الإرسال…","sent":"تم إرسال الرسالة.","messageList":"سجل المحادثة","yolpolTeam":"فريق YOLPOL","errors":{"required":"اكتب رسالة قبل الإرسال.","tooLong":"يجب ألا تتجاوز الرسالة ١٠٬٠٠٠ حرف.","invalidMessage":"الرسالة غير صالحة. راجعها وحاول مرة أخرى.","sessionExpired":"انتهت جلسة الموظفين. سجّل الدخول مرة أخرى.","permissionDenied":"ليست لديك صلاحية إرسال هذا الرد.","conversationUnavailable":"محادثة الاستفسار غير متاحة.","retryConflict":"تعذر مطابقة إعادة المحاولة بأمان. حاول الإرسال مرة أخرى.","messageTooLarge":"حجم الرسالة أكبر من المسموح للإرسال.","unsupportedRequest":"تعذر قبول طلب الرد.","rateLimited":"تمت محاولات رد كثيرة. حاول لاحقًا.","serviceUnavailable":"خدمة الرد غير متاحة مؤقتًا. تم الاحتفاظ برسالتك."}},
+    "translationControl": {
+      "title": "إعدادات الترجمة",
+      "description": "اختر متى تُجدول ترجمة المزوّد لكل اتجاه. تُطبّق سلامة لغة العميل دائمًا.",
+      "customerToStaff": "رسائل العميل ← الموظفون",
+      "customerToStaffDescription": "يبقي الوضع اليدوي نص العميل الأصلي ظاهرًا ولا يترجمه إلا بطلب الموظفين.",
+      "staffToCustomer": "ردود الموظفين ← العميل",
+      "staffToCustomerDescription": "يحظر الوضع اليدوي التسليم بين اللغات حتى يطلب الموظف الترجمة وتكتمل.",
+      "aiToStaff": "ردود الذكاء الاصطناعي ← الموظفون",
+      "aiToStaffDescription": "يتجنب وضع عند الطلب تكلفة ترجمة الراحة حتى يطلبها الموظفون.",
+      "auto": "تلقائي",
+      "manual": "يدوي",
+      "onDemand": "عند الطلب",
+      "working": "جارٍ التحديث…",
+      "error": "تعذر تحديث إعدادات الترجمة. حدّث الصفحة وحاول مجددًا."
+    },
     "conversationAi": {
       "title": "الذكاء الاصطناعي للمحادثة", "currentState": "حالة الأتمتة", "jobState": "آخر رد احتياطي",
       "states": {"AUTO": "رد احتياطي تلقائي", "PAUSED": "متوقف مؤقتًا", "HUMAN_TAKEOVER": "استلام بشري"},

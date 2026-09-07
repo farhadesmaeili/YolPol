@@ -21,7 +21,13 @@ export interface ConversationMessageReader {
   findPositionedForInquiry?(inquiryId: string): Promise<readonly PositionedConversationMessage[] | null>;
 }
 
-export type PositionedConversationMessage = Readonly<{position: number; message: Message; translation?: MessageTranslationView}>;
+export type PositionedConversationMessage = Readonly<{
+  position: number;
+  message: Message;
+  translation?: MessageTranslationView;
+  /** The highest durable position a reconnect may safely resume after. */
+  resumePosition?: number;
+}>;
 
 export interface PositionedConversationMessageReader {
   findPositionedForInquiry(inquiryId: string): Promise<readonly PositionedConversationMessage[] | null>;

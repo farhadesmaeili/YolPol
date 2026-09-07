@@ -9,6 +9,9 @@ import {formatHumanNumber, LtrIsolate} from "@/shared/presentation/bidi/bidi-iso
 import type {Locale} from "@/shared/types/locale";
 import type {ConversationAiStatusDto} from "@/features/conversation-ai-routing/application/dto/conversation-ai-routing-dto";
 import {ConversationAiControlPanel} from "@/features/conversation-ai-routing/presentation/components/conversation-ai-control";
+import type {ConversationTranslationControlDto} from "@/features/conversation-translation/application/dto/translation-control-dto";
+import {defaultConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {TranslationControlPanel} from "@/features/conversation-translation/presentation/components/translation-control-panel";
 
 function isStatus(value: string | null): value is InquiryStatus {
   return value === "NEW" || value === "WAITING_FOR_TEAM" || value === "WAITING_FOR_CUSTOMER" || value === "QUOTED" || value === "CONFIRMED" || value === "CLOSED";
@@ -18,13 +21,14 @@ function DetailValue({children, label, ltr = false}: Readonly<{children: React.R
   return <div className="min-w-0"><dt className="text-xs font-medium text-stone-500">{label}</dt><dd className={`mt-1 break-words text-sm font-semibold text-stone-900 ${ltr ? "font-mono text-xs" : ""}`}>{ltr ? <LtrIsolate>{children}</LtrIsolate> : children}</dd></div>;
 }
 
-export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply, conversationAiStatus = {state: "AUTO", version: 0, latestJob: null}, canControlConversationAi = false}: Readonly<{
+export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply, conversationAiStatus = {state: "AUTO", version: 0, latestJob: null}, canControlConversationAi = false, translationControl = {...defaultConversationTranslationPolicy, version: 0}}: Readonly<{
   detail: TeamInquiryDetailDto;
   locale: Locale;
   teamMemberNames?: Readonly<Record<string, string>>;
   canReply: boolean;
   conversationAiStatus?: ConversationAiStatusDto;
   canControlConversationAi?: boolean;
+  translationControl?: ConversationTranslationControlDto;
 }>) {
   const [t, typing] = await Promise.all([
     getTranslations({locale, namespace: "Staff"}),
@@ -109,6 +113,28 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
               }}
             />
           </StaffPanel>
+          <StaffPanel title={t("translationControl.title")}>
+            <TranslationControlPanel
+              inquiryId={inquiry.id}
+              initialControl={translationControl}
+              canControl={canReply}
+              labels={{
+                title: t("translationControl.title"),
+                description: t("translationControl.description"),
+                customerToStaff: t("translationControl.customerToStaff"),
+                customerToStaffDescription: t("translationControl.customerToStaffDescription"),
+                staffToCustomer: t("translationControl.staffToCustomer"),
+                staffToCustomerDescription: t("translationControl.staffToCustomerDescription"),
+                aiToStaff: t("translationControl.aiToStaff"),
+                aiToStaffDescription: t("translationControl.aiToStaffDescription"),
+                auto: t("translationControl.auto"),
+                manual: t("translationControl.manual"),
+                onDemand: t("translationControl.onDemand"),
+                working: t("translationControl.working"),
+                error: t("translationControl.error"),
+              }}
+            />
+          </StaffPanel>
           <StaffPanel title={t("inquiryDetail.workflowHistory")}>
             {detail.workflowHistory.length === 0 ? <StaffState title={t("states.emptyWorkflowTitle")} description={t("states.emptyWorkflowDescription")} /> : (
               <ol className="space-y-4">
@@ -134,10 +160,11 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
               locale={locale}
               teamMemberNames={teamMemberNames}
               canReply={canReply}
+              translationControl={translationControl}
               labels={{
                 translation: {
                   original: t("translation.original"), translation: t("translation.translation"), pending: t("translation.pending"),
-                  failed: t("translation.failed"), ready: t("translation.ready"), sameLanguage: t("translation.sameLanguage"), unknown: t("translation.unknown"), authoring: t("translation.authoring"),
+                  failed: t("translation.failed"), ready: t("translation.ready"), sameLanguage: t("translation.sameLanguage"), unknown: t("translation.unknown"), authoring: t("translation.authoring"), authoringManual: t("translation.authoringManual"),
                   blocked: t("translation.blocked"),
                   cancelled: t("translation.cancelled"),
                   skipped: t("translation.skipped"),
@@ -150,6 +177,10 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
                   sourceLanguage: t("translation.sourceLanguage"),
                   selectLanguage: t("translation.selectLanguage"),
                   confirmLanguage: t("translation.confirmLanguage"),
+                  translate: t("translation.translate"),
+                  translateForStaff: t("translation.translateForStaff"),
+                  translateForCustomer: t("translation.translateForCustomer"),
+                  customerLanguageResponse: t("translation.customerLanguageResponse"),
                   languages: {en: t("translation.languages.en"), tr: t("translation.languages.tr"), fa: t("translation.languages.fa"), ar: t("translation.languages.ar")},
                 },
                 aiAgent: t("senders.AI_AGENT"),

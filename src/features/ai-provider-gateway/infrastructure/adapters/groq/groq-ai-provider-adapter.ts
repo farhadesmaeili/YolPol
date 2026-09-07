@@ -138,6 +138,13 @@ function safeProviderRequestId(error: APIError): string | undefined {
   return value && safeProviderRequestIdPattern.test(value) ? value : undefined;
 }
 
+function isGroqToolCallGenerationFailure(error: APIError): boolean {
+  if (!isRecord(error.error)) return false;
+  const detail = Object.prototype.hasOwnProperty.call(error.error, "error") ? error.error.error : error.error;
+  return isRecord(detail) && detail.code === "tool_use_failed"
+    && typeof detail.failed_generation === "string" && detail.failed_generation.trim().length > 0;
+}
+
 function mapGroqFailure(error: unknown): AiProviderFailure {
   if (error instanceof AiProviderFailure) return error;
   if (error instanceof APIUserAbortError) return new AiProviderFailure("CANCELLED");
@@ -147,7 +154,15 @@ function mapGroqFailure(error: unknown): AiProviderFailure {
   if (error instanceof PermissionDeniedError) return new AiProviderFailure("PERMISSION", undefined, safeProviderRequestId(error));
   if (error instanceof NotFoundError) return new AiProviderFailure("MODEL_NOT_FOUND_OR_CONFIG", undefined, safeProviderRequestId(error));
   if (error instanceof RateLimitError) return new AiProviderFailure("RATE_LIMIT", retryAfterMilliseconds(error), safeProviderRequestId(error));
-  if (error instanceof BadRequestError || error instanceof UnprocessableEntityError) return new AiProviderFailure("INVALID_REQUEST", undefined, safeProviderRequestId(error));
+  if (error instanceof BadRequestError) {
+    return new AiProviderFailure(
+      "INVALID_REQUEST",
+      undefined,
+      safeProviderRequestId(error),
+      isGroqToolCallGenerationFailure(error) ? "TOOL_CALL_GENERATION_FAILED" : undefined,
+    );
+  }
+  if (error instanceof UnprocessableEntityError) return new AiProviderFailure("INVALID_REQUEST", undefined, safeProviderRequestId(error));
   if (error instanceof APIError) {
     const requestId = safeProviderRequestId(error);
     if (error.status === 408) return new AiProviderFailure("TIMEOUT", undefined, requestId);

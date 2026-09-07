@@ -1,5 +1,7 @@
 import type {AiProviderExecutionAttempt, AiProviderFailureCategory} from "@/features/ai-provider-gateway/domain/types/ai-provider-execution";
 
+export type AiProviderFailureReason = "TOOL_CALL_GENERATION_FAILED";
+
 const safeFailureMessages: Readonly<Record<AiProviderFailureCategory, string>> = Object.freeze({
   INVALID_REQUEST: "The AI execution request is invalid.",
   SAFETY_REJECTION: "The AI provider rejected the request for safety reasons.",
@@ -25,6 +27,7 @@ export class AiProviderFailure extends Error {
     readonly category: AiProviderFailureCategory,
     readonly retryAfterMs?: number,
     readonly providerRequestId?: string,
+    readonly reason?: AiProviderFailureReason,
   ) {
     super(safeFailureMessages[category]);
     this.name = "AiProviderFailure";
@@ -35,6 +38,7 @@ export class AiProviderGatewayError extends Error {
     readonly category: AiProviderFailureCategory,
     readonly executionId: string,
     readonly attempts: readonly AiProviderExecutionAttempt[],
+    readonly reason?: AiProviderFailureReason,
   ) {
     super(safeFailureMessages[category]);
     this.name = "AiProviderGatewayError";

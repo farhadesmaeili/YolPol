@@ -6,8 +6,8 @@ import type {TranslationRemediation} from "@/features/conversation-translation/d
 import type {TranslationLabels} from "@/features/conversation-translation/presentation/components/message-translation";
 import {isSupportedLocale, type Locale} from "@/shared/types/locale";
 
-export function TranslationRemediationActions({inquiryId, messageId, value, outbound, canConfirmSource, labels, onResolved}: Readonly<{
-  inquiryId: string; messageId: string; value: MessageTranslationView; outbound: boolean; canConfirmSource: boolean; labels: TranslationLabels; onResolved?: () => void;
+export function TranslationRemediationActions({inquiryId, messageId, value, outbound, canConfirmSource, manualRequestLabel, labels, onResolved}: Readonly<{
+  inquiryId: string; messageId: string; value: MessageTranslationView; outbound: boolean; canConfirmSource: boolean; manualRequestLabel?: string | null; labels: TranslationLabels; onResolved?: () => void;
 }>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -30,6 +30,8 @@ export function TranslationRemediationActions({inquiryId, messageId, value, outb
     } catch { setError(true); setBusy(false); }
   }
   return <div className="mt-2 flex flex-wrap items-center gap-2" aria-busy={busy}>
+    {manualRequestLabel ? <button type="button" disabled={busy} onClick={() => void act({action: "REQUEST", expectedVersion})}
+      className="min-h-11 rounded border border-stone-400 px-3 py-2 disabled:opacity-50">{manualRequestLabel}</button> : null}
     {value.translations.filter((t) => t.status === "FAILED" || t.status === "CANCELLED").map((t) => <button type="button" key={t.targetLocale}
       disabled={busy} onClick={() => void act({action: "RETRY", expectedVersion, targetLocale: t.targetLocale})}
       className="rounded border border-stone-400 px-3 py-2 disabled:opacity-50">{labels.retry} · {labels.languages[t.targetLocale]}</button>)}

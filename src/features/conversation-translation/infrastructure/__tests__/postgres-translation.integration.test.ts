@@ -1,5 +1,6 @@
 import {readFile} from "node:fs/promises";
 import {PostgresTranslationRemediationRepository} from "@/features/conversation-translation/infrastructure/persistence/postgres-translation-remediation-repository";
+import {PostgresConversationTranslationControlRepository} from "@/features/conversation-translation/infrastructure/persistence/postgres-translation-control-repository";
 import {resolve} from "node:path";
 import {drizzle} from "drizzle-orm/node-postgres";
 import {migrate} from "drizzle-orm/node-postgres/migrator";
@@ -27,7 +28,7 @@ let pool: Pool;
 const now = new Date("2026-09-05T10:00:00.000Z");
 const at = (seconds: number) => new Date(now.getTime() + seconds * 1000);
 async function clean() {
-  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 async function seed(locale: Locale = "tr", initialMessage = false) {
   const inquiry = new InquiryTestBuilder().with({id: "translation-inquiry", source: {locale, path: `/${locale}/inquiry`}, createdAt: now}).buildNew();
@@ -44,6 +45,106 @@ beforeEach(clean);
 afterAll(async () => { if (pool) { await clean(); await pool.end(); } });
 
 describe("durable Conversation translation", () => {
+  it("retains unknown-language replies in the resume frontier until explicit language confirmation", async () => {
+    await seed("tr");
+    await pool.query(`insert into conversation_messages (id,conversation_id,position,sender_type,channel,body,created_at)
+      values ('unknown-repair','translation-conversation',0,'AI_AGENT','WEBSITE','Trusted Turkish original',$1)`, [now]);
+    await pool.query("insert into conversation_message_languages (message_id,source_locale,customer_target_locale) values ('unknown-repair',null,'tr')");
+    await messages().appendForInquiry("translation-inquiry", Message.create({id: "later-safe", senderType: "AI_AGENT", channel: "WEBSITE",
+      sourceLocale: "tr", body: "Later safe AI", createdAt: at(1)}));
+    const reader = new PostgresCustomerMessageReader(pool);
+    expect(await reader.findAfterPositionForInquiry("translation-inquiry", -1, 100))
+      .toMatchObject([{position: 1, resumePosition: -1}]);
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    expect(await remediation.remediate({inquiryId: "translation-inquiry", messageId: "unknown-repair", action: "CONFIRM_LANGUAGE",
+      sourceLocale: "tr", expectedVersion: 1, actorReference: "staff:member"})).toBe("updated");
+    expect((await reader.findAfterPositionForInquiry("translation-inquiry", -1, 100))?.map(({position}) => position)).toEqual([0, 1]);
+  });
+
+  it("linearizes competing version-zero field updates and atomically records the winning before/after snapshot", async () => {
+    await seed();
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    const base = {inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO",
+      expectedVersion: 0, actorReference: "staff:first", eventId: "first-control", now} as const;
+    const attempts = [{...base, customerToStaffMode: "MANUAL" as const},
+      {...base, aiToStaffMode: "ON_DEMAND" as const, actorReference: "staff:second", eventId: "second-control"}];
+    const results = await Promise.all(attempts.map((input) => controls.change(input)));
+    expect([...results].sort()).toEqual(["conflict", "updated"]);
+    const winner = attempts[results.indexOf("updated")]!;
+    expect(await controls.read(base.inquiryId)).toEqual({customerToStaffMode: winner.customerToStaffMode,
+      staffToCustomerMode: winner.staffToCustomerMode, aiToStaffMode: winner.aiToStaffMode, version: 1});
+    expect((await pool.query("select * from conversation_translation_control_events")).rows).toMatchObject([{
+      id: winner.eventId, previous_customer_to_staff_mode: "AUTO", new_customer_to_staff_mode: winner.customerToStaffMode,
+      previous_staff_to_customer_mode: "AUTO", new_staff_to_customer_mode: "AUTO",
+      previous_ai_to_staff_mode: "AUTO", new_ai_to_staff_mode: winner.aiToStaffMode,
+      previous_version: 0, new_version: 1, actor_reference: winner.actorReference,
+    }]);
+    expect(await controls.change(winner)).toBe("conflict");
+    expect(await controls.change({...winner, expectedVersion: 1})).toBe("unchanged");
+    expect((await pool.query("select count(*)::int as count from conversation_translation_controls")).rows[0].count).toBe(1);
+    expect((await pool.query("select count(*)::int as count from conversation_translation_control_events")).rows[0].count).toBe(1);
+    await expect(controls.change({...base, expectedVersion: 1, customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL",
+      eventId: winner.eventId})).rejects.toMatchObject({code: "23505"});
+    expect((await controls.read(base.inquiryId))?.version).toBe(1);
+    await pool.query("delete from inquiries where id=$1", [base.inquiryId]);
+    expect((await pool.query("select count(*)::int as count from conversation_translation_control_events")).rows[0].count).toBe(0);
+  });
+
+  it.each([
+    ["ON_DEMAND", "AUTO", "AUTO", 1, "staff:member"],
+    ["AUTO", "ON_DEMAND", "AUTO", 1, "staff:member"],
+    ["AUTO", "AUTO", "MANUAL", 1, "staff:member"],
+    ["AUTO", "AUTO", "AUTO", 0, "staff:member"],
+    ["AUTO", "AUTO", "AUTO", 1, "customer:forged"],
+  ])("rejects invalid direct-SQL control values %s/%s/%s/%s/%s", async (customer, staff, ai, version, actor) => {
+    await seed();
+    await expect(pool.query(`insert into conversation_translation_controls
+      (conversation_id,customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode,version,updated_at,updated_by)
+      values ('translation-conversation',$1,$2,$3,$4,$5,$6)`, [customer, staff, ai, version, now, actor])).rejects.toMatchObject({code: "23514"});
+  });
+
+  it("creates no AI convenience intent or Gateway execution from repeated Staff/Customer reads in ON_DEMAND", async () => {
+    await seed();
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    await controls.change({inquiryId: "translation-inquiry", customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL",
+      aiToStaffMode: "ON_DEMAND", expectedVersion: 0, actorReference: "staff:member", eventId: "no-tokens", now});
+    for (let index = 0; index < 3; index += 1) await messages().appendForInquiry("translation-inquiry", Message.create({
+      id: `on-demand-${index}`, senderType: "AI_AGENT", channel: "WEBSITE", sourceLocale: "tr", body: "AI Turkish original", createdAt: at(index),
+    }));
+    for (let index = 0; index < 3; index += 1) {
+      await controls.read("translation-inquiry");
+      await messages().findPositionedForInquiry("translation-inquiry");
+      expect(await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry")).toHaveLength(3);
+    }
+    const gateway = {execute: vi.fn().mockResolvedValue(translationResponse("Persian convenience translation"))};
+    const worker = new ProcessTranslationJobs(new PostgresTranslationJobRepository(pool), gateway,
+      {read: () => ({active: false, state: "INACTIVE"})}, {now: () => new Date("2099-01-01T00:00:00Z")});
+    expect(await worker.execute()).toMatchObject({claimed: 0});
+    expect(gateway.execute).not.toHaveBeenCalled();
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(0);
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    const request = {inquiryId: "translation-inquiry", messageId: "on-demand-0", action: "REQUEST", expectedVersion: 1, actorReference: "staff:member"} as const;
+    expect((await Promise.all([remediation.remediate(request), remediation.remediate(request)])).sort()).toEqual(["unchanged", "updated"]);
+    expect(await worker.execute()).toMatchObject({claimed: 1, succeeded: 1});
+    expect(await remediation.remediate(request)).toBe("unchanged");
+    expect(await worker.execute()).toMatchObject({claimed: 0});
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(1);
+  });
+
+  it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("reuses the automatic %s intent during concurrent append and REQUEST", async (senderType) => {
+    await seed();
+    const message = senderType === "INTERNAL_USER" ? reply("auto-request") : Message.create({id: "auto-request", senderType,
+      channel: "WEBSITE", sourceLocale: "tr", body: "Turkish original", createdAt: at(1)});
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    const request = {inquiryId: "translation-inquiry", messageId: message.id.value, action: "REQUEST", expectedVersion: 1, actorReference: "staff:member"} as const;
+    const [appended, requested] = await Promise.all([messages().appendForInquiry(request.inquiryId, message), remediation.remediate(request)]);
+    expect(appended).toBe("created");
+    expect(["not_found", "unchanged"]).toContain(requested);
+    expect(await remediation.remediate(request)).toBe("unchanged");
+    expect((await pool.query("select target_locale from conversation_translation_jobs where message_id=$1", [message.id.value])).rows)
+      .toEqual([{target_locale: senderType === "INTERNAL_USER" ? "tr" : "fa"}]);
+  });
   it("rolls back the authoritative message if translation scheduling cannot commit", async () => {
     await seed();
     await pool.query("alter table conversation_translation_jobs add constraint test_reject_jobs check (false)");
@@ -143,7 +244,7 @@ describe("durable Conversation translation", () => {
     await messages().appendForInquiry("translation-inquiry", reply("staff-ar"));
     expect((await pool.query("select message_id,customer_target_locale from conversation_message_languages where customer_target_locale is not null order by message_id")).rows).toEqual([{message_id: "staff-ar", customer_target_locale: "ar"}, {message_id: "staff-tr", customer_target_locale: "tr"}]);
   });
-  it("holds pending/failed history and SSE, releases success once at the original position, and keeps originals", async () => {
+  it("withholds pending/failed Staff rows without hiding later Customer-safe history and SSE", async () => {
     await seed("tr"); await messages().appendForInquiry("translation-inquiry", reply("staff-1"));
     const reader = new PostgresCustomerMessageReader(pool);
     const history = new GetConversationMessageHistory(reader); const updates = new ReadNewConversationMessages(reader, toConversationMessageDto);
@@ -158,8 +259,11 @@ describe("durable Conversation translation", () => {
     await messages().appendForInquiry("translation-inquiry", reply("staff-failure"));
     const failedJob = await jobs.claim(at(5)); await jobs.finish(failedJob!, {failure: "PERMISSION"}, at(6));
     await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({id: "later-customer", senderType: "CUSTOMER", channel: "WEBSITE", body: "Later customer", createdAt: at(7)}));
-    expect(await updates.execute({inquiryId: "translation-inquiry", afterCursor: 0})).toMatchObject({updates: []});
+    expect(await updates.execute({inquiryId: "translation-inquiry", afterCursor: 0})).toMatchObject({
+      updates: [{cursor: 2, resumeCursor: 0, message: {id: "later-customer", body: "Later customer"}}],
+    });
     const safeHistory = JSON.stringify(await history.execute({inquiryId: "translation-inquiry"}));
+    expect(safeHistory).toContain("Later customer");
     expect(safeHistory).not.toContain("Staff original"); expect(safeHistory).not.toContain("PERMISSION");
     expect((await messages().findPositionedForInquiry("translation-inquiry"))?.[1]?.translation?.translations[0]?.status).toBe("FAILED");
   });
@@ -167,7 +271,29 @@ describe("durable Conversation translation", () => {
     await seed("tr"); await messages().appendForInquiry("translation-inquiry", reply("same", "tr"));
     await messages().appendForInquiry("translation-inquiry", Message.create({id: "ai", senderType: "AI_AGENT", channel: "WEBSITE", body: "AI Turkish original", sourceLocale: "tr", createdAt: at(2)}));
     expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((m) => m.body)).toEqual(["Staff original", "AI Turkish original"]);
-    expect((await pool.query("select target_locale from conversation_message_translations order by message_id")).rows).toEqual([{target_locale: "fa"}, {target_locale: "fa"}]);
+    expect((await pool.query("select target_locale from conversation_message_translations order by message_id")).rows).toEqual([{target_locale: "fa"}]);
+  });
+  it("delivers a same-language AI reply beyond a failed cross-language Staff row", async () => {
+    await seed("ar");
+    await messages().appendForInquiry("translation-inquiry", reply("failed-staff", "fa"));
+    const jobs = new PostgresTranslationJobRepository(pool);
+    const failed = await jobs.claim(at(2));
+    expect(failed).toMatchObject({messageId: "failed-staff", targetLocale: "ar"});
+    await jobs.finish(failed!, {failure: "PERMISSION"}, at(3));
+    await messages().appendForInquiry("translation-inquiry", Message.create({
+      id: "safe-ai", senderType: "AI_AGENT", channel: "WEBSITE", sourceLocale: "ar",
+      body: "Grounded Arabic response", createdAt: at(4),
+    }));
+
+    const reader = new PostgresCustomerMessageReader(pool);
+    expect((await reader.findPositionedForInquiry("translation-inquiry"))?.map(({position, resumePosition, message}) => ({
+      position, resumePosition, id: message.id.value, body: message.body,
+    }))).toEqual([{position: 1, resumePosition: -1, id: "safe-ai", body: "Grounded Arabic response"}]);
+    expect(await new ReadNewConversationMessages(reader, toConversationMessageDto)
+      .execute({inquiryId: "translation-inquiry", afterCursor: -1})).toMatchObject({
+      updates: [{cursor: 1, resumeCursor: -1, message: {id: "safe-ai", body: "Grounded Arabic response"}}],
+    });
+    expect(JSON.stringify(await reader.findForInquiry("translation-inquiry"))).not.toContain("Staff original");
   });
   it("delivers fa Customer and fa Staff originals without provider translation in history and SSE", async () => {
     await seed("fa");
@@ -311,11 +437,19 @@ describe("explicit translation remediation", () => {
     expect((await pool.query("select * from conversation_ai_response_jobs order by id")).rows).toEqual(before.rows);
     expect((await pool.query("select * from conversation_ai_controls")).rows).toEqual(control.rows);
   });
-  it("skips failed position 11 permanently, preserves originals, and releases 12/13 in history and SSE", async () => {
+  it("skips failed position 11 permanently and removes its reconnect frontier", async () => {
     const {repository, jobs, first} = await deliveryFixture();
-    expect((await visiblePositions()).positions).toEqual([10]);
+    expect((await visiblePositions()).positions).toEqual([10, 12, 13]);
+    expect((await new PostgresCustomerMessageReader(pool).findPositionedForInquiry("translation-inquiry"))
+      ?.map(({position, resumePosition}) => ({position, resumePosition}))).toEqual([
+      {position: 10, resumePosition: undefined},
+      {position: 12, resumePosition: 10},
+      {position: 13, resumePosition: 10},
+    ]);
     expect(await repository.remediate({...remediationInput, action: "SKIP"})).toBe("updated");
     expect((await visiblePositions()).positions).toEqual([10, 12, 13]);
+    expect((await new PostgresCustomerMessageReader(pool).findPositionedForInquiry("translation-inquiry"))
+      ?.map(({resumePosition}) => resumePosition)).toEqual([undefined, undefined, undefined]);
     expect((await visiblePositions()).bodies).not.toContain("Staff original");
     expect(await repository.remediate({...remediationInput, expectedVersion: 2, action: "RETRY", targetLocale: "tr"})).toBe("conflict");
     expect(await jobs.finish(first, {body: "Late original leak"}, later(5))).toBe(false);
@@ -328,12 +462,12 @@ describe("explicit translation remediation", () => {
     const {repository, jobs, first} = await deliveryFixture();
     expect(await repository.remediate({...remediationInput, action: "RETRY", targetLocale: "tr"})).toBe("updated");
     expect(await repository.remediate({...remediationInput, action: "RETRY", targetLocale: "tr"})).toBe("conflict");
-    expect((await visiblePositions()).positions).toEqual([10]);
+    expect((await visiblePositions()).positions).toEqual([10, 12, 13]);
     const retry = (await jobs.claim(later(5)))!;
     expect(retry.id).toBe(first.id); expect(retry.executionId).not.toBe(first.executionId);
     expect(await jobs.finish(first, {body: "Stale"}, later(6))).toBe(false);
     await jobs.finish(retry, {failure: "PERMISSION"}, later(6));
-    expect(await jobs.claim(later(7))).toBeNull(); expect((await visiblePositions()).positions).toEqual([10]);
+    expect(await jobs.claim(later(7))).toBeNull(); expect((await visiblePositions()).positions).toEqual([10, 12, 13]);
     expect(await repository.remediate({...remediationInput, expectedVersion: 2, action: "RETRY", targetLocale: "tr"})).toBe("updated");
     const next = (await jobs.claim(later(8)))!; expect(next.executionId).not.toBe(retry.executionId);
     await jobs.finish(next, {body: "Recovered translation"}, later(9));
@@ -376,6 +510,196 @@ describe("explicit translation remediation", () => {
     await pool.query("delete from inquiries where id='translation-inquiry'");
     expect((await pool.query("select count(*)::int as count from conversation_translation_events")).rows[0].count).toBe(0);
   });
+  it("persists versioned directional controls, rejects stale updates, and keeps control audits append-only", async () => {
+    await seed();
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    expect(await controls.read("translation-inquiry")).toEqual({
+      customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO", version: 0,
+    });
+    const change = {
+      inquiryId: "translation-inquiry", customerToStaffMode: "MANUAL" as const,
+      staffToCustomerMode: "MANUAL" as const, aiToStaffMode: "ON_DEMAND" as const,
+      expectedVersion: 0, actorReference: "staff:member", eventId: "translation_control_event_1", now,
+    };
+    expect(await controls.change(change)).toBe("updated");
+    expect(await controls.read("translation-inquiry")).toEqual({
+      customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL", aiToStaffMode: "ON_DEMAND", version: 1,
+    });
+    expect(await controls.change({...change, customerToStaffMode: "AUTO", eventId: "translation_control_event_2"})).toBe("conflict");
+    expect(await controls.change({...change, expectedVersion: 1, eventId: "translation_control_event_3"})).toBe("unchanged");
+    const events = await pool.query("select * from conversation_translation_control_events");
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0]).toMatchObject({previous_version: 0, new_version: 1, actor_reference: "staff:member"});
+    await expect(pool.query("update conversation_translation_control_events set actor_reference='staff:other'")).rejects.toMatchObject({code: "55000"});
+    await expect(pool.query("delete from conversation_translation_control_events")).rejects.toMatchObject({code: "55000"});
+  });
+  it("uses manual and on-demand scheduling without source leaks and reuses each translation intent", async () => {
+    await seed("tr");
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    expect(await controls.change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL",
+      aiToStaffMode: "ON_DEMAND", expectedVersion: 0, actorReference: "staff:member",
+      eventId: "translation_control_manual", now,
+    })).toBe("updated");
+    await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({
+      id: "manual-customer", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "tr",
+      body: "Customer Turkish original", createdAt: at(1),
+    }));
+    await messages().appendForInquiry("translation-inquiry", Message.create({
+      id: "manual-ai", senderType: "AI_AGENT", channel: "WEBSITE", sourceLocale: "tr",
+      body: "AI Turkish original", createdAt: at(2),
+    }));
+    await messages().appendForInquiry("translation-inquiry", reply("manual-staff"));
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(0);
+    expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((message) => message.body))
+      .toEqual(["Customer Turkish original", "AI Turkish original"]);
+    expect(await new ReadNewConversationMessages(new PostgresCustomerMessageReader(pool), toConversationMessageDto)
+      .execute({inquiryId: "translation-inquiry", afterCursor: 1})).toMatchObject({updates: []});
+
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    const manualRequest = (messageId: string, actorReference = "staff:member") => remediation.remediate({
+      inquiryId: "translation-inquiry", messageId, action: "REQUEST", expectedVersion: 1, actorReference,
+    });
+    expect((await Promise.all([manualRequest("manual-customer"), manualRequest("manual-customer", "staff:other")])).sort()).toEqual(["unchanged", "updated"]);
+    expect(await manualRequest("manual-ai")).toBe("updated");
+    expect(await manualRequest("manual-staff")).toBe("updated");
+    expect((await pool.query("select message_id,target_locale from conversation_translation_jobs order by message_id")).rows).toEqual([
+      {message_id: "manual-ai", target_locale: "fa"},
+      {message_id: "manual-customer", target_locale: "fa"},
+      {message_id: "manual-staff", target_locale: "tr"},
+    ]);
+    const jobs = new PostgresTranslationJobRepository(pool);
+    for (let index = 0; index < 3; index += 1) {
+      const job = await jobs.claim(later(4 + index));
+      expect(job).not.toBeNull();
+      await jobs.finish(job!, {body: job!.messageId === "manual-staff" ? "Staff Turkish safe translation" : "Persian Staff convenience translation"}, later(8 + index));
+    }
+    expect(await manualRequest("manual-ai")).toBe("unchanged");
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(3);
+    expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((message) => message.body))
+      .toEqual(["Customer Turkish original", "AI Turkish original", "Staff Turkish safe translation"]);
+    expect(await new ReadNewConversationMessages(new PostgresCustomerMessageReader(pool), toConversationMessageDto)
+      .execute({inquiryId: "translation-inquiry", afterCursor: 1})).toMatchObject({updates: [{message: {id: "manual-staff", body: "Staff Turkish safe translation"}}]});
+    expect((await messages().findForInquiry("translation-inquiry"))?.map((message) => message.body))
+      .toEqual(["Customer Turkish original", "AI Turkish original", "Staff original"]);
+  });
+  it("keeps queued, claimed, and completed translation work reusable across mode changes", async () => {
+    await seed("tr");
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({
+      id: "queued-before-manual", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "tr", body: "Customer", createdAt: at(1),
+    }));
+    expect(await controls.change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "MANUAL", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND",
+      expectedVersion: 0, actorReference: "staff:member", eventId: "translation_control_queued", now: at(2),
+    })).toBe("updated");
+    const jobs = new PostgresTranslationJobRepository(pool);
+    const claimed = await jobs.claim(at(3));
+    expect(claimed?.messageId).toBe("queued-before-manual");
+    expect(await new PostgresTranslationRemediationRepository(pool).remediate({
+      inquiryId: "translation-inquiry", messageId: "queued-before-manual", action: "REQUEST",
+      expectedVersion: 1, actorReference: "staff:other",
+    })).toBe("unchanged");
+    expect(await controls.change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO",
+      expectedVersion: 1, actorReference: "staff:member", eventId: "translation_control_running", now: at(4),
+    })).toBe("updated");
+    expect(await jobs.finish(claimed!, {body: "Reusable Staff translation"}, at(5))).toBe(true);
+    await messages().appendCustomerWebsiteForInquiry("translation-inquiry", Message.create({
+      id: "automatic-after-resume", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "tr", body: "Later Customer", createdAt: at(6),
+    }));
+    expect((await pool.query("select status,body from conversation_message_translations where message_id='queued-before-manual'")).rows[0])
+      .toEqual({status: "SUCCEEDED", body: "Reusable Staff translation"});
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs where message_id='automatic-after-resume'")).rows[0].count).toBe(1);
+  });
+  it("keeps same-language Staff originals Customer-safe in MANUAL without creating a provider job", async () => {
+    await seed("fa");
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    await controls.change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO",
+      expectedVersion: 0, actorReference: "staff:member", eventId: "translation_control_same", now,
+    });
+    await messages().appendForInquiry("translation-inquiry", reply("same-language", "fa"));
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(0);
+    expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((message) => message.body)).toEqual(["Staff original"]);
+  });
+  it("keeps source-language confirmation separate from provider scheduling in MANUAL", async () => {
+    await seed("tr");
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    await controls.change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO",
+      expectedVersion: 0, actorReference: "staff:member", eventId: "translation_control_unknown", now,
+    });
+    await pool.query(`insert into conversation_messages
+      (id,conversation_id,position,sender_type,channel,actor_reference,body,created_at)
+      values ('unknown-manual','translation-conversation',0,'INTERNAL_USER','WEBSITE','staff:member','Unknown Staff source',$1)`, [now]);
+    await pool.query("insert into conversation_message_languages (message_id,source_locale,customer_target_locale) values ('unknown-manual',null,'tr')");
+    const remediation = new PostgresTranslationRemediationRepository(pool);
+    expect(await remediation.remediate({
+      inquiryId: "translation-inquiry", messageId: "unknown-manual", action: "CONFIRM_LANGUAGE",
+      sourceLocale: "fa", expectedVersion: 1, actorReference: "staff:member",
+    })).toBe("updated");
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs where message_id='unknown-manual'")).rows[0].count).toBe(0);
+    expect((await pool.query("select source_locale,customer_target_locale from conversation_message_languages where message_id='unknown-manual'")).rows)
+      .toEqual([{source_locale: "fa", customer_target_locale: "tr"}]);
+    expect(await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry")).toEqual([]);
+    expect(await remediation.remediate({
+      inquiryId: "translation-inquiry", messageId: "unknown-manual", action: "REQUEST",
+      expectedVersion: 2, actorReference: "staff:member",
+    })).toBe("updated");
+    expect((await pool.query("select target_locale from conversation_translation_jobs where message_id='unknown-manual'")).rows)
+      .toEqual([{target_locale: "tr"}]);
+  });
+  it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("linearizes %s append against a simultaneous mode change without duplicate jobs", async (senderType) => {
+    await seed("tr");
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    const message = senderType === "INTERNAL_USER" ? reply("racing-message") : Message.create({
+      id: "racing-message", senderType, channel: "WEBSITE", sourceLocale: "tr", body: "Turkish original", createdAt: at(1),
+    });
+    const [, changed] = await Promise.all([
+      messages().appendForInquiry("translation-inquiry", message),
+      controls.change({
+        inquiryId: "translation-inquiry", customerToStaffMode: senderType === "CUSTOMER" ? "MANUAL" : "AUTO",
+        staffToCustomerMode: senderType === "INTERNAL_USER" ? "MANUAL" : "AUTO",
+        aiToStaffMode: senderType === "AI_AGENT" ? "ON_DEMAND" : "AUTO",
+        expectedVersion: 0, actorReference: "staff:member", eventId: `translation_control_race_${senderType.toLowerCase()}`, now,
+      }),
+    ]);
+    expect(changed).toBe("updated");
+    expect((await pool.query("select count(*)::int as count from conversation_translation_jobs where message_id='racing-message'")).rows[0].count)
+      .toBeLessThanOrEqual(1);
+  });
+  it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("blocks %s append on the Conversation lock and observes committed manual policy", async (senderType) => {
+    await seed();
+    const lock = await pool.connect();
+    let append: Promise<unknown> | undefined;
+    try {
+      await lock.query("begin");
+      await lock.query("select id from conversations where id='translation-conversation' for update");
+      const pid = (await lock.query<{pid: number}>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      await lock.query(`insert into conversation_translation_controls
+        (conversation_id,customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode,version,updated_at,updated_by)
+        values ('translation-conversation','MANUAL','MANUAL','ON_DEMAND',1,$1,'staff:member')`, [now]);
+      append = messages().appendForInquiry("translation-inquiry", senderType === "INTERNAL_USER" ? reply("locked-append")
+        : Message.create({id: "locked-append", senderType, channel: "WEBSITE", sourceLocale: "tr", body: "Turkish original", createdAt: at(1)}));
+      // Observe actual PostgreSQL lock contention before releasing the policy transaction.
+      const deadline = Date.now() + 5_000;
+      let blocked = false;
+      while (!blocked && Date.now() < deadline) {
+        blocked = (await pool.query<{blocked: boolean}>(`select exists(select 1 from pg_stat_activity
+          where datname=current_database() and $1=any(pg_blocking_pids(pid))) as blocked`, [pid])).rows[0]!.blocked;
+        if (!blocked) await new Promise((resolveWait) => setTimeout(resolveWait, 5));
+      }
+      expect(blocked).toBe(true);
+      await lock.query("commit");
+      expect(await append).toBe("created");
+      expect((await pool.query("select count(*)::int as count from conversation_translation_jobs")).rows[0].count).toBe(0);
+    } finally {
+      await lock.query("rollback");
+      lock.release();
+      await append;
+    }
+  });
   it("applies actual 0018 over historical originals, backfills trusted locale and resolves unknown language explicitly", async () => {
     await seed("ar", true);
     await messages().appendForInquiry("translation-inquiry", reply("blocked"));
@@ -386,6 +710,8 @@ describe("explicit translation remediation", () => {
       await client.query("drop table conversation_translation_events,conversation_translation_jobs,conversation_message_translations,conversation_message_languages");
       await client.query("drop function prevent_translation_event_mutation(),prevent_translation_delivery_revival()");
       await client.query(await readFile(resolve("drizzle/0018_conversation_translation.sql"), "utf8"));
+      await client.query("alter table conversation_translation_events drop constraint translation_event_action_check");
+      await client.query("alter table conversation_translation_events add constraint translation_event_action_check check (action in ('REQUEST','RETRY','SKIP','CONFIRM_LANGUAGE'))");
       await client.query("commit");
     } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
     expect((await pool.query("select source_locale from conversation_message_languages where message_id='initial-customer'")).rows[0].source_locale).toBe("ar");

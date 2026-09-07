@@ -3,11 +3,13 @@ import type {ConversationMessageUpdate, ConversationUpdateStreamRegistry} from "
 
 type ActiveStream<TMessage extends ConversationMessageDto> = {
   cursor: number;
+  readonly deliveredPositions: Set<number>;
   readonly conversationId: string;
   readonly listener: (update: ConversationMessageUpdate<TMessage>) => void;
 };
 
 export const defaultMaximumActiveConversationStreams = 100;
+export const maximumRememberedConversationPositions = 1000;
 
 export class InMemoryConversationUpdateStreamRegistry<TMessage extends ConversationMessageDto> implements ConversationUpdateStreamRegistry<TMessage> {
   private readonly activeStreams = new Map<number, ActiveStream<TMessage>>();
@@ -20,7 +22,8 @@ export class InMemoryConversationUpdateStreamRegistry<TMessage extends Conversat
   register(input: Parameters<ConversationUpdateStreamRegistry["register"]>[0]) {
     if (this.activeStreams.size >= this.maximumActiveStreams) return null;
     const registrationId = this.nextRegistrationId++;
-    this.activeStreams.set(registrationId, {conversationId: input.conversationId, cursor: input.afterCursor, listener: input.listener});
+    this.activeStreams.set(registrationId, {conversationId: input.conversationId, cursor: input.afterCursor,
+      deliveredPositions: new Set<number>(), listener: input.listener});
     let closed = false;
 
     return Object.freeze({
@@ -32,8 +35,20 @@ export class InMemoryConversationUpdateStreamRegistry<TMessage extends Conversat
         try {
           for (const update of ordered) {
             if (update.cursor <= stream.cursor) continue;
-            stream.listener(update);
-            stream.cursor = update.cursor;
+            const resumeCursor = Math.max(stream.cursor, update.resumeCursor ?? update.cursor);
+            if (resumeCursor === stream.cursor && stream.deliveredPositions.has(update.cursor)) continue;
+            stream.listener(resumeCursor === update.cursor && update.resumeCursor === undefined
+              ? update
+              : Object.freeze({...update, resumeCursor}));
+            stream.cursor = resumeCursor;
+            for (const position of stream.deliveredPositions) {
+              if (position <= stream.cursor) stream.deliveredPositions.delete(position);
+            }
+            if (update.cursor > stream.cursor) stream.deliveredPositions.add(update.cursor);
+            // Eviction permits safe replay; it must never turn an unseen lower position into a duplicate.
+            if (stream.deliveredPositions.size > maximumRememberedConversationPositions) {
+              stream.deliveredPositions.delete(stream.deliveredPositions.values().next().value!);
+            }
           }
         } catch (error) {
           closed = true;
