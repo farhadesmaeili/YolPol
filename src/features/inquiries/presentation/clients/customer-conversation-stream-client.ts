@@ -3,7 +3,7 @@ import {parseConversationTypingEvent} from "@/features/inquiries/presentation/cl
 import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
 
 export interface CustomerConversationEventSource {
-  addEventListener(type: "message" | "typing", listener: (event: MessageEvent<string>) => void): void;
+  addEventListener(type: "message" | "typing" | "open" | "error", listener: (event: MessageEvent<string>) => void): void;
   close(): void;
 }
 
@@ -13,10 +13,16 @@ export function subscribeToCustomerConversation(
   onMessage: (message: CustomerChatMessage) => void,
   createEventSource: (url: string) => CustomerConversationEventSource = (url) => new EventSource(url),
   onStaffTyping?: (isTyping: boolean) => void,
+  onReconnecting?: (reconnecting: boolean) => void,
 ): CustomerConversationStreamSubscription | null {
   let source: CustomerConversationEventSource;
   try { source = createEventSource("/api/customer/conversation/stream"); }
-  catch { return null; }
+  catch { onReconnecting?.(true); return null; }
+
+  if (onReconnecting) {
+    source.addEventListener("open", () => onReconnecting(false));
+    source.addEventListener("error", () => { onStaffTyping?.(false); onReconnecting(true); });
+  }
 
   source.addEventListener("message", (event) => {
     try {

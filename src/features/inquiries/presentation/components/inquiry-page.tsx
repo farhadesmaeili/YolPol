@@ -1,11 +1,15 @@
 import type {ReactNode} from "react";
-
 import {PremiumBreadcrumbs, PremiumPageShell} from "@/shared/presentation/marketing/premium-page-shell";
 
 export function InquiryPagePresentation({children, labels}: {children: ReactNode; labels: Readonly<{isRtl: boolean; breadcrumbLabel: string; home: string; eyebrow: string; heading: string; introduction: string; pricing: string}>}) {
-  return <PremiumPageShell><div className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-8 lg:px-14 xl:px-20">
+  return <PremiumPageShell><div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-8 lg:px-12">
     <PremiumBreadcrumbs label={labels.breadcrumbLabel} home={labels.home} current={labels.heading} />
-    <header className="grid gap-8 border-b border-stone-950/10 py-10 md:grid-cols-[minmax(0,1fr)_18rem] md:items-end lg:py-16"><div><div className="flex items-center gap-4"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-800" /><p className={labels.isRtl ? "text-sm font-semibold text-emerald-900" : "text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-900"}>{labels.eyebrow}</p></div><h1 className={`mt-6 max-w-4xl text-[clamp(2.8rem,6vw,6rem)] font-semibold leading-[0.96] text-stone-950 ${labels.isRtl ? "" : "tracking-[-0.055em]"}`}>{labels.heading}</h1><p className="mt-6 max-w-3xl text-lg leading-9 text-stone-600">{labels.introduction}</p></div><p className="border-s-2 border-emerald-800 ps-5 text-sm font-semibold leading-7 text-emerald-900">{labels.pricing}</p></header>
-    <div className="grid gap-8 pb-16 pt-4 lg:grid-cols-[12rem_minmax(0,1fr)]"><aside aria-hidden="true" className="hidden pt-12 lg:block"><div dir="ltr" className="sticky top-36 space-y-5 text-[9px] font-semibold tracking-[0.2em] text-stone-400"><p>01</p><p>02</p><p>03</p><p>04</p></div></aside><div className="min-w-0">{children}</div></div>
+    <header className="grid gap-6 border-b border-border py-8 sm:py-12 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-end">
+      <div><p className={`flex items-center gap-3 text-xs font-semibold text-brand ${labels.isRtl ? "" : "uppercase tracking-[.2em]"}`}><span aria-hidden="true" className="h-px w-8 bg-accent" />{labels.eyebrow}</p>
+        <h1 className={`mt-4 max-w-3xl text-[clamp(2rem,5vw,4rem)] font-semibold leading-[1.2] ${labels.isRtl ? "" : "tracking-[-.045em]"}`}>{labels.heading}</h1>
+        <p className="mt-4 max-w-2xl text-base leading-8 text-muted-foreground">{labels.introduction}</p></div>
+      <p className="border-s-2 border-accent ps-4 text-sm leading-7 text-muted-foreground">{labels.pricing}</p>
+    </header>
+    <div className="mx-auto min-w-0 max-w-4xl">{children}</div>
   </div></PremiumPageShell>;
 }

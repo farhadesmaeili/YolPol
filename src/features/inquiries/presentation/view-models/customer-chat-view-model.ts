@@ -5,6 +5,7 @@ export type CustomerChatMessage = Readonly<{
   body: string;
   sender: CustomerChatSender;
   position?: number;
+  createdAt?: string;
 }>;
 
 export type CustomerChatLabels = Readonly<{
@@ -24,6 +25,9 @@ export type CustomerChatLabels = Readonly<{
   sent: string;
   errorTitle: string;
   historyErrorTitle: string;
+  newMessages: string;
+  reconnecting: string;
+  summary: Readonly<{title: string; loading: string; unavailable: string; retry: string; details: string; destination: string; submitted: string; units: Readonly<Record<"pieces" | "packages" | "pallets" | "truckloads", string>>}>;
   errors: Readonly<{
     required: string;
     tooLong: string;

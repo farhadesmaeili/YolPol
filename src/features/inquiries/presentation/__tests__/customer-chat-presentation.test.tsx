@@ -20,7 +20,7 @@ describe("Customer chat presentation", () => {
     expect(html).toContain('name="message"');
     expect(html).toContain('required=""');
     expect(html).toContain(labels.loadingHistory);
-    expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
+    expect(html).toContain('aria-label="Send message"');
     expect(html).not.toContain("ypc_");
   });
 
@@ -33,7 +33,7 @@ describe("Customer chat presentation", () => {
   });
 
   it("renders restored history immediately without a second loading state", () => {
-    const html = renderToStaticMarkup(<CustomerChat labels={labels} initialMessages={[{id: "restored-1", body: "Restored after refresh", sender: "customer"}]} />);
+    const html = renderToStaticMarkup(<CustomerChat labels={labels} initialSummary={null} initialMessages={[{id: "restored-1", body: "Restored after refresh", sender: "customer"}]} />);
     expect(html).toContain("Restored after refresh");
     expect(html).not.toContain(labels.loadingHistory);
   });

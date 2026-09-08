@@ -1,12 +1,13 @@
 import type {PreferredContactMethod, TargetCountryCode} from "@/features/inquiries/domain/types/inquiry-types";
 import type {SubmitInquiryUnit} from "@/features/inquiries/application/dto/inquiry-dto";
 
-export type InquiryProductOption = Readonly<{id: string; sku: string; name: string; availableUnits: readonly SubmitInquiryUnit[]}>;
+export type InquiryProductOption = Readonly<{id: string; sku: string; name: string; description?: string; image?: Readonly<{source: string; alt: string}>; availableUnits: readonly SubmitInquiryUnit[]}>;
 export type InquiryDraftLine = Readonly<{productId: string; quantityText: string; unit: SubmitInquiryUnit}>;
 export type InquiryDraftErrorCode = "required" | "invalid" | "tooLarge" | "destinationDependency";
 export type InquiryDraftFailure = Readonly<{field: "fullName" | "company" | "country" | "city" | "email" | "phone" | "whatsappPhone" | "telegramUsername" | "preferredContact" | "destinationCountry" | "destinationCity" | "message" | "privacy" | "products" | "quantity" | "quantityUnit"; code: InquiryDraftErrorCode; itemIndex?: number; productId?: string}>;
 export type InquiryFormLabels = Readonly<{
   customer: string; fullName: string; company: string; country: string; city: string; email: string; phone: string;
+  contactHint: string; destinationHint: string; detailsHint: string; continueHint: string; newInquiry: string;
   preferredContact: string; whatsappPhone: string; telegramUsername: string; contactMethods: Readonly<Record<PreferredContactMethod, string>>;
   countries: Readonly<Record<TargetCountryCode, string>>; countryPlaceholder: string;
   products: string; product: string; palletCountRequired: string; quantityRequired: string; quantityUnit: string; units: Readonly<Record<SubmitInquiryUnit, string>>; removeProduct: string;

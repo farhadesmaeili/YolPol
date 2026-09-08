@@ -41,7 +41,7 @@ export function parseCustomerChatMessage(value: unknown): CustomerChatMessage | 
   if (typeof value.createdAt !== "string") return null;
   const createdAt = new Date(value.createdAt);
   if (!Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== value.createdAt) return null;
-  return Object.freeze({id: value.id, body: value.body, ...(value.position !== undefined ? {position: Number(value.position)} : {}), sender: senderType === "CUSTOMER" ? "customer" : "support"});
+  return Object.freeze({id: value.id, body: value.body, createdAt: value.createdAt, ...(value.position !== undefined ? {position: Number(value.position)} : {}), sender: senderType === "CUSTOMER" ? "customer" : "support"});
 }
 
 async function parseCustomerMessageHistoryResponse(response: Response): Promise<LoadCustomerMessageHistoryResult> {

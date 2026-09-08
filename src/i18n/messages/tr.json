@@ -22,11 +22,72 @@
   },
   "AiProviderRegistry": {"metadata":"Yapay Zekâ Sağlayıcıları | YolPol Personel","eyebrow":"Sağlayıcı kaydı","title":"Yapay Zekâ Sağlayıcı Kaydı","description":"Gelecekteki yapay zekâ altyapısı için sağlayıcı, model profili, yetenek ve güvenli kimlik bilgisi referansı metadatasını yapılandırın. Bu kayıt sağlayıcı çağrısı yapmaz.","providers":"Sağlayıcılar","profiles":"Model profilleri","credentials":"Kimlik bilgisi referansları","audit":"Kayıt denetim geçmişi","empty":"Yapılandırılmış kayıt yok.","readOnly":"Personel rolünüz salt okunur erişime sahip.","id":"Sabit kimlik","adapterKey":"Adaptör anahtarı","displayName":"Görünen ad","name":"Profil adı","modelIdentifier":"Sağlayıcı model kimliği","provider":"Sağlayıcı","alias":"Takma ad","secretReference":"Güvenli gizli bilgi referansı","secretReferenceHelp":"Yalnızca güvenli bir referans veya takma ad saklayın. Buraya API anahtarı ya da taşıyıcı kimlik bilgisi yapıştırmayın.","enabled":"Etkin","priority":"Öncelik","capabilities":"Yetenekler","temperature":"Sıcaklık (isteğe bağlı)","topP":"Top P (isteğe bağlı)","maxOutputTokens":"Azami çıktı belirteci","version":"Sürüm","updatedAt":"Güncellendi","updatedBy":"Güncelleyen","createProvider":"Sağlayıcı oluştur","createProfile":"Model profili oluştur","createCredential":"Kimlik bilgisi referansı ekle","save":"Kaydet","saving":"Kaydediliyor…","saved":"Kayıt kaydedildi ve yenilendi.","edit":"Düzenle","statuses":{"enabled":"Etkin","disabled":"Devre dışı"},"errors":{"invalid":"Kayıt değerlerini gözden geçirin.","conflict":"Bu kayıt başka bir oturumda değişti. Yenileyip tekrar deneyin.","forbidden":"Personel rolünüz bu işlemi yapamaz.","rate_limited":"Çok fazla güncelleme denemesi. Daha sonra tekrar deneyin.","failed":"Kayıt güvenli biçimde kaydedilemedi."},"eventTypes":{"CREATED":"Oluşturuldu","UPDATED":"Güncellendi","ENABLED":"Etkinleştirildi","DISABLED":"Devre dışı bırakıldı"},"entityTypes":{"PROVIDER":"Sağlayıcı","MODEL_PROFILE":"Model profili","CREDENTIAL_REFERENCE":"Kimlik bilgisi referansı"},"capabilityLabels":{"TEXT_GENERATION":"Metin üretimi","TRANSLATION":"Çeviri","STRUCTURED_OUTPUT":"Yapılandırılmış çıktı","TOOL_CALLING":"Araç çağırma"}},
   "ConversationTyping": {"team":"YOLPOL Ekibi yazıyor…","customer":"Müşteri yazıyor…"},
-  "CustomerChat": {"title":"Görüşmeyi sürdürün","description":"Bu talep hakkında takip mesajı gönderin.","messages":"Talep mesajları","empty":"Bu görüşmeye henüz mesaj eklenmedi.","customerAuthor":"Siz","supportAuthor":"YolPol","messageLabel":"Mesaj","messagePlaceholder":"Takip mesajınızı yazın…","send":"Mesaj gönder","sending":"Gönderiliyor…","loading":"Mesajınız gönderiliyor…","loadingHistory":"Görüşme geçmişi yükleniyor…","sent":"Mesajınız gönderildi.","errorTitle":"Mesaj gönderilemedi","historyErrorTitle":"Mesajlar yüklenemedi","errors":{"required":"Göndermeden önce bir mesaj yazın.","tooLong":"Mesajınız çok uzun.","validation":"Mesajınızı kontrol edip yeniden deneyin.","rateLimited":"Çok fazla istek yapıldı. Lütfen bekleyip yeniden deneyin.","network":"Mesajlaşma hizmetine ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.","service":"Mesajınız şu anda gönderilemedi. Lütfen yeniden deneyin.","history":"Görüşme geçmişiniz şu anda yüklenemedi. Lütfen yeniden deneyin."}},
-  "InquirySubmission": {"submit":"Talebi gönder","submitting":"Talep gönderiliyor…","succeeded":"Toptan satış talebiniz alındı. Ekibimiz talebi inceleyip sizinle iletişime geçecektir.","reference":"Talep referansı","invalid":"Zorunlu alanları doldurun, bir ürün seçin ve onay verin.","productUnavailable":"Seçilen ürünlerden biri kullanılamıyor. Ürün seçiminizi kontrol edip yeniden deneyin.","serviceFailure":"Talep hizmeti geçici olarak kullanılamıyor.","retry":"Bilgileriniz korundu; lütfen yeniden deneyin.","rateLimited":"Şu anda çok fazla talep gönderiliyor. Lütfen bekleyip yeniden deneyin.","timeout":"Gönderim çok uzun sürdüğü için durduruldu."},
+  "CustomerChat": {
+    "title": "YOLPOL · Talebiniz",
+    "description": "Talebiniz ve görüşmeniz bir arada.",
+    "messages": "Talep mesajları",
+    "empty": "Talebiniz YOLPOL'e ulaştı. Eklemek istediğiniz bir şey varsa buradan yazabilirsiniz.",
+    "customerAuthor": "Siz",
+    "supportAuthor": "YolPol",
+    "messageLabel": "Mesaj",
+    "messagePlaceholder": "Takip mesajınızı yazın…",
+    "send": "Mesaj gönder",
+    "sending": "Gönderiliyor…",
+    "loading": "Mesajınız gönderiliyor…",
+    "loadingHistory": "Görüşme geçmişi yükleniyor…",
+    "sent": "Mesajınız gönderildi.",
+    "errorTitle": "Mesaj gönderilemedi",
+    "historyErrorTitle": "Mesajlar yüklenemedi",
+    "errors": {
+      "required": "Göndermeden önce bir mesaj yazın.",
+      "tooLong": "Mesajınız çok uzun.",
+      "validation": "Mesajınızı kontrol edip yeniden deneyin.",
+      "rateLimited": "Çok fazla istek yapıldı. Lütfen bekleyip yeniden deneyin.",
+      "network": "Mesajlaşma hizmetine ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.",
+      "service": "Mesajınız şu anda gönderilemedi. Lütfen yeniden deneyin.",
+      "history": "Görüşme geçmişiniz şu anda yüklenemedi. Lütfen yeniden deneyin."
+    },
+    "newMessages": "Yeni mesajlar",
+    "reconnecting": "Yeniden bağlanılıyor… Bağlantı kurulduğunda mesajlarınız güncellenecek.",
+    "summary": {
+      "title": "Talep özeti",
+      "loading": "Talebiniz yükleniyor…",
+      "unavailable": "Talep özeti yüklenemedi.",
+      "retry": "Tekrar dene",
+      "details": "Ek bilgiler",
+      "destination": "Varış yeri",
+      "submitted": "Gönderim tarihi",
+      "units": {
+        "pieces": "Adet",
+        "packages": "Paket",
+        "pallets": "Palet",
+        "truckloads": "Kamyon yükü"
+      }
+    }
+  },
+  "InquirySubmission": {
+    "submit": "Talebi gönder ve devam et",
+    "submitting": "Talep gönderiliyor…",
+    "succeeded": "Talebiniz alındı.",
+    "reference": "Talep referansı",
+    "invalid": "Zorunlu alanları doldurun, bir ürün seçin ve onay verin.",
+    "productUnavailable": "Seçilen ürünlerden biri kullanılamıyor. Ürün seçiminizi kontrol edip yeniden deneyin.",
+    "serviceFailure": "Talep hizmeti geçici olarak kullanılamıyor.",
+    "retry": "Bilgileriniz korundu; lütfen yeniden deneyin.",
+    "rateLimited": "Şu anda çok fazla talep gönderiliyor. Lütfen bekleyip yeniden deneyin.",
+    "timeout": "Gönderim çok uzun sürdüğü için durduruldu."
+  },
   "ActiveInquiryPrivacy": {"heading":"Çevrimiçi toptan satış talebi","paragraphs":{"submission":"Toptan satış talep formunu gönderdiğinizde sağladığınız bilgiler YolPol'e güvenli biçimde iletilir ve talebin işlenmesi için saklanır.","purpose":"YolPol, gönderilen talep bilgilerini toptan satış talebinizi incelemek, yanıtlamak ve yönetmek için kullanır.","retention":"Talep kayıtları 24 aya kadar saklanabilir ve artık gerekli olmadığında daha erken silinebilir.","security":"Bu form şu anda ayrı IP adresi, User-Agent, hız sınırlama veya başka güvenlik metadatası toplamaz. Bu durum değişirse söz konusu metadata en fazla 30 gün saklanabilir.","delivery":"Gönderilen talepler, talep işlemlerini desteklemek amacıyla Telegram dahil yapılandırılmış iletişim kanalları üzerinden yetkili YOLPOL Personeline yönelik kurum içi operasyonel bildirimler oluşturabilir. Bu nedenle gönderilen bilgilerin bir bölümü, iç operasyonlarda kullanılan yapılandırılmış üçüncü taraf iletişim altyapısı üzerinden işlenebilir."}},
   "InquiryPrivacyInventory": {"heading":"Sakladığımız Talep bilgileri","customerHeading":"Sağladığınız bilgiler","customer":{"contact":"Ad soyad, e-posta adresi, ana telefon, seçilen iletişim yöntemleri, koşullu WhatsApp numarası ve Telegram kullanıcı adı ile isteğe bağlı şirket adı.","location":"Seçilen ülkeniz ve isteğe bağlı şehriniz ile isteğe bağlı seçilen varış ülkesi ve şehri.","request":"İsteğe bağlı mesaj ve seçilen her Ürün için Ürün kimliği ve palet sayısı."},"productHeading":"YolPol tarafından doğrulanan Ürün bilgileri","product":{"snapshot":"YolPol, seçilen her Ürün için doğrulanmış Ürün kimliğini, SKU'yu, Ürün kısa adını ve yerelleştirilmiş Ürün adını saklar."},"evidenceHeading":"Gönderim ve onay kanıtı","evidence":{"context":"Etkin dil ve yerelleştirilmiş kaynak yolu.","consent":"Onay durumu, onay zamanı ve Gizlilik Politikası sürümü.","system":"Sunucu tarafından oluşturulan Talep kimliği, oluşturulma zamanı ve güncellenme zamanı."}},
-  "InquiryProductSelection": {"emptyTitle":"Henüz ürün eklenmedi","emptyDescription":"Bir veya daha fazla ürün seçin ve her biri için istenen palet sayısını girin.","selectProduct":"Ürün seçin","productPlaceholder":"Bir ürün seçin","addProduct":"Ürün ekle","addAnotherProduct":"Başka bir ürün ekle","allProductsAdded":"Tüm mevcut ürünler eklendi."},
+  "InquiryProductSelection": {
+    "emptyTitle": "Henüz ürün eklenmedi",
+    "emptyDescription": "Şişelerinizi seçin, ardından seçtiğiniz her ürün için miktar belirtin.",
+    "selectProduct": "Ürün seçin",
+    "productPlaceholder": "Bir ürün seçin",
+    "addProduct": "Ürün ekle",
+    "addAnotherProduct": "Başka bir ürün ekle",
+    "allProductsAdded": "Tüm mevcut ürünler eklendi."
+  },
   "InquiryFormCorrections": {"palletCountRequiredLabel":"Palet sayısı (zorunlu)","quantityRequiredLabel":"Miktar (zorunlu)","quantityUnitLabel":"Birim","invalidField":"Bu alan için geçerli bir değer girin.","phoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası telefon numarası girin.","whatsappPhoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası WhatsApp numarası girin.","telegramUsernameInvalid":"@ ile başlayan geçerli bir Telegram kullanıcı adı girin.","preferredContactRequired":"En az bir tercih edilen iletişim yöntemi seçin.","quantityRequired":"Miktarı girin.","quantityInvalid":"Pozitif bir tam sayı miktarı girin.","quantityTooLarge":"Miktar çok büyük.","quantityUnitInvalid":"Geçerli bir miktar birimi seçin.","productsRequired":"En az bir kullanılabilir ürün seçin.","privacyRequired":"Talebi hazırlamak için onay gereklidir.","destinationDependency":"Varış şehri girildiğinde varış ülkesini seçin."},
   "ExportLogistics": {
     "metadata": {
@@ -191,7 +252,62 @@
   "ProductCategories": {"oliveOil": "Zeytinyağı şişeleri", "food": "Gıda şişeleri", "beverage": "İçecek şişeleri", "pharmaceutical": "İlaç şişeleri"},
   "Breadcrumbs": {"label": "İçerik yolu", "home": "Ana sayfa", "products": "Ürünler"},
   "NotFound": {"title": "Sayfa bulunamadı", "description": "İstenen sayfa veya yerelleştirilmiş ürün bulunamadı.", "backHome": "Ana sayfaya dön"},
-  "InquiryPage": {"metadata":{"title":"Toptan Teklif İsteyin | YolPol","description":"Yayımlanmış YolPol ürünleri ve ticari gereksinimler için B2B toptan satış talebi gönderin."},"eyebrow":"B2B toptan satış talebi","heading":"Toptan teklif isteyin","introduction":"Yayımlanmış ürünleri seçin ve alıcının ayarladığı taşımacılık için iletişim, palet ve varış bilgilerinizi paylaşın.","pricing":"Ürün fiyatları ve ticari koşullar talep yoluyla kesinleştirilir.","form":{"customer":"İletişim bilgileri","fullName":"Ad soyad (zorunlu)","company":"Şirket adı (isteğe bağlı)","country":"Ülke (zorunlu)","countryPlaceholder":"Ülke seçin","city":"Şehir (isteğe bağlı)","email":"E-posta (zorunlu)","phone":"Ana telefon (zorunlu)","whatsappPhone":"WhatsApp numarası (zorunlu)","telegramUsername":"Telegram kullanıcı adı (zorunlu)","preferredContact":"Tercih edilen iletişim yöntemleri (bir veya daha fazla)","products":"Ürünler","product":"Ürün","removeProduct":"Ürünü kaldır","destination":"Alıcının ayarladığı taşımacılık için varış yeri","destinationCountry":"Varış ülkesi (isteğe bağlı)","destinationCity":"Varış şehri (isteğe bağlı)","message":"Mesaj (isteğe bağlı)"},"contactMethods":{"email":"E-posta","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"İran","TR":"Türkiye","IQ":"Irak","AM":"Ermenistan","AZ":"Azerbaycan","TM":"Türkmenistan","AF":"Afganistan","PK":"Pakistan","AE":"Birleşik Arap Emirlikleri","SA":"Suudi Arabistan","QA":"Katar","KW":"Kuveyt","BH":"Bahreyn","OM":"Umman"}},
+  "InquiryPage": {
+    "metadata": {
+      "title": "Toptan Teklif İsteyin | YolPol",
+      "description": "Yayımlanmış YolPol ürünleri ve ticari gereksinimler için B2B toptan satış talebi gönderin."
+    },
+    "eyebrow": "B2B toptan satış talebi",
+    "heading": "Toptan teklif isteyin",
+    "introduction": "İhtiyacınız olan şişeleri seçin. Toptan talebinizi gönderin, ayrıntıları YOLPOL ile görüşün.",
+    "pricing": "Ürün fiyatları ve ticari koşullar talep yoluyla kesinleştirilir.",
+    "form": {
+      "customer": "Size nasıl ulaşabiliriz?",
+      "fullName": "Ad soyad (zorunlu)",
+      "company": "Şirket adı (isteğe bağlı)",
+      "country": "Ülke (zorunlu)",
+      "countryPlaceholder": "Ülke seçin",
+      "city": "Şehir (isteğe bağlı)",
+      "email": "E-posta (zorunlu)",
+      "phone": "Ana telefon (zorunlu)",
+      "whatsappPhone": "WhatsApp numarası (zorunlu)",
+      "telegramUsername": "Telegram kullanıcı adı (zorunlu)",
+      "preferredContact": "Tercih edilen iletişim yöntemleri (bir veya daha fazla)",
+      "products": "İhtiyacınız olan ürünleri ekleyin",
+      "product": "Ürün",
+      "removeProduct": "Ürünü kaldır",
+      "destination": "Varış yeri bilgileri",
+      "destinationCountry": "Varış ülkesi (isteğe bağlı)",
+      "destinationCity": "Varış şehri (isteğe bağlı)",
+      "message": "Ek bilgiler (isteğe bağlı)",
+      "contactHint": "İletişim bilgileriniz, ekibimizin talebinizle ilgili size ulaşmasını sağlar.",
+      "destinationHint": "Bu bilgiler talebinizi anlamamıza yardımcı olur. Teslim alma ve nakliye alıcı tarafından düzenlenir.",
+      "detailsHint": "Ölçü, zamanlama veya diğer ihtiyaçlarınızı belirtin. Gönderdikten sonra görüşmeye devam edebilirsiniz.",
+      "continueHint": "Talebinizle YOLPOL ile görüşmeniz başlar. Fiyatlar ve koşullar doğrudan görüşülür.",
+      "newInquiry": "Yeni talep oluştur"
+    },
+    "contactMethods": {
+      "email": "E-posta",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram"
+    },
+    "countries": {
+      "IR": "İran",
+      "TR": "Türkiye",
+      "IQ": "Irak",
+      "AM": "Ermenistan",
+      "AZ": "Azerbaycan",
+      "TM": "Türkmenistan",
+      "AF": "Afganistan",
+      "PK": "Pakistan",
+      "AE": "Birleşik Arap Emirlikleri",
+      "SA": "Suudi Arabistan",
+      "QA": "Katar",
+      "KW": "Kuveyt",
+      "BH": "Bahreyn",
+      "OM": "Umman"
+    }
+  },
   "Inquiry": {"customerInformation": "Müşteri bilgileri", "fullName": "Ad soyad", "company": "Şirket", "country": "Ülke", "city": "Şehir", "email": "E-posta", "phone": "Telefon veya WhatsApp", "telegramUsername": "Telegram kullanıcı adı", "preferredContact": "Tercih edilen iletişim yöntemi", "productSelection": "Ürün seçimi", "quantity": "Miktar", "units": {"pieces": "Adet", "packages": "Paket", "pallets": "Palet", "truckloads": "Kamyon yükü"}, "destination": "Varış yeri", "message": "Mesaj", "privacyConsent": "Belirtilen gizlilik koşullarını açıkça kabul ediyorum.", "validation": {"required": "Bu alan zorunludur.", "invalid": "Geçerli bir değer girin.", "productUnavailable": "Seçilen ürün kullanılamıyor."}, "submission": {"idle": "Hazır", "submitting": "Gönderiliyor", "accepted": "Talebiniz alındı.", "acceptedWithWarning": "Talebiniz alındı ancak bir veya daha fazla bildirim gönderilemedi.", "integrationUnavailable": "Talep gönderimi şu anda kullanılamıyor."}}
   ,"Staff": {
     "translation": {
