@@ -53,7 +53,7 @@ describe("Staff translation presentation", () => {
     const ai = {id: "ai", senderType: "AI_AGENT" as const, channel: "WEBSITE" as const, actorReference: null, body: "Merhaba", createdAt: "2026-09-07T00:00:01Z",
       translation: {sourceLocale: "tr" as const, customerTargetLocale: "tr" as const, deliveryState: "ACTIVE" as const, version: 1, translations: []}};
     const html = renderToStaticMarkup(<StaffConversationMessageList locale="en" customerDisplayName="Customer" teamMemberNames={{}} inquiryId="inquiry" canReply
-      translationControl={{customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL", aiToStaffMode: "ON_DEMAND", version: 1}}
+      translationControl={{globalDefaults: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0}, override: {customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL", aiToStaffMode: "ON_DEMAND", version: 1}, effective: {customerToStaffMode: "MANUAL", staffToCustomerMode: "MANUAL", aiToStaffMode: "ON_DEMAND"}, source: "OVERRIDE"}}
       labels={{translation: en.Staff.translation, aiAgent: "AI", customer: "Customer", system: "System", yolpolTeam: "Team", emptyDescription: "Empty", emptyTitle: "Empty", messageList: "Messages", channels: en.Staff.channels}}
       messages={[customer, ai]} />);
     expect(html).toContain(en.Staff.translation.translateForStaff);

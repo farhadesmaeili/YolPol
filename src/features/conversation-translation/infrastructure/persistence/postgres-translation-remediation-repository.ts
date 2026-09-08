@@ -3,7 +3,7 @@ import type {Pool} from "pg";
 import type {TranslationRemediationRepository, RemediationResult} from "@/features/conversation-translation/application/ports/translation-remediation-repository";
 import type {TranslationRemediation} from "@/features/conversation-translation/domain/types/translation-remediation";
 import {automaticTranslationTargets, requestedTranslationTarget} from "@/features/conversation-translation/domain/services/translation-scheduling-policy";
-import {defaultConversationTranslationPolicy, type ConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {effectiveTranslationPolicyFromRows} from "@/features/conversation-translation/infrastructure/persistence/translation-policy-row";
 import {translationIdentity, translationLocale} from "@/features/conversation-translation/domain/types/translation";
 import {staffWorkingLocale} from "@/shared/config/conversation-translation";
 
@@ -104,16 +104,9 @@ export class PostgresTranslationRemediationRepository implements TranslationReme
             where m.id=$1 and c.id=$2`, [input.messageId, conversation.rows[0].id, language.customer_target_locale]);
           const target = translationLocale(targetResult.rows[0]?.locale);
           await client.query("update conversation_message_languages set source_locale=$2,customer_target_locale=$3 where message_id=$1", [input.messageId, input.sourceLocale, target]);
-          const configured = await client.query<{
-            customer_to_staff_mode: ConversationTranslationPolicy["customerToStaffMode"];
-            staff_to_customer_mode: ConversationTranslationPolicy["staffToCustomerMode"];
-            ai_to_staff_mode: ConversationTranslationPolicy["aiToStaffMode"];
-          }>("select customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode from conversation_translation_controls where conversation_id=$1", [conversation.rows[0].id]);
-          const policy = configured.rows[0] ? {
-            customerToStaffMode: configured.rows[0].customer_to_staff_mode,
-            staffToCustomerMode: configured.rows[0].staff_to_customer_mode,
-            aiToStaffMode: configured.rows[0].ai_to_staff_mode,
-          } : defaultConversationTranslationPolicy;
+          const globalSettings = await client.query<Record<string, unknown>>("select customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode from global_translation_settings where id='GLOBAL'");
+          const configured = await client.query<Record<string, unknown>>("select customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode from conversation_translation_controls where conversation_id=$1", [conversation.rows[0].id]);
+          const policy = effectiveTranslationPolicyFromRows(globalSettings.rows[0], configured.rows[0]);
           for (const locale of automaticTranslationTargets({
             senderType: language.sender_type,
             sourceLocale: input.sourceLocale,

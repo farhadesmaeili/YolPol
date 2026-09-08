@@ -28,7 +28,7 @@ let pool: Pool;
 const now = new Date("2026-09-05T10:00:00.000Z");
 const at = (seconds: number) => new Date(now.getTime() + seconds * 1000);
 async function clean() {
-  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, global_translation_setting_events, global_translation_settings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, ai_schedule_windows, ai_policy_events, ai_operation_policy, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 async function seed(locale: Locale = "tr", initialMessage = false) {
   const inquiry = new InquiryTestBuilder().with({id: "translation-inquiry", source: {locale, path: `/${locale}/inquiry`}, createdAt: now}).buildNew();
@@ -76,7 +76,7 @@ describe("durable Conversation translation", () => {
     expect((await pool.query("select * from conversation_translation_control_events")).rows).toMatchObject([{
       id: winner.eventId, previous_customer_to_staff_mode: "AUTO", new_customer_to_staff_mode: winner.customerToStaffMode,
       previous_staff_to_customer_mode: "AUTO", new_staff_to_customer_mode: "AUTO",
-      previous_ai_to_staff_mode: "AUTO", new_ai_to_staff_mode: winner.aiToStaffMode,
+      previous_ai_to_staff_mode: "ON_DEMAND", new_ai_to_staff_mode: winner.aiToStaffMode,
       previous_version: 0, new_version: 1, actor_reference: winner.actorReference,
     }]);
     expect(await controls.change(winner)).toBe("conflict");
@@ -134,6 +134,10 @@ describe("durable Conversation translation", () => {
 
   it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("reuses the automatic %s intent during concurrent append and REQUEST", async (senderType) => {
     await seed();
+    if (senderType === "AI_AGENT") await new PostgresConversationTranslationControlRepository(pool).change({
+      inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO",
+      expectedVersion: 0, actorReference: "staff:member", eventId: "automatic-ai-override", now,
+    });
     const message = senderType === "INTERNAL_USER" ? reply("auto-request") : Message.create({id: "auto-request", senderType,
       channel: "WEBSITE", sourceLocale: "tr", body: "Turkish original", createdAt: at(1)});
     const remediation = new PostgresTranslationRemediationRepository(pool);
@@ -268,7 +272,9 @@ describe("durable Conversation translation", () => {
     expect((await messages().findPositionedForInquiry("translation-inquiry"))?.[1]?.translation?.translations[0]?.status).toBe("FAILED");
   });
   it("uses same-language originals and schedules Staff translation for AI_AGENT", async () => {
-    await seed("tr"); await messages().appendForInquiry("translation-inquiry", reply("same", "tr"));
+    await seed("tr");
+    await new PostgresConversationTranslationControlRepository(pool).change({inquiryId: "translation-inquiry", customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO", expectedVersion: 0, actorReference: "staff:member", eventId: "automatic-ai", now});
+    await messages().appendForInquiry("translation-inquiry", reply("same", "tr"));
     await messages().appendForInquiry("translation-inquiry", Message.create({id: "ai", senderType: "AI_AGENT", channel: "WEBSITE", body: "AI Turkish original", sourceLocale: "tr", createdAt: at(2)}));
     expect((await new PostgresCustomerMessageReader(pool).findForInquiry("translation-inquiry"))?.map((m) => m.body)).toEqual(["Staff original", "AI Turkish original"]);
     expect((await pool.query("select target_locale from conversation_message_translations order by message_id")).rows).toEqual([{target_locale: "fa"}]);
@@ -510,11 +516,49 @@ describe("explicit translation remediation", () => {
     await pool.query("delete from inquiries where id='translation-inquiry'");
     expect((await pool.query("select count(*)::int as count from conversation_translation_events")).rows[0].count).toBe(0);
   });
+  it("inherits current global defaults, preserves explicit overrides, and returns to globals after removal", async () => {
+    await seed();
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    const fallback = {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0} as const;
+    expect(await controls.readGlobalDefaults()).toEqual(fallback);
+    expect(await controls.readEffective("translation-inquiry")).toEqual({globalDefaults: fallback, override: null,
+      effective: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND"}, source: "GLOBAL"});
+    const globalBase = {customerToStaffMode: "MANUAL" as const, staffToCustomerMode: "AUTO" as const, aiToStaffMode: "AUTO" as const,
+      expectedVersion: 0, actorReference: "staff:admin", eventId: "global-1", now};
+    expect(await controls.changeGlobalDefaults(globalBase)).toBe("updated");
+    expect((await controls.readEffective("translation-inquiry"))?.effective).toEqual({customerToStaffMode: "MANUAL", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO"});
+    const override = {customerToStaffMode: "AUTO" as const, staffToCustomerMode: "MANUAL" as const, aiToStaffMode: "ON_DEMAND" as const};
+    expect(await controls.changeOverride({inquiryId: "translation-inquiry", action: "SET", policy: override, expectedVersion: 0,
+      actorReference: "staff:member", eventId: "override-1", now: at(1)})).toBe("updated");
+    expect((await controls.readEffective("translation-inquiry"))?.effective).toEqual(override);
+    expect(await controls.changeGlobalDefaults({...globalBase, customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", expectedVersion: 1, eventId: "global-2", now: at(2)})).toBe("updated");
+    expect((await controls.readEffective("translation-inquiry"))?.effective).toEqual(override);
+    expect(await controls.changeOverride({inquiryId: "translation-inquiry", action: "REMOVE", expectedVersion: 1,
+      actorReference: "staff:member", eventId: "override-remove", now: at(3)})).toBe("updated");
+    expect(await controls.readEffective("translation-inquiry")).toMatchObject({source: "GLOBAL", override: null,
+      effective: {customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO"}});
+    expect((await pool.query("select operation from conversation_translation_control_events order by occurred_at")).rows).toEqual([{operation: "SET"}, {operation: "REMOVE"}]);
+    await expect(pool.query("update global_translation_setting_events set actor_reference='staff:other'")).rejects.toMatchObject({code: "55000"});
+  });
+
+  it("serializes first global-default writes and rejects the stale contender", async () => {
+    await seed();
+    const controls = new PostgresConversationTranslationControlRepository(pool);
+    const base = {customerToStaffMode: "MANUAL" as const, staffToCustomerMode: "AUTO" as const, aiToStaffMode: "ON_DEMAND" as const,
+      expectedVersion: 0, actorReference: "staff:admin", now};
+    const results = await Promise.all([
+      controls.changeGlobalDefaults({...base, eventId: "global-race-1"}),
+      controls.changeGlobalDefaults({...base, staffToCustomerMode: "MANUAL", eventId: "global-race-2"}),
+    ]);
+    expect(results.sort()).toEqual(["conflict", "updated"]);
+    expect((await pool.query("select count(*)::int as count from global_translation_setting_events")).rows[0].count).toBe(1);
+  });
+
   it("persists versioned directional controls, rejects stale updates, and keeps control audits append-only", async () => {
     await seed();
     const controls = new PostgresConversationTranslationControlRepository(pool);
     expect(await controls.read("translation-inquiry")).toEqual({
-      customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO", version: 0,
+      customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0,
     });
     const change = {
       inquiryId: "translation-inquiry", customerToStaffMode: "MANUAL" as const,

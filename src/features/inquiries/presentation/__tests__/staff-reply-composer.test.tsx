@@ -127,7 +127,7 @@ describe("Staff Reply Composer presentation", () => {
     const catalog = labels(enMessages.Staff);
     const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={-1}
       initialMessages={[]} inquiryId="inquiry-1" labels={{...catalog, translation: enMessages.Staff.translation}} locale="en"
-      teamMemberNames={{}} translationControl={{customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO", version: 1}} />);
+      teamMemberNames={{}} translationControl={{globalDefaults: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0}, override: {customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO", version: 1}, effective: {customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO"}, source: "OVERRIDE"}} />);
     expect(html).toContain(enMessages.Staff.translation.authoringManual);
     expect(html).not.toContain(enMessages.Staff.translation.authoring);
   });

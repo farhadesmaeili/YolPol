@@ -71,6 +71,8 @@ export interface StaffAuthorization {
   mayViewAiProviderRegistry(principal: StaffPrincipal): boolean;
   mayManageAiProviders(principal: StaffPrincipal): boolean;
   mayManageAiCredentialReferences(principal: StaffPrincipal): boolean;
+  mayViewTranslationSettings(principal: StaffPrincipal): boolean;
+  mayManageTranslationSettings(principal: StaffPrincipal): boolean;
   mayManageTeam(principal: StaffPrincipal): boolean;
   mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean;
   mayDeactivateStaffMember(principal: StaffPrincipal, target: Readonly<{staffAccountId: string; role: StaffRole; active: boolean}>): boolean;

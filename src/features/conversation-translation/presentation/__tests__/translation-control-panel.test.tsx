@@ -12,7 +12,9 @@ describe("TranslationControlPanel", () => {
   it.each([en, tr, fa, ar])("renders all three localized durable modes accessibly", (messages) => {
     const labels = messages.Staff.translationControl;
     const html = renderToStaticMarkup(<TranslationControlPanel inquiryId="inquiry" initialControl={{
-      customerToStaffMode: "MANUAL", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 2,
+      globalDefaults: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 1},
+      override: {customerToStaffMode: "MANUAL", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 2},
+      effective: {customerToStaffMode: "MANUAL", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND"}, source: "OVERRIDE",
     }} canControl labels={labels} />);
     expect(html).toContain(labels.customerToStaff);
     expect(html).toContain(labels.staffToCustomer);
@@ -23,9 +25,11 @@ describe("TranslationControlPanel", () => {
 
   it("keeps Viewer controls disabled while showing active durable state", () => {
     const html = renderToStaticMarkup(<TranslationControlPanel inquiryId="inquiry" initialControl={{
-      customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO", version: 0,
+      globalDefaults: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0},
+      override: null, effective: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND"}, source: "GLOBAL",
     }} canControl={false} labels={en.Staff.translationControl} />);
-    expect(html.match(/disabled=""/gu)).toHaveLength(6);
+    expect(html).toContain(en.Staff.translationControl.usingGlobal);
+    expect(html).not.toContain("<button");
     expect(html).toContain(en.Staff.translationControl.auto);
   });
 });

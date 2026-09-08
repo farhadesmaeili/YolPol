@@ -39,6 +39,8 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
   mayViewAiProviderRegistry(principal: StaffPrincipal): boolean { return this.valid(principal); }
   mayManageAiProviders(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
   mayManageAiCredentialReferences(principal: StaffPrincipal): boolean { return this.valid(principal) && principal.role === "SUPER_ADMIN"; }
+  mayViewTranslationSettings(principal: StaffPrincipal): boolean { return this.valid(principal); }
+  mayManageTranslationSettings(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
   mayManageTeam(principal: StaffPrincipal): boolean { return this.valid(principal) && (principal.role === "SUPER_ADMIN" || principal.role === "ADMIN"); }
 
   mayCreateStaffInvitation(principal: StaffPrincipal, targetRole: StaffRole): boolean {
@@ -79,6 +81,8 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
       mayViewAiProviderRegistry: this.mayViewAiProviderRegistry(principal),
       mayManageAiProviders: this.mayManageAiProviders(principal),
       mayManageAiCredentialReferences: this.mayManageAiCredentialReferences(principal),
+      mayViewTranslationSettings: this.mayViewTranslationSettings(principal),
+      mayManageTranslationSettings: this.mayManageTranslationSettings(principal),
       mayManageTeam,
       mayCreateStaffInvitation: mayManageTeam,
       mayDeactivateStaffMember: mayManageTeam,
