@@ -73,3 +73,28 @@ button,
 summary {
   -webkit-tap-highlight-color: transparent;
 }
+
+.chat-viewport {
+  height: clamp(18rem, 52dvh, 34rem);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scroll-behavior: auto;
+}
+
+.chat-composer {
+  padding-bottom: max(.75rem, env(safe-area-inset-bottom));
+}
+
+.inquiry-summary > summary::-webkit-details-marker { display: none; }
+
+@keyframes inquiry-reveal {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.inquiry-reveal, .chat-message { animation: inquiry-reveal 180ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .inquiry-reveal, .chat-message { animation: none; }
+  .customer-chat *, .inquiry-form * { scroll-behavior: auto; }
+}

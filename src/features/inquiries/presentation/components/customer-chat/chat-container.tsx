@@ -1,11 +1,11 @@
 import type {ReactNode} from "react";
 
 export function ChatContainer({headingId, title, description, isBusy, children}: {headingId: string; title: string; description: string; isBusy: boolean; children: ReactNode}) {
-  return <section aria-labelledby={headingId} aria-busy={isBusy} className="mt-8 min-w-0 border border-stone-950/10 bg-white/45 shadow-[0_28px_80px_-60px_rgba(28,25,23,0.55)] backdrop-blur-sm">
-    <header className="border-b border-stone-950/10 px-5 py-5 sm:px-7 sm:py-6">
-      <div className="flex items-center gap-3"><span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-emerald-800" /><h2 id={headingId} className="text-xl font-semibold text-stone-950 sm:text-2xl">{title}</h2></div>
-      <p className="mt-2 max-w-2xl text-sm leading-7 text-stone-600">{description}</p>
+  return <section aria-labelledby={headingId} aria-busy={isBusy} className="customer-chat min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_16px_60px_-32px_rgba(22,26,23,.3)] sm:rounded-3xl">
+    <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
+      <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold tracking-tight text-white">YP</span>
+      <div className="min-w-0"><h2 id={headingId} className="text-lg font-semibold">{title}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p></div>
     </header>
-    <div className="grid min-w-0 gap-5 p-4 sm:p-6 lg:p-7">{children}</div>
+    {children}
   </section>;
 }

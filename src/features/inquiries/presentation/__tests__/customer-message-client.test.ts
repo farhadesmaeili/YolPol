@@ -70,8 +70,8 @@ describe("Customer message history client", () => {
   it("loads and maps the exact ordered history contract", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(history, 200));
     await expect(loadCustomerMessageHistory(signal, fetcher)).resolves.toEqual({status: "loaded", messages: [
-      {id: "message_1", body: "Customer update", sender: "customer"},
-      {id: "message_2", body: "Support response", sender: "support"},
+      {id: "message_1", body: "Customer update", sender: "customer", createdAt: "2026-08-25T08:00:00.000Z"},
+      {id: "message_2", body: "Support response", sender: "support", createdAt: "2026-08-25T08:05:00.000Z"},
     ]});
     expect(fetcher).toHaveBeenCalledWith("/api/customer/conversation", {method: "GET", headers: {Accept: "application/json"}, signal});
   });

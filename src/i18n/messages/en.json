@@ -32,11 +32,72 @@
   },
   "AiProviderRegistry": {"metadata":"AI Providers | YolPol Staff","eyebrow":"Provider registry","title":"AI Provider Registry","description":"Configure provider, model-profile, capability, and safe credential-reference metadata for future AI infrastructure. This registry never calls a provider.","providers":"Providers","profiles":"Model profiles","credentials":"Credential references","audit":"Registry audit history","empty":"No records configured.","readOnly":"Your Staff role has read-only access.","id":"Stable ID","adapterKey":"Adapter key","displayName":"Display name","name":"Profile name","modelIdentifier":"Provider model identifier","provider":"Provider","alias":"Alias","secretReference":"Safe secret reference","secretReferenceHelp":"Store only a safe reference or alias. Never paste an API key or bearer credential here.","enabled":"Enabled","priority":"Priority","capabilities":"Capabilities","temperature":"Temperature (optional)","topP":"Top P (optional)","maxOutputTokens":"Maximum output tokens","version":"Version","updatedAt":"Updated","updatedBy":"Updated by","createProvider":"Create provider","createProfile":"Create model profile","createCredential":"Add credential reference","save":"Save","saving":"Saving…","saved":"Registry saved and refreshed.","edit":"Edit","statuses":{"enabled":"Enabled","disabled":"Disabled"},"errors":{"invalid":"Review the registry values.","conflict":"This record changed in another session. Refresh and try again.","forbidden":"Your Staff role cannot perform this operation.","rate_limited":"Too many update attempts. Try again later.","failed":"The registry could not be saved safely."},"eventTypes":{"CREATED":"Created","UPDATED":"Updated","ENABLED":"Enabled","DISABLED":"Disabled"},"entityTypes":{"PROVIDER":"Provider","MODEL_PROFILE":"Model profile","CREDENTIAL_REFERENCE":"Credential reference"},"capabilityLabels":{"TEXT_GENERATION":"Text generation","TRANSLATION":"Translation","STRUCTURED_OUTPUT":"Structured output","TOOL_CALLING":"Tool calling"}},
   "ConversationTyping": {"team":"YOLPOL Team is typing…","customer":"Customer is typing…"},
-  "CustomerChat": {"title":"Continue the conversation","description":"Send a follow-up message about this inquiry.","messages":"Inquiry messages","empty":"No messages have been added to this conversation yet.","customerAuthor":"You","supportAuthor":"YolPol","messageLabel":"Message","messagePlaceholder":"Write a follow-up message…","send":"Send message","sending":"Sending…","loading":"Sending your message…","loadingHistory":"Loading conversation history…","sent":"Your message was sent.","errorTitle":"Message not sent","historyErrorTitle":"Messages could not be loaded","errors":{"required":"Enter a message before sending.","tooLong":"Your message is too long.","validation":"Review your message and try again.","rateLimited":"Too many requests were made. Please wait and try again.","network":"We could not reach the messaging service. Check your connection and try again.","service":"Your message could not be sent right now. Please try again.","history":"Your conversation history could not be loaded right now. Please try again."}},
-  "InquirySubmission": {"submit":"Submit inquiry","submitting":"Submitting inquiry…","succeeded":"Your wholesale inquiry has been received. Our team will review the request and follow up.","reference":"Inquiry reference","invalid":"Complete the required fields, select a product, and accept the consent statement.","productUnavailable":"A selected product is unavailable. Review your product selection and try again.","serviceFailure":"The inquiry service is temporarily unavailable.","retry":"Your details were preserved; please try again.","rateLimited":"Too many inquiries are being submitted right now. Please wait and try again.","timeout":"The submission took too long and was stopped."},
+  "CustomerChat": {
+    "title": "YOLPOL · Your inquiry",
+    "description": "Your request and our conversation, together.",
+    "messages": "Inquiry messages",
+    "empty": "Your inquiry is with YOLPOL. Add a message here whenever you need to share more.",
+    "customerAuthor": "You",
+    "supportAuthor": "YolPol",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Write a follow-up message…",
+    "send": "Send message",
+    "sending": "Sending…",
+    "loading": "Sending your message…",
+    "loadingHistory": "Loading conversation history…",
+    "sent": "Your message was sent.",
+    "errorTitle": "Message not sent",
+    "historyErrorTitle": "Messages could not be loaded",
+    "errors": {
+      "required": "Enter a message before sending.",
+      "tooLong": "Your message is too long.",
+      "validation": "Review your message and try again.",
+      "rateLimited": "Too many requests were made. Please wait and try again.",
+      "network": "We could not reach the messaging service. Check your connection and try again.",
+      "service": "Your message could not be sent right now. Please try again.",
+      "history": "Your conversation history could not be loaded right now. Please try again."
+    },
+    "newMessages": "New messages",
+    "reconnecting": "Reconnecting… Your messages will update when the connection returns.",
+    "summary": {
+      "title": "Inquiry summary",
+      "loading": "Loading your inquiry…",
+      "unavailable": "Your inquiry summary could not be loaded.",
+      "retry": "Try again",
+      "details": "Additional details",
+      "destination": "Destination",
+      "submitted": "Submitted",
+      "units": {
+        "pieces": "Pieces",
+        "packages": "Packages",
+        "pallets": "Pallets",
+        "truckloads": "Truckloads"
+      }
+    }
+  },
+  "InquirySubmission": {
+    "submit": "Send inquiry and continue",
+    "submitting": "Submitting inquiry…",
+    "succeeded": "Your inquiry has been received.",
+    "reference": "Inquiry reference",
+    "invalid": "Complete the required fields, select a product, and accept the consent statement.",
+    "productUnavailable": "A selected product is unavailable. Review your product selection and try again.",
+    "serviceFailure": "The inquiry service is temporarily unavailable.",
+    "retry": "Your details were preserved; please try again.",
+    "rateLimited": "Too many inquiries are being submitted right now. Please wait and try again.",
+    "timeout": "The submission took too long and was stopped."
+  },
   "ActiveInquiryPrivacy": {"heading":"Online wholesale inquiry submission","paragraphs":{"submission":"When you submit the wholesale inquiry form, the information you provide is securely transmitted to YolPol and stored for inquiry handling.","purpose":"YolPol uses submitted inquiry information to review, respond to, and manage your wholesale request.","retention":"Inquiry records may be retained for up to 24 months and may be deleted earlier when no longer required.","security":"This form does not currently collect separate IP-address, User-Agent, rate-limit, or other security metadata. If that changes, such metadata may be retained for up to 30 days.","delivery":"Submitted inquiries may generate internal operational notifications for authorized YOLPOL Staff through configured communication channels, including Telegram, to support inquiry handling. Some submitted information may therefore be processed through configured third-party communication infrastructure used for internal operations."}},
   "InquiryPrivacyInventory": {"heading":"Inquiry information we store","customerHeading":"Information you provide","customer":{"contact":"Full name, email address, main phone number, selected contact methods, conditional WhatsApp number and Telegram username, and optional company name.","location":"Your selected country and optional city, plus optional selected destination country and city.","request":"An optional message and each selected Product identifier and pallet count."},"productHeading":"Product information resolved by YolPol","product":{"snapshot":"For each selected Product, YolPol stores the verified Product identifier, SKU, Product slug, and localized Product name."},"evidenceHeading":"Submission and consent evidence","evidence":{"context":"Active locale and the localized source path.","consent":"Consent status, consent timestamp, and Privacy Policy version.","system":"Server-generated Inquiry identifier, creation timestamp, and update timestamp."}},
-  "InquiryProductSelection": {"emptyTitle":"No products added yet","emptyDescription":"Select one or more products and enter the requested pallet count for each one.","selectProduct":"Select product","productPlaceholder":"Choose a product","addProduct":"Add product","addAnotherProduct":"Add another product","allProductsAdded":"All available products have been added."},
+  "InquiryProductSelection": {
+    "emptyTitle": "No products added yet",
+    "emptyDescription": "Choose your bottles, then add a quantity for each selected product.",
+    "selectProduct": "Select product",
+    "productPlaceholder": "Choose a product",
+    "addProduct": "Add product",
+    "addAnotherProduct": "Add another product",
+    "allProductsAdded": "All available products have been added."
+  },
   "InquiryFormCorrections": {"palletCountRequiredLabel":"Pallet count (required)","quantityRequiredLabel":"Quantity (required)","quantityUnitLabel":"Unit","invalidField":"Enter a valid value for this field.","phoneInvalid":"Enter a valid international phone number with its country calling code.","whatsappPhoneInvalid":"Enter a valid international WhatsApp number with its country calling code.","telegramUsernameInvalid":"Enter a valid Telegram username beginning with @.","preferredContactRequired":"Select at least one preferred contact method.","quantityRequired":"Enter a quantity.","quantityInvalid":"Enter a positive whole quantity.","quantityTooLarge":"The quantity is too large.","quantityUnitInvalid":"Select a valid quantity unit.","productsRequired":"Select at least one available product.","privacyRequired":"Consent is required to prepare the inquiry.","destinationDependency":"Select the destination country when a destination city is provided."},
   "ExportLogistics": {
     "metadata": {
@@ -201,7 +262,62 @@
   "ProductCategories": {"oliveOil": "Olive oil bottles", "food": "Food bottles", "beverage": "Beverage bottles", "pharmaceutical": "Pharmaceutical bottles"},
   "Breadcrumbs": {"label": "Breadcrumb", "home": "Home", "products": "Products"},
   "NotFound": {"title": "Page not found", "description": "The requested page or localized product could not be found.", "backHome": "Return to home"},
-  "InquiryPage": {"metadata":{"title":"Request a Wholesale Quote | YolPol","description":"Submit a B2B wholesale inquiry for published YolPol products and commercial requirements."},"eyebrow":"B2B wholesale inquiry","heading":"Request a wholesale quote","introduction":"Select published products and share your contact, pallet and destination details for buyer-arranged transportation.","pricing":"Product pricing and commercial terms are confirmed through inquiry.","form":{"customer":"Contact information","fullName":"Full name (required)","company":"Company name (optional)","country":"Country (required)","countryPlaceholder":"Select a country","city":"City (optional)","email":"Email (required)","phone":"Main phone (required)","whatsappPhone":"WhatsApp number (required)","telegramUsername":"Telegram username (required)","preferredContact":"Preferred contact methods (select one or more)","products":"Products","product":"Product","removeProduct":"Remove product","destination":"Destination for buyer-arranged transportation","destinationCountry":"Destination country (optional)","destinationCity":"Destination city (optional)","message":"Message (optional)"},"contactMethods":{"email":"Email","whatsapp":"WhatsApp","telegram":"Telegram"},"countries":{"IR":"Iran","TR":"Türkiye","IQ":"Iraq","AM":"Armenia","AZ":"Azerbaijan","TM":"Turkmenistan","AF":"Afghanistan","PK":"Pakistan","AE":"United Arab Emirates","SA":"Saudi Arabia","QA":"Qatar","KW":"Kuwait","BH":"Bahrain","OM":"Oman"}},
+  "InquiryPage": {
+    "metadata": {
+      "title": "Request a Wholesale Quote | YolPol",
+      "description": "Submit a B2B wholesale inquiry for published YolPol products and commercial requirements."
+    },
+    "eyebrow": "B2B wholesale inquiry",
+    "heading": "Request a wholesale quote",
+    "introduction": "Select the bottles you need. Send your wholesale request, then discuss the details with YOLPOL.",
+    "pricing": "Product pricing and commercial terms are confirmed through inquiry.",
+    "form": {
+      "customer": "How can we contact you?",
+      "fullName": "Full name (required)",
+      "company": "Company name (optional)",
+      "country": "Country (required)",
+      "countryPlaceholder": "Select a country",
+      "city": "City (optional)",
+      "email": "Email (required)",
+      "phone": "Main phone (required)",
+      "whatsappPhone": "WhatsApp number (required)",
+      "telegramUsername": "Telegram username (required)",
+      "preferredContact": "Preferred contact methods (select one or more)",
+      "products": "Add the products you need",
+      "product": "Product",
+      "removeProduct": "Remove product",
+      "destination": "Destination information",
+      "destinationCountry": "Destination country (optional)",
+      "destinationCity": "Destination city (optional)",
+      "message": "Additional details (optional)",
+      "contactHint": "Your business contact details help our team follow up on your request.",
+      "destinationHint": "This helps us understand your request. Collection and transport are arranged by you.",
+      "detailsHint": "Sizes, timing or other requirements. You can continue the discussion after sending.",
+      "continueHint": "Your request opens a conversation with YOLPOL. Prices and terms are agreed directly.",
+      "newInquiry": "Start a new inquiry"
+    },
+    "contactMethods": {
+      "email": "Email",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram"
+    },
+    "countries": {
+      "IR": "Iran",
+      "TR": "Türkiye",
+      "IQ": "Iraq",
+      "AM": "Armenia",
+      "AZ": "Azerbaijan",
+      "TM": "Turkmenistan",
+      "AF": "Afghanistan",
+      "PK": "Pakistan",
+      "AE": "United Arab Emirates",
+      "SA": "Saudi Arabia",
+      "QA": "Qatar",
+      "KW": "Kuwait",
+      "BH": "Bahrain",
+      "OM": "Oman"
+    }
+  },
   "Inquiry": {"customerInformation": "Customer information", "fullName": "Full name", "company": "Company", "country": "Country", "city": "City", "email": "Email", "phone": "Phone or WhatsApp", "telegramUsername": "Telegram username", "preferredContact": "Preferred contact method", "productSelection": "Product selection", "quantity": "Quantity", "units": {"pieces": "Pieces", "packages": "Packages", "pallets": "Pallets", "truckloads": "Truckloads"}, "destination": "Destination", "message": "Message", "privacyConsent": "I explicitly consent to the stated privacy terms.", "validation": {"required": "This field is required.", "invalid": "Enter a valid value.", "productUnavailable": "The selected product is unavailable."}, "submission": {"idle": "Ready", "submitting": "Submitting", "accepted": "Your inquiry was received.", "acceptedWithWarning": "Your inquiry was received, but one or more notifications could not be sent.", "integrationUnavailable": "Inquiry submission is not currently available."}},
   "Staff": {
     "translation": {

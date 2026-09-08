@@ -1,6 +1,10 @@
 "use client";
 
 import {useEffect, useId, useReducer, useRef, useState} from "react";
+import type {CustomerInquirySummaryDto} from "@/features/inquiries/application/dto/customer-inquiry-summary-dto";
+import type {InquiryProductOption} from "@/features/inquiries/presentation/view-models/inquiry-form-view-model";
+import {loadCustomerInquirySummary} from "@/features/inquiries/presentation/clients/customer-inquiry-summary-client";
+import {customerFollowUpMessages, InquirySummary} from "@/features/inquiries/presentation/components/customer-chat/inquiry-summary";
 
 import {ConversationTypingHeartbeat, sendCustomerConversationTyping} from "@/features/inquiries/presentation/clients/conversation-typing-client";
 import {subscribeToCustomerConversation} from "@/features/inquiries/presentation/clients/customer-conversation-stream-client";
@@ -34,7 +38,7 @@ function historyFailureMessage(failure: CustomerChatHistoryFailure, labels: Cust
   }
 }
 
-export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLabels; initialMessages?: readonly CustomerChatMessage[]}) {
+export function CustomerChat({labels, initialMessages, initialSummary, locale = "en", products = [], countries = {}}: {labels: CustomerChatLabels; initialMessages?: readonly CustomerChatMessage[]; initialSummary?: CustomerInquirySummaryDto | null; locale?: string; products?: readonly InquiryProductOption[]; countries?: Readonly<Record<string, string>>}) {
   const headingId = useId();
   const errorId = useId();
   const historyErrorId = useId();
@@ -44,13 +48,30 @@ export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLab
   const mounted = useRef(true);
   const typingHeartbeat = useRef<ConversationTypingHeartbeat | null>(null);
   const [staffTyping, setStaffTyping] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [summary, setSummary] = useState<CustomerInquirySummaryDto | null>(initialSummary ?? null);
+  const [summaryLoading, setSummaryLoading] = useState(initialSummary === undefined);
+  const [summaryAttempt, setSummaryAttempt] = useState(0);
+  const [historyAttempt, setHistoryAttempt] = useState(0);
   const [state, dispatch] = useReducer(customerChatReducer, initialMessages, createInitialCustomerChatState);
+
+  useEffect(() => {
+    if (initialSummary !== undefined && summaryAttempt === 0) return;
+    const controller = new AbortController();
+    void loadCustomerInquirySummary(controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      setSummary(result);
+      setSummaryLoading(false);
+    });
+    return () => controller.abort();
+  }, [initialSummary, summaryAttempt]);
 
   useEffect(() => {
     const subscription = subscribeToCustomerConversation(
       (message) => dispatch({type: "realtime_message_received", message}),
       undefined,
       setStaffTyping,
+      setReconnecting,
     );
     return () => subscription?.close();
   }, []);
@@ -66,7 +87,16 @@ export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLab
 
   useEffect(() => {
     mounted.current = true;
-    if (initialMessages) return () => { mounted.current = false; activeSubmissionController.current?.abort(); activeSubmissionController.current = null; submissionInFlight.current = false; };
+    return () => {
+      mounted.current = false;
+      activeSubmissionController.current?.abort();
+      activeSubmissionController.current = null;
+      submissionInFlight.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialMessages && historyAttempt === 0) return;
     const controller = new AbortController();
     activeHistoryController.current = controller;
     dispatch({type: "history_started"});
@@ -77,14 +107,10 @@ export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLab
       else dispatch({type: "history_failed", failure: result.status === "rate_limited" ? "rate_limited" : result.status === "network_error" ? "network" : "service"});
     });
     return () => {
-      mounted.current = false;
       controller.abort();
       if (activeHistoryController.current === controller) activeHistoryController.current = null;
-      activeSubmissionController.current?.abort();
-      activeSubmissionController.current = null;
-      submissionInFlight.current = false;
     };
-  }, [initialMessages]);
+  }, [initialMessages, historyAttempt]);
 
   const submit = async () => {
     if (submissionInFlight.current) return;
@@ -116,14 +142,20 @@ export function CustomerChat({labels, initialMessages}: {labels: CustomerChatLab
 
   const isSubmitting = state.status === "submitting";
   const isLoadingHistory = state.historyStatus === "loading";
+  const messages = customerFollowUpMessages(state.messages, summary);
   return <ChatContainer headingId={headingId} title={labels.title} description={labels.description} isBusy={isSubmitting || isLoadingHistory}>
-    <MessageList messages={state.messages} label={labels.messages} empty={labels.empty} customerAuthor={labels.customerAuthor} supportAuthor={labels.supportAuthor} />
+    {summary ? <InquirySummary summary={summary} labels={labels.summary} locale={locale} products={products} countries={countries} /> : summaryLoading ? <ChatLoadingState message={labels.summary.loading} /> : <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 text-xs text-muted-foreground"><p>{labels.summary.unavailable}</p><button type="button" onClick={() => {setSummaryLoading(true); setSummaryAttempt((attempt) => attempt + 1);}} className="min-h-11 shrink-0 rounded px-3 font-semibold text-brand focus-visible:ring-2 focus-visible:ring-focus">{labels.summary.retry}</button></div>}
+    <MessageList messages={summaryLoading ? [] : messages} ready={!isLoadingHistory && !summaryLoading} locale={locale} newMessages={labels.newMessages} label={labels.messages} empty={labels.empty} customerAuthor={labels.customerAuthor} supportAuthor={labels.supportAuthor} />
+    <div className="space-y-2 px-4 sm:px-6">
     <ConversationTypingIndicator active={staffTyping} label={labels.teamTyping} />
+    {reconnecting ? <p role="status" className="py-2 text-xs text-muted-foreground">{labels.reconnecting}</p> : null}
     {isLoadingHistory ? <ChatLoadingState message={labels.loadingHistory} /> : null}
     {isSubmitting ? <ChatLoadingState message={labels.loading} /> : null}
     {state.historyFailure ? <ChatErrorState id={historyErrorId} title={labels.historyErrorTitle} message={historyFailureMessage(state.historyFailure, labels)} /> : null}
+    {state.historyFailure ? <button type="button" onClick={() => setHistoryAttempt((attempt) => attempt + 1)} className="min-h-11 rounded px-3 text-sm font-semibold text-brand focus-visible:ring-2 focus-visible:ring-focus">{labels.summary.retry}</button> : null}
     {state.failure ? <ChatErrorState id={errorId} title={labels.errorTitle} message={failureMessage(state.failure, labels)} /> : null}
     {state.sentAnnouncement ? <p role="status" className="sr-only">{labels.sent}</p> : null}
+    </div>
     <MessageInput draft={state.draft} label={labels.messageLabel} placeholder={labels.messagePlaceholder} sendLabel={labels.send} sendingLabel={labels.sending} submitting={isSubmitting} errorId={errorId} invalid={state.failure !== null} onDraftChange={(value) => { typingHeartbeat.current?.draftChanged(value); dispatch({type: "draft_changed", value}); }} onSubmit={() => { void submit(); }} />
   </ChatContainer>;
 }

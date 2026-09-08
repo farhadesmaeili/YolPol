@@ -15,8 +15,9 @@ export function inquiryAvailableUnits(locale: Locale, packaging: InquiryPackagin
 
 export async function listInquiryProductOptions(locale: Locale): Promise<readonly InquiryProductOption[]> {
   const products = await listPublishedProductDtos(locale);
-  return Object.freeze(products.map(({id, sku, name, packaging}) => {
+  return Object.freeze(products.map(({id, sku, name, packaging, images, shortDescription}) => {
     const availableUnits = inquiryAvailableUnits(locale, packaging);
-    return Object.freeze({id, sku, name, availableUnits});
+    const primary = images.find(({isPrimary}) => isPrimary) ?? images[0];
+    return Object.freeze({id, sku, name, availableUnits, description: shortDescription, ...(primary ? {image: {source: primary.source, alt: primary.alternativeText ?? name}} : {})});
   }));
 }
