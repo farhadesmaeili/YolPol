@@ -1,14 +1,22 @@
 import {describe, expect, it} from "vitest";
 import {ConversationTranslationControl} from "@/features/conversation-translation/domain/entities/conversation-translation-control";
 import {allowsOnDemandTranslation, automaticTranslationTargets, requestedTranslationTarget} from "@/features/conversation-translation/domain/services/translation-scheduling-policy";
-import {defaultConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {defaultConversationTranslationPolicy, resolveConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
 
 describe("Conversation Translation Control domain", () => {
   it("defaults all three directions to current automatic behavior", () => {
-    expect(defaultConversationTranslationPolicy).toEqual({customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "AUTO"});
+    expect(defaultConversationTranslationPolicy).toEqual({customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND"});
     expect(automaticTranslationTargets({senderType: "CUSTOMER", sourceLocale: "tr", customerTargetLocale: null, staffTargetLocale: "fa", policy: defaultConversationTranslationPolicy})).toEqual(["fa"]);
     expect(automaticTranslationTargets({senderType: "INTERNAL_USER", sourceLocale: "fa", customerTargetLocale: "tr", staffTargetLocale: "fa", policy: defaultConversationTranslationPolicy})).toEqual(["tr"]);
-    expect(automaticTranslationTargets({senderType: "AI_AGENT", sourceLocale: "tr", customerTargetLocale: "tr", staffTargetLocale: "fa", policy: defaultConversationTranslationPolicy})).toEqual(["fa"]);
+    expect(automaticTranslationTargets({senderType: "AI_AGENT", sourceLocale: "tr", customerTargetLocale: "tr", staffTargetLocale: "fa", policy: defaultConversationTranslationPolicy})).toEqual([]);
+  });
+
+  it("resolves an override ahead of persisted globals and deterministic fallback defaults", () => {
+    const globalDefaults = {customerToStaffMode: "MANUAL" as const, staffToCustomerMode: "AUTO" as const, aiToStaffMode: "AUTO" as const};
+    const override = {customerToStaffMode: "AUTO" as const, staffToCustomerMode: "MANUAL" as const, aiToStaffMode: "ON_DEMAND" as const};
+    expect(resolveConversationTranslationPolicy({globalDefaults})).toEqual(globalDefaults);
+    expect(resolveConversationTranslationPolicy({globalDefaults, override})).toEqual(override);
+    expect(resolveConversationTranslationPolicy({})).toEqual(defaultConversationTranslationPolicy);
   });
 
   it("suppresses only the selected convenience or required automatic scheduling", () => {

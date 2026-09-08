@@ -15,6 +15,7 @@ export type StaffShellLabels = Readonly<{
   aiOperations: string;
   aiProviders: string;
   inquiries: string;
+  translationSettings: string;
   logout: string;
   logoutError: string;
   loggingOut: string;
@@ -38,6 +39,7 @@ export function StaffShell({children, labels, locale, principal, capabilities}: 
   const navigation = [
     {href: "/staff" as const, label: labels.dashboard},
     {href: "/staff/inquiries" as const, label: labels.inquiries},
+    ...(capabilities.mayViewTranslationSettings ? [{href: "/staff/translation-settings" as const, label: labels.translationSettings}] : []),
     ...(capabilities.mayViewAiOperations ? [{href: "/staff/ai-operations" as const, label: labels.aiOperations}] : []),
     ...(capabilities.mayViewAiProviderRegistry ? [{href: "/staff/ai-providers" as const, label: labels.aiProviders}] : []),
     ...(capabilities.mayManageTeam ? [{href: "/staff/team" as const, label: labels.team}] : []),

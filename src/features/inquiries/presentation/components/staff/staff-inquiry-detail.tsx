@@ -9,8 +9,7 @@ import {formatHumanNumber, LtrIsolate} from "@/shared/presentation/bidi/bidi-iso
 import type {Locale} from "@/shared/types/locale";
 import type {ConversationAiStatusDto} from "@/features/conversation-ai-routing/application/dto/conversation-ai-routing-dto";
 import {ConversationAiControlPanel} from "@/features/conversation-ai-routing/presentation/components/conversation-ai-control";
-import type {ConversationTranslationControlDto} from "@/features/conversation-translation/application/dto/translation-control-dto";
-import {defaultConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {defaultConversationTranslationControlDto, type ConversationTranslationControlDto} from "@/features/conversation-translation/application/dto/translation-control-dto";
 import {TranslationControlPanel} from "@/features/conversation-translation/presentation/components/translation-control-panel";
 
 function isStatus(value: string | null): value is InquiryStatus {
@@ -21,7 +20,7 @@ function DetailValue({children, label, ltr = false}: Readonly<{children: React.R
   return <div className="min-w-0"><dt className="text-xs font-medium text-stone-500">{label}</dt><dd className={`mt-1 break-words text-sm font-semibold text-stone-900 ${ltr ? "font-mono text-xs" : ""}`}>{ltr ? <LtrIsolate>{children}</LtrIsolate> : children}</dd></div>;
 }
 
-export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply, conversationAiStatus = {state: "AUTO", version: 0, latestJob: null}, canControlConversationAi = false, translationControl = {...defaultConversationTranslationPolicy, version: 0}}: Readonly<{
+export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, canReply, conversationAiStatus = {state: "AUTO", version: 0, latestJob: null}, canControlConversationAi = false, translationControl = defaultConversationTranslationControlDto}: Readonly<{
   detail: TeamInquiryDetailDto;
   locale: Locale;
   teamMemberNames?: Readonly<Record<string, string>>;
@@ -121,12 +120,18 @@ export async function StaffInquiryDetail({detail, locale, teamMemberNames = {}, 
               labels={{
                 title: t("translationControl.title"),
                 description: t("translationControl.description"),
+                usingGlobal: t("translationControl.usingGlobal"),
+                usingOverride: t("translationControl.usingOverride"),
+                effective: t("translationControl.effective"),
+                customize: t("translationControl.customize"),
+                reset: t("translationControl.reset"),
                 customerToStaff: t("translationControl.customerToStaff"),
                 customerToStaffDescription: t("translationControl.customerToStaffDescription"),
                 staffToCustomer: t("translationControl.staffToCustomer"),
                 staffToCustomerDescription: t("translationControl.staffToCustomerDescription"),
                 aiToStaff: t("translationControl.aiToStaff"),
                 aiToStaffDescription: t("translationControl.aiToStaffDescription"),
+                safety: t("translationControl.safety"),
                 auto: t("translationControl.auto"),
                 manual: t("translationControl.manual"),
                 onDemand: t("translationControl.onDemand"),

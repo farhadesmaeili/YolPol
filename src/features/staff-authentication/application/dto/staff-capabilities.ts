@@ -11,6 +11,8 @@ export type StaffCapabilities = Readonly<{
   mayViewAiProviderRegistry: boolean;
   mayManageAiProviders: boolean;
   mayManageAiCredentialReferences: boolean;
+  mayViewTranslationSettings: boolean;
+  mayManageTranslationSettings: boolean;
   mayManageTeam: boolean;
   mayCreateStaffInvitation: boolean;
   mayDeactivateStaffMember: boolean;

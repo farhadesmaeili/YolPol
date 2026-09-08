@@ -25,6 +25,7 @@ function capabilities(mayReplyToCustomerConversation: boolean): StaffCapabilitie
     mayPublishStaffTyping: mayReplyToCustomerConversation, mayUpdateInquiryWorkflow: mayReplyToCustomerConversation,
     mayViewAiOperations: true, mayManageAiOperations: false,
     mayViewAiProviderRegistry: true, mayManageAiProviders: false, mayManageAiCredentialReferences: false,
+    mayViewTranslationSettings: true, mayManageTranslationSettings: false,
     mayManageTeam: false, mayCreateStaffInvitation: false, mayDeactivateStaffMember: false,
     mayReactivateStaffMember: false, mayChangeStaffRole: false, mayAssignAdminRole: false, mayAssignSuperAdminRole: false,
   };

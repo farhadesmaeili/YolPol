@@ -2,6 +2,47 @@ import {sql} from "drizzle-orm";
 import {check, foreignKey, index, integer, pgTable, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
 import {conversationMessages, conversations} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 
+export const globalTranslationSettings = pgTable("global_translation_settings", {
+  id: varchar("id", {length: 32}).primaryKey(),
+  customerToStaffMode: varchar("customer_to_staff_mode", {length: 16}).notNull().default("AUTO"),
+  staffToCustomerMode: varchar("staff_to_customer_mode", {length: 16}).notNull().default("AUTO"),
+  aiToStaffMode: varchar("ai_to_staff_mode", {length: 16}).notNull().default("ON_DEMAND"),
+  version: integer("version").notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
+  updatedBy: varchar("updated_by", {length: 166}).notNull(),
+}, (t) => [
+  check("global_translation_settings_singleton_check", sql`${t.id} = 'GLOBAL'`),
+  check("global_translation_settings_customer_staff_check", sql`${t.customerToStaffMode} in ('AUTO','MANUAL')`),
+  check("global_translation_settings_staff_customer_check", sql`${t.staffToCustomerMode} in ('AUTO','MANUAL')`),
+  check("global_translation_settings_ai_staff_check", sql`${t.aiToStaffMode} in ('AUTO','ON_DEMAND')`),
+  check("global_translation_settings_version_check", sql`${t.version} >= 1`),
+  check("global_translation_settings_actor_check", sql`${t.updatedBy} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
+]);
+
+export const globalTranslationSettingEvents = pgTable("global_translation_setting_events", {
+  id: varchar("id", {length: 128}).primaryKey(),
+  settingsId: varchar("settings_id", {length: 32}).notNull().references(() => globalTranslationSettings.id),
+  previousCustomerToStaffMode: varchar("previous_customer_to_staff_mode", {length: 16}).notNull(),
+  newCustomerToStaffMode: varchar("new_customer_to_staff_mode", {length: 16}).notNull(),
+  previousStaffToCustomerMode: varchar("previous_staff_to_customer_mode", {length: 16}).notNull(),
+  newStaffToCustomerMode: varchar("new_staff_to_customer_mode", {length: 16}).notNull(),
+  previousAiToStaffMode: varchar("previous_ai_to_staff_mode", {length: 16}).notNull(),
+  newAiToStaffMode: varchar("new_ai_to_staff_mode", {length: 16}).notNull(),
+  previousVersion: integer("previous_version").notNull(),
+  newVersion: integer("new_version").notNull(),
+  actorReference: varchar("actor_reference", {length: 166}).notNull(),
+  occurredAt: timestamp("occurred_at", {withTimezone: true, mode: "date"}).notNull(),
+}, (t) => [
+  index("global_translation_setting_events_occurred_idx").on(t.occurredAt, t.id),
+  check("global_translation_setting_events_id_check", sql`${t.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("global_translation_setting_events_customer_staff_check", sql`${t.previousCustomerToStaffMode} in ('AUTO','MANUAL') and ${t.newCustomerToStaffMode} in ('AUTO','MANUAL')`),
+  check("global_translation_setting_events_staff_customer_check", sql`${t.previousStaffToCustomerMode} in ('AUTO','MANUAL') and ${t.newStaffToCustomerMode} in ('AUTO','MANUAL')`),
+  check("global_translation_setting_events_ai_staff_check", sql`${t.previousAiToStaffMode} in ('AUTO','ON_DEMAND') and ${t.newAiToStaffMode} in ('AUTO','ON_DEMAND')`),
+  check("global_translation_setting_events_changed_check", sql`${t.previousCustomerToStaffMode} <> ${t.newCustomerToStaffMode} or ${t.previousStaffToCustomerMode} <> ${t.newStaffToCustomerMode} or ${t.previousAiToStaffMode} <> ${t.newAiToStaffMode}`),
+  check("global_translation_setting_events_version_check", sql`${t.previousVersion} >= 0 and ${t.newVersion} = ${t.previousVersion} + 1`),
+  check("global_translation_setting_events_actor_check", sql`${t.actorReference} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
+]);
+
 export const conversationTranslationControls = pgTable("conversation_translation_controls", {
   conversationId: varchar("conversation_id", {length: 128}).primaryKey().references(() => conversations.id, {onDelete: "cascade"}),
   customerToStaffMode: varchar("customer_to_staff_mode", {length: 16}).notNull().default("AUTO"),
@@ -21,6 +62,7 @@ export const conversationTranslationControls = pgTable("conversation_translation
 export const conversationTranslationControlEvents = pgTable("conversation_translation_control_events", {
   id: varchar("id", {length: 128}).primaryKey(),
   conversationId: varchar("conversation_id", {length: 128}).notNull().references(() => conversations.id, {onDelete: "cascade"}),
+  operation: varchar("operation", {length: 16}).notNull().default("SET"),
   previousCustomerToStaffMode: varchar("previous_customer_to_staff_mode", {length: 16}).notNull(),
   newCustomerToStaffMode: varchar("new_customer_to_staff_mode", {length: 16}).notNull(),
   previousStaffToCustomerMode: varchar("previous_staff_to_customer_mode", {length: 16}).notNull(),
@@ -34,10 +76,11 @@ export const conversationTranslationControlEvents = pgTable("conversation_transl
 }, (t) => [
   index("conversation_translation_control_events_conversation_idx").on(t.conversationId, t.occurredAt, t.id),
   check("conversation_translation_control_events_id_check", sql`${t.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
+  check("conversation_translation_control_events_operation_check", sql`${t.operation} in ('SET','REMOVE')`),
   check("conversation_translation_control_events_customer_staff_check", sql`${t.previousCustomerToStaffMode} in ('AUTO','MANUAL') and ${t.newCustomerToStaffMode} in ('AUTO','MANUAL')`),
   check("conversation_translation_control_events_staff_customer_check", sql`${t.previousStaffToCustomerMode} in ('AUTO','MANUAL') and ${t.newStaffToCustomerMode} in ('AUTO','MANUAL')`),
   check("conversation_translation_control_events_ai_staff_check", sql`${t.previousAiToStaffMode} in ('AUTO','ON_DEMAND') and ${t.newAiToStaffMode} in ('AUTO','ON_DEMAND')`),
-  check("conversation_translation_control_events_changed_check", sql`${t.previousCustomerToStaffMode} <> ${t.newCustomerToStaffMode} or ${t.previousStaffToCustomerMode} <> ${t.newStaffToCustomerMode} or ${t.previousAiToStaffMode} <> ${t.newAiToStaffMode}`),
+  check("conversation_translation_control_events_changed_check", sql`${t.operation} = 'REMOVE' or ${t.previousVersion} = 0 or ${t.previousCustomerToStaffMode} <> ${t.newCustomerToStaffMode} or ${t.previousStaffToCustomerMode} <> ${t.newStaffToCustomerMode} or ${t.previousAiToStaffMode} <> ${t.newAiToStaffMode}`),
   check("conversation_translation_control_events_version_check", sql`${t.previousVersion} >= 0 and ${t.newVersion} = ${t.previousVersion} + 1`),
   check("conversation_translation_control_events_actor_check", sql`${t.actorReference} ~ '^staff:[A-Za-z0-9_-]{1,160}$'`),
 ]);

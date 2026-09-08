@@ -12,8 +12,7 @@ import {StaffConversationMessageList, type StaffConversationLabels} from "@/feat
 import {createInitialStaffReplyState, staffReplyDraftFailure, staffReplyReducer, type StaffReplyDraftFailure} from "@/features/inquiries/presentation/state/staff-reply-reducer";
 import {useRouter} from "@/i18n/navigation";
 import type {Locale} from "@/shared/types/locale";
-import type {ConversationTranslationControlDto} from "@/features/conversation-translation/application/dto/translation-control-dto";
-import {defaultConversationTranslationPolicy} from "@/features/conversation-translation/domain/types/translation-control";
+import {defaultConversationTranslationControlDto, type ConversationTranslationControlDto} from "@/features/conversation-translation/application/dto/translation-control-dto";
 
 export type StaffReplyComposerLabels = StaffConversationLabels & Readonly<{
   characters: string;
@@ -40,7 +39,7 @@ export function StaffReplyComposer({
   locale,
   teamMemberNames,
   canReply,
-  translationControl = {...defaultConversationTranslationPolicy, version: 0},
+  translationControl = defaultConversationTranslationControlDto,
 }: Readonly<{
   customerDisplayName: string;
   initialConversationCursor: number;
@@ -197,7 +196,7 @@ export function StaffReplyComposer({
 
       {canReply ? <form onSubmit={handleSubmit} noValidate className="min-w-0">
         <h3 className="text-base font-bold text-stone-950">{labels.replyToCustomer}</h3>
-        {labels.translation ? <p className="mt-2 text-sm">{translationControl.staffToCustomerMode === "MANUAL" ? labels.translation.authoringManual : labels.translation.authoring}</p> : null}
+        {labels.translation ? <p className="mt-2 text-sm">{translationControl.effective.staffToCustomerMode === "MANUAL" ? labels.translation.authoringManual : labels.translation.authoring}</p> : null}
         <label htmlFor={textareaId} className="mt-4 block text-sm font-semibold text-stone-800">{labels.writeReply}</label>
         <textarea
           ref={textarea}

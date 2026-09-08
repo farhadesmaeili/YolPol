@@ -134,6 +134,8 @@ describe("StaffAuthorizationPolicy", () => {
       mayViewAiProviderRegistry: true,
       mayManageAiProviders: mayManageTeam,
       mayManageAiCredentialReferences: role === "SUPER_ADMIN",
+      mayViewTranslationSettings: true,
+      mayManageTranslationSettings: mayManageTeam,
       mayManageTeam,
       mayCreateStaffInvitation: mayManageTeam,
       mayDeactivateStaffMember: mayManageTeam,
