@@ -25,6 +25,15 @@ function fixtures() {
 const validBody = {expectedVersion: 0, mode: "DISABLED", businessTimeZone: "Asia/Tehran", humanGracePeriodSeconds: 900, scheduleWindows: []};
 
 describe("AI Operations Staff HTTP boundary", () => {
+  it("returns the authoritative Emergency Stop status to authenticated authorized Staff", async () => {
+    const value = fixtures();
+    const get = createGetAiOperationsRequestHandler(() => value.access, () => value.operations, value.options);
+    const response = await get(authenticatedRequest());
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({status: "found", value: {effectiveDecision: {allowed: false, reason: "POLICY_UNAVAILABLE"}}});
+    expect(value.operations.getPolicy.execute).toHaveBeenCalledWith(principal);
+  });
+
   it("requires the HttpOnly session for reads and rejects all query strings", async () => {
     const value = fixtures();
     const get = createGetAiOperationsRequestHandler(() => value.access, () => value.operations, value.options);
@@ -53,6 +62,14 @@ describe("AI Operations Staff HTTP boundary", () => {
     const response = await update(authenticatedRequest("PUT", validBody));
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({code: "version_conflict"});
+  });
+
+  it.each(["DISABLED", "FALLBACK"] as const)("uses the same protected policy mutation for %s", async (mode) => {
+    const value = fixtures();
+    const update = createUpdateAiOperationsRequestHandler(() => value.access, () => value.operations, value.options);
+    const body = {...validBody, mode};
+    expect((await update(authenticatedRequest("PUT", body))).status).toBe(200);
+    expect(value.operations.updatePolicy.execute).toHaveBeenCalledWith({...body, principal});
   });
 
   it("maps application capability denial without exposing role logic in the handler", async () => {

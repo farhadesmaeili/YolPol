@@ -9,6 +9,10 @@ import {getLocaleDirection} from "@/i18n/locale";
 
 const labels: AiOperationsControlPanelLabels = {
   eyebrow: "Runtime policy", title: "AI Operations Control Plane", description: "Operations permission only", configuredState: "Configured policy", effectiveState: "Effective eligibility", effectiveAllowed: "May become eligible", effectiveBlocked: "Not eligible", eligibilityNotice: "Future AI may become eligible only; this does not execute AI.", noPolicy: "No policy", emergencyOverride: "Emergency override",
+  emergencyStop: {
+    title: "AI Emergency Stop", activeStatus: "AI Automation ACTIVE", disabledStatus: "AI Automation DISABLED", activeDescription: "Fallback may run.", disabledDescription: "Automatic fallback and continuation are disabled.", environmentDescription: "Server override is active.", unconfiguredDescription: "Configure a policy.", disable: "Disable AI", enable: "Enable AI", enableUnavailable: "Configure below.", disabling: "Disabling", enabling: "Enabling", disabled: "AI disabled", enabled: "AI enabled", readOnly: "Managers only", confirmTitle: "Disable AI automation?", confirmDescription: "Automated AI responses will stop.", cancel: "Keep active", confirmDisable: "Confirm disable",
+    errors: {invalid: "Invalid", conflict: "Conflict", forbidden: "Forbidden", rate_limited: "Limited", failed: "Failed"},
+  },
   emergencyStates: {INACTIVE: "Inactive", ACTIVE: "Forced off", INVALID: "Invalid and forced off"},
   decisionReasons: {POLICY_DISABLED: "Disabled", OUTSIDE_SCHEDULE: "Outside schedule", EMERGENCY_DISABLED: "Emergency disabled", POLICY_UNAVAILABLE: "Unavailable", POLICY_INVALID: "Invalid", ALLOWED_FALLBACK: "Fallback allowed", ALLOWED_SCHEDULE: "Schedule allowed"},
   mode: "Mode", modes: {DISABLED: "Disabled", FALLBACK: "Fallback", SCHEDULED: "Scheduled"}, businessTimeZone: "Business time zone", gracePeriodMinutes: "Human grace minutes", schedule: "Schedule", scheduleDescription: "Business-local schedule", weekday: "Weekday",
@@ -41,7 +45,7 @@ describe("AiOperationsControlPanel", () => {
   it("renders all modes and the timezone, grace, schedule, and intent controls for managers", () => {
     const policy = {mode: "SCHEDULED" as const, businessTimeZone: "Asia/Tehran", humanGracePeriodSeconds: 900, scheduleWindows: [{weekday: "MONDAY" as const, startMinute: 540, endMinute: 600, enabled: true}], version: 4, updatedAt: "2026-09-01T00:00:00.000Z", updatedBy: "staff:member-1"};
     const html = renderToStaticMarkup(<AiOperationsControlPanel locale="en" mayManage labels={labels} events={[]} status={{policy, effectiveDecision: {allowed: true, reason: "ALLOWED_SCHEDULE"}, emergencyOverride: {active: false, state: "INACTIVE"}}} />);
-    expect(html).toContain('<option value="DISABLED">');
+    expect(html).not.toContain('<option value="DISABLED">');
     expect(html).toContain('<option value="FALLBACK">');
     expect(html).toContain('<option value="SCHEDULED" selected="">');
     expect(html).toContain('value="Asia/Tehran"');
@@ -49,5 +53,33 @@ describe("AiOperationsControlPanel", () => {
     expect(html.match(/type="time"/gu)).toHaveLength(2);
     expect(html).toContain("Confirm eligibility change");
     expect(html).toContain('type="submit"');
+  });
+
+  it("renders an active authoritative state with a dedicated confirmation-triggering disable action", () => {
+    const policy = {mode: "FALLBACK" as const, businessTimeZone: "Asia/Tehran", humanGracePeriodSeconds: 900, scheduleWindows: [], version: 3, updatedAt: "2026-09-01T00:00:00.000Z", updatedBy: "staff:member-1"};
+    const html = renderToStaticMarkup(<AiOperationsControlPanel locale="en" mayManage labels={labels} events={[]} status={{policy, effectiveDecision: {allowed: true, reason: "ALLOWED_FALLBACK"}, emergencyOverride: {active: false, state: "INACTIVE"}}} />);
+    expect(html).toContain("AI Automation ACTIVE");
+    expect(html).toContain("Disable AI");
+    expect(html).toContain('aria-haspopup="dialog"');
+  });
+
+  it("renders a disabled authoritative state with a deliberate restore action", () => {
+    const enabledPolicy = {mode: "FALLBACK" as const, businessTimeZone: "Asia/Tehran", humanGracePeriodSeconds: 900, scheduleWindows: [], version: 3, updatedAt: "2026-09-01T00:00:00.000Z", updatedBy: "staff:member-1"};
+    const disabledPolicy = {...enabledPolicy, mode: "DISABLED" as const, version: 4, updatedAt: "2026-09-01T00:01:00.000Z"};
+    const events = [{id: "event-4", eventType: "POLICY_UPDATED" as const, previousVersion: 3, newVersion: 4, actorReference: "staff:member-1", occurredAt: disabledPolicy.updatedAt, previousPolicy: enabledPolicy, newPolicy: disabledPolicy}];
+    const html = renderToStaticMarkup(<AiOperationsControlPanel locale="en" mayManage labels={labels} events={events} status={{policy: disabledPolicy, effectiveDecision: {allowed: false, reason: "POLICY_DISABLED"}, emergencyOverride: {active: false, state: "INACTIVE"}}} />);
+    expect(html).toContain("AI Automation DISABLED");
+    expect(html).toContain("Enable AI");
+    expect(html).not.toContain('aria-haspopup="dialog"');
+  });
+
+  it("implements disabling through an accessible dialog without a browser-native confirm", () => {
+    const source = readFileSync("src/features/ai-operations/presentation/components/ai-emergency-stop-control.tsx", "utf8");
+    expect(source).toContain('aria-haspopup="dialog"');
+    expect(source).toContain('role="dialog"');
+    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain("setConfirmingDisable(true)");
+    expect(source).toContain('mutate("DISABLE")');
+    expect(source).not.toContain("window.confirm");
   });
 });

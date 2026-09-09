@@ -39,6 +39,15 @@ describe("AI Operations use cases", () => {
     await expect(useCase.execute(updateInput("VIEWER"))).resolves.toEqual({status: "forbidden"});
   });
 
+  it.each(["SALES", "VIEWER"] as const)("prevents %s Staff from disabling or re-enabling AI automation", async (role) => {
+    const repository = new FakeAiOperationsRepository();
+    const useCase = new UpdateAiOperationsPolicy(repository, authorization, new FakeAiOperationsClock(), new FakeAiOperationsEventIdGenerator());
+    for (const mode of ["DISABLED", "FALLBACK"] as const) {
+      await expect(useCase.execute({...updateInput(role), mode, scheduleWindows: []})).resolves.toEqual({status: "forbidden"});
+    }
+    expect(repository.policy).toBeNull();
+  });
+
   it("rejects stale versions and reports a transaction-time compare-and-swap conflict", async () => {
     const repository = new FakeAiOperationsRepository();
     const useCase = new UpdateAiOperationsPolicy(repository, authorization, new FakeAiOperationsClock(), new FakeAiOperationsEventIdGenerator());
@@ -70,6 +79,25 @@ describe("AI Operations use cases", () => {
     await expect(evaluate.execute()).resolves.toEqual({allowed: true, reason: "ALLOWED_FALLBACK"});
     emergency.value = {active: true, state: "INVALID"};
     await expect(evaluate.execute()).resolves.toEqual({allowed: false, reason: "EMERGENCY_DISABLED"});
+  });
+
+  it("lets authorized Staff disable and re-enable through the audited versioned policy", async () => {
+    const repository = new FakeAiOperationsRepository();
+    const clock = new FakeAiOperationsClock();
+    const update = new UpdateAiOperationsPolicy(repository, authorization, clock, new FakeAiOperationsEventIdGenerator());
+    const evaluate = new EvaluateAiOperationsAvailability(repository, new FakeAiOperationsEmergencyOverride(), clock);
+
+    await expect(update.execute({...updateInput("ADMIN"), mode: "FALLBACK", scheduleWindows: []})).resolves.toMatchObject({status: "updated", policy: {mode: "FALLBACK", version: 1}});
+    await expect(evaluate.execute()).resolves.toEqual({allowed: true, reason: "ALLOWED_FALLBACK"});
+    await expect(update.execute({...updateInput("SUPER_ADMIN"), expectedVersion: 1, mode: "DISABLED", scheduleWindows: []})).resolves.toMatchObject({status: "updated", policy: {mode: "DISABLED", version: 2}});
+    await expect(evaluate.execute()).resolves.toEqual({allowed: false, reason: "POLICY_DISABLED"});
+    await expect(update.execute({...updateInput("ADMIN"), expectedVersion: 2, mode: "FALLBACK", scheduleWindows: []})).resolves.toMatchObject({status: "updated", policy: {mode: "FALLBACK", version: 3}});
+    await expect(evaluate.execute()).resolves.toEqual({allowed: true, reason: "ALLOWED_FALLBACK"});
+    expect(repository.events.map((event) => [event.eventType, event.previousPolicy?.version ?? null, event.newPolicy.version, event.actorReference])).toEqual([
+      ["POLICY_CREATED", null, 1, "staff:member-1"],
+      ["POLICY_UPDATED", 1, 2, "staff:member-1"],
+      ["POLICY_UPDATED", 2, 3, "staff:member-1"],
+    ]);
   });
 
   it("plans grace deadlines and scheduled windows while suppressing disabled and emergency states", async () => {
