@@ -5,7 +5,7 @@ import {findNextAiOperationsEligibleInstant} from "@/features/ai-operations/doma
 export const maximumAiFallbackSchedulingHorizonMs = 24 * 60 * 60 * 1_000;
 
 export type PlanAiOperationsFallbackResult =
-  | Readonly<{status: "scheduled"; notBefore: Date}>
+  | Readonly<{status: "scheduled"; notBefore: Date | null; continuationNotBefore: Date}>
   | Readonly<{status: "suppressed"; reason: "DISABLED" | "EMERGENCY_DISABLED" | "NO_WINDOW_WITHIN_HORIZON" | "POLICY_INVALID" | "POLICY_UNAVAILABLE"}>;
 
 export class PlanAiOperationsFallback {
@@ -23,12 +23,12 @@ export class PlanAiOperationsFallback {
       const policy = await this.repository.find();
       if (!policy) return {status: "suppressed", reason: "POLICY_UNAVAILABLE"};
       if (policy.mode === "DISABLED") return {status: "suppressed", reason: "DISABLED"};
-      const graceDeadline = new Date(input.triggeredAt.getTime() + policy.humanGracePeriodSeconds * 1_000);
       const horizon = new Date(input.triggeredAt.getTime() + maximumAiFallbackSchedulingHorizonMs);
+      const continuationNotBefore = findNextAiOperationsEligibleInstant(policy, input.triggeredAt, horizon);
+      if (!continuationNotBefore) return {status: "suppressed", reason: "NO_WINDOW_WITHIN_HORIZON"};
+      const graceDeadline = new Date(input.triggeredAt.getTime() + policy.humanGracePeriodSeconds * 1_000);
       const notBefore = findNextAiOperationsEligibleInstant(policy, graceDeadline, horizon);
-      return notBefore
-        ? {status: "scheduled", notBefore}
-        : {status: "suppressed", reason: "NO_WINDOW_WITHIN_HORIZON"};
+      return {status: "scheduled", notBefore, continuationNotBefore};
     } catch (error) {
       return {status: "suppressed", reason: error instanceof InvalidStoredAiOperationsPolicyError ? "POLICY_INVALID" : "POLICY_UNAVAILABLE"};
     }

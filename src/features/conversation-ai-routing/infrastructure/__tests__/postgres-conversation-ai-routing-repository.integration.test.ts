@@ -52,6 +52,109 @@ beforeEach(async () => { await clean(); leaseSequence = 0; globalAllowed = true;
 afterAll(async () => { if (pool) { await clean(); await pool.end(); } });
 
 describe("PostgresConversationAiRoutingRepository", () => {
+  it("uses one initial human grace period, continues immediately, preserves burst superseding, and resets after Staff takeover", async () => {
+    await pool.query("update conversation_ai_response_jobs set not_before=$1 where id='ai_job_turn_1'", [at(60)]);
+    const routing = repository();
+    const messages = new PostgresConversationMessageRepository(pool);
+
+    await expect(routing.claimDue({limit: 10, now: at(59), leaseMilliseconds: 60_000})).resolves.toHaveLength(0);
+    const [initialJob] = await routing.claimDue({limit: 10, now: at(60), leaseMilliseconds: 60_000});
+    expect(initialJob?.id).toBe("ai_job_turn_1");
+    await expect(routing.finalize({job: initialJob!, body: "Initial AI response", decision: "RESPOND", now: at(61)})).resolves.toBe("succeeded");
+    await expect(routing.claimDue({limit: 10, now: at(61), leaseMilliseconds: 60_000})).resolves.toHaveLength(0);
+
+    await messages.appendForInquiry("inquiry-1", Message.create({
+      id: "system-after-ai", senderType: "SYSTEM", channel: "WEBSITE", body: "Internal event", createdAt: at(62),
+    }));
+    await pool.query(`insert into conversation_message_translations
+      (id,message_id,source_locale,target_locale,status,body,created_at,updated_at,version)
+      values ('translation-ai-response','ai_response_ai_job_turn_1','en','tr','SUCCEEDED','Translated AI response',$1,$1,1)`, [at(62)]);
+
+    const firstFollowUp = Message.create({
+      id: "customer-follow-up-1", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "First follow-up", createdAt: at(63),
+    });
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", firstFollowUp, {
+      id: "ai_job_follow_up_1", triggerMessageId: firstFollowUp.id.value, notBefore: at(123), continuationNotBefore: at(63),
+      executionId: "ai_fallback_ai_job_follow_up_1", createdAt: at(63),
+    });
+    const secondFollowUp = Message.create({
+      id: "customer-follow-up-2", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "Second follow-up", createdAt: at(64),
+    });
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", secondFollowUp, {
+      id: "ai_job_follow_up_2", triggerMessageId: secondFollowUp.id.value, notBefore: at(124), continuationNotBefore: at(64),
+      executionId: "ai_fallback_ai_job_follow_up_2", createdAt: at(64),
+    });
+    expect((await pool.query("select id,status,not_before from conversation_ai_response_jobs where id like 'ai_job_follow_up_%' order by id")).rows).toEqual([
+      {id: "ai_job_follow_up_1", status: "SUPERSEDED", not_before: at(63)},
+      {id: "ai_job_follow_up_2", status: "PENDING", not_before: at(64)},
+    ]);
+
+    const [continuedJob] = await routing.claimDue({limit: 10, now: at(64), leaseMilliseconds: 60_000});
+    expect(continuedJob?.id).toBe("ai_job_follow_up_2");
+    await expect(routing.finalize({job: continuedJob!, body: "Continued AI response", decision: "RESPOND", now: at(65)})).resolves.toBe("succeeded");
+
+    const thirdFollowUp = Message.create({
+      id: "customer-follow-up-3", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "Third follow-up", createdAt: at(66),
+    });
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", thirdFollowUp, {
+      id: "ai_job_follow_up_3", triggerMessageId: thirdFollowUp.id.value, notBefore: at(126), continuationNotBefore: at(66),
+      executionId: "ai_fallback_ai_job_follow_up_3", createdAt: at(66),
+    });
+    const [thirdJob] = await routing.claimDue({limit: 10, now: at(66), leaseMilliseconds: 60_000});
+    expect(thirdJob?.id).toBe("ai_job_follow_up_3");
+    await expect(routing.finalize({job: thirdJob!, body: "Another AI response", decision: "RESPOND", now: at(67)})).resolves.toBe("succeeded");
+
+    await messages.appendForInquiry("inquiry-1", Message.create({
+      id: "staff-takeover", senderType: "INTERNAL_USER", channel: "WEBSITE", actorReference: "staff:member-1", body: "Staff response", createdAt: at(68),
+    }));
+    await messages.appendForInquiry("inquiry-1", Message.create({
+      id: "system-after-staff", senderType: "SYSTEM", channel: "WEBSITE", body: "Internal event", createdAt: at(69),
+    }));
+    const postTakeover = Message.create({
+      id: "customer-after-staff", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "Question after Staff", createdAt: at(70),
+    });
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", postTakeover, {
+      id: "ai_job_after_staff", triggerMessageId: postTakeover.id.value, notBefore: at(130), continuationNotBefore: at(70),
+      executionId: "ai_fallback_ai_job_after_staff", createdAt: at(70),
+    });
+    await expect(routing.claimDue({limit: 10, now: at(129), leaseMilliseconds: 60_000})).resolves.toHaveLength(0);
+    const [reentryJob] = await routing.claimDue({limit: 10, now: at(130), leaseMilliseconds: 60_000});
+    expect(reentryJob?.id).toBe("ai_job_after_staff");
+  });
+
+  it.each([
+    ["FAILED", "INFRASTRUCTURE_FAILURE"],
+    ["SUPERSEDED", null],
+  ] as const)("does not activate continuation from a %s job even if a correlated AI-shaped message exists", async (status, failureCategory) => {
+    await pool.query(`update conversation_ai_response_jobs set status=$1,failure_category=$2,terminal_at=$3,updated_at=$3 where id='ai_job_turn_1'`, [status, failureCategory, at(1)]);
+    const messages = new PostgresConversationMessageRepository(pool);
+    await messages.appendForInquiry("inquiry-1", Message.create({
+      id: "ai_response_ai_job_turn_1", senderType: "AI_AGENT", channel: "WEBSITE", body: "Uncommitted AI-shaped message", createdAt: at(2),
+    }));
+    const customer = Message.create({
+      id: `customer-after-${status.toLowerCase()}`, senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "Follow-up", createdAt: at(3),
+    });
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", customer, {
+      id: `ai_job_after_${status.toLowerCase()}`, triggerMessageId: customer.id.value, notBefore: at(63), continuationNotBefore: at(3),
+      executionId: `ai_fallback_ai_job_after_${status.toLowerCase()}`, createdAt: at(3),
+    });
+    expect((await pool.query("select not_before from conversation_ai_response_jobs where trigger_message_id=$1", [customer.id.value])).rows).toEqual([{not_before: at(63)}]);
+  });
+
+  it("does not activate continuation from an uncorrelated AI message", async () => {
+    await pool.query("update conversation_ai_response_jobs set status='SUPERSEDED',terminal_at=$1,updated_at=$1 where id='ai_job_turn_1'", [at(1)]);
+    const messages = new PostgresConversationMessageRepository(pool);
+    await messages.appendForInquiry("inquiry-1", Message.create({
+      id: "legacy-ai-message", senderType: "AI_AGENT", channel: "WEBSITE", body: "Legacy AI response", createdAt: at(2),
+    }));
+    const customer = Message.create({id: "customer-after-legacy-ai", senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en", body: "Follow-up", createdAt: at(3)});
+    await messages.appendCustomerWebsiteForInquiry("inquiry-1", customer, {
+      id: "ai_job_after_legacy_ai", triggerMessageId: customer.id.value, notBefore: at(63), continuationNotBefore: at(3),
+      executionId: "ai_fallback_ai_job_after_legacy_ai", createdAt: at(3),
+    });
+    expect((await pool.query("select not_before from conversation_ai_response_jobs where id='ai_job_after_legacy_ai'")).rows).toEqual([{not_before: at(63)}]);
+  });
+
   it("finalizes successive AI turns in ON_DEMAND without Staff translation jobs", async () => {
     await pool.query(`insert into conversation_translation_controls
       (conversation_id,customer_to_staff_mode,staff_to_customer_mode,ai_to_staff_mode,version,updated_at,updated_by)
@@ -62,7 +165,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
       if (index > 0) await messages.appendCustomerWebsiteForInquiry("inquiry-1", Message.create({
         id: `on-demand-customer-${index}`, senderType: "CUSTOMER", channel: "WEBSITE", sourceLocale: "en",
         body: "Next customer question", createdAt: at(index * 10),
-      }), {id: `ai_job_on_demand_${index}`, triggerMessageId: `on-demand-customer-${index}`, notBefore: at(index * 10),
+      }), {id: `ai_job_on_demand_${index}`, triggerMessageId: `on-demand-customer-${index}`, notBefore: at(index * 10), continuationNotBefore: at(index * 10),
         executionId: `on-demand-execution-${index}`, createdAt: at(index * 10)});
       const [job] = await routing.claimDue({limit: 1, now: at(index * 10 + 1), leaseMilliseconds: 60_000});
       expect(job).toBeDefined();
@@ -130,7 +233,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     const routing = repository();
     const [job] = await routing.claimDue({limit: 1, now: at(1), leaseMilliseconds: 60_000});
     const customer = Message.create({id: "customer-2", senderType: "CUSTOMER", channel: "WEBSITE", body: "New question", createdAt: at(2)});
-    await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {id: "ai_job_turn_2", triggerMessageId: "customer-2", notBefore: at(3), executionId: "ai_fallback_ai_job_turn_2", createdAt: at(2)});
+    await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {id: "ai_job_turn_2", triggerMessageId: "customer-2", notBefore: at(3), continuationNotBefore: at(2), executionId: "ai_fallback_ai_job_turn_2", createdAt: at(2)});
     await expect(routing.finalize({job: job!, body: "Stale AI response", decision: "RESPOND", now: at(4)})).resolves.toBe("stale_lease");
     const jobs = await pool.query("select id,status from conversation_ai_response_jobs order by id");
     expect(jobs.rows).toEqual([{id: "ai_job_turn_1", status: "SUPERSEDED"}, {id: "ai_job_turn_2", status: "PENDING"}]);
@@ -169,7 +272,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     expect(await routing.changeControl({inquiryId: "inquiry-1", state: "AUTO", expectedVersion: 1, actorReference: "staff:member-1", eventId: "event-resume", now: at(3)})).toBe("updated");
     expect((await pool.query("select status from conversation_ai_response_jobs where id='ai_job_turn_1'")).rows[0].status).toBe("CANCELLED");
     const customer = Message.create({id: "customer-future", senderType: "CUSTOMER", channel: "WEBSITE", body: "Future turn", createdAt: at(4)});
-    await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {id: "ai_job_future", triggerMessageId: "customer-future", notBefore: at(5), executionId: "ai_fallback_ai_job_future", createdAt: at(4)});
+    await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {id: "ai_job_future", triggerMessageId: "customer-future", notBefore: at(5), continuationNotBefore: at(4), executionId: "ai_fallback_ai_job_future", createdAt: at(4)});
     expect((await pool.query("select id,status from conversation_ai_response_jobs order by created_at")).rows).toEqual([{id: "ai_job_turn_1", status: "CANCELLED"}, {id: "ai_job_future", status: "PENDING"}]);
     expect((await pool.query("select previous_state,new_state,previous_version,new_version,actor_reference from conversation_ai_control_events order by occurred_at")).rows).toEqual([
       {previous_state: "AUTO", new_state: "PAUSED", previous_version: 0, new_version: 1, actor_reference: "staff:member-1"},
@@ -215,7 +318,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     const customer = Message.create({id: "customer-disable-race", senderType: "CUSTOMER", channel: "WEBSITE", body: "Concurrent question", createdAt: at(1)});
     await Promise.all([
       new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {
-        id: "ai_job_disable_race", triggerMessageId: customer.id.value, notBefore: at(61),
+        id: "ai_job_disable_race", triggerMessageId: customer.id.value, notBefore: at(61), continuationNotBefore: at(1),
         executionId: "ai_fallback_ai_job_disable_race", createdAt: at(1),
       }),
       operations.save(disabled, operationsEvent("aipe_disable-race", enabled, disabled), 1),
@@ -227,7 +330,7 @@ describe("PostgresConversationAiRoutingRepository", () => {
     await pool.query("delete from ai_operation_policy where id='global'");
     const customer = Message.create({id: "customer-missing-policy", senderType: "CUSTOMER", channel: "WEBSITE", body: "Question", createdAt: at(1)});
     await new PostgresConversationMessageRepository(pool).appendCustomerWebsiteForInquiry("inquiry-1", customer, {
-      id: "ai_job_missing_policy", triggerMessageId: customer.id.value, notBefore: at(61),
+      id: "ai_job_missing_policy", triggerMessageId: customer.id.value, notBefore: at(61), continuationNotBefore: at(1),
       executionId: "ai_fallback_ai_job_missing_policy", createdAt: at(1),
     });
     expect((await pool.query("select id,status from conversation_ai_response_jobs order by id")).rows).toEqual([

@@ -78,9 +78,22 @@ describe("AI Operations use cases", () => {
     const update = new UpdateAiOperationsPolicy(repository, authorization, new FakeAiOperationsClock(), new FakeAiOperationsEventIdGenerator());
     await update.execute({...updateInput(), mode: "FALLBACK", humanGracePeriodSeconds: 900, scheduleWindows: []});
     const planner = new PlanAiOperationsFallback(repository, emergency);
-    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({status: "scheduled", notBefore: new Date("2026-09-07T05:15:00.000Z")});
+    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({
+      status: "scheduled",
+      notBefore: new Date("2026-09-07T05:15:00.000Z"),
+      continuationNotBefore: new Date("2026-09-07T05:00:00.000Z"),
+    });
     await update.execute({...updateInput(), expectedVersion: 1, mode: "SCHEDULED", humanGracePeriodSeconds: 60, scheduleWindows: [{weekday: "MONDAY", startMinute: 600, endMinute: 660, enabled: true}]});
-    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({status: "scheduled", notBefore: new Date("2026-09-07T06:30:00.000Z")});
+    await expect(planner.execute({triggeredAt: new Date("2026-09-07T05:00:00.000Z")})).resolves.toEqual({
+      status: "scheduled",
+      notBefore: new Date("2026-09-07T06:30:00.000Z"),
+      continuationNotBefore: new Date("2026-09-07T06:30:00.000Z"),
+    });
+    await expect(planner.execute({triggeredAt: new Date("2026-09-07T07:29:30.000Z")})).resolves.toEqual({
+      status: "scheduled",
+      notBefore: null,
+      continuationNotBefore: new Date("2026-09-07T07:29:30.000Z"),
+    });
     emergency.value = {active: true, state: "ACTIVE"};
     await expect(planner.execute({triggeredAt: new Date()})).resolves.toEqual({status: "suppressed", reason: "EMERGENCY_DISABLED"});
   });

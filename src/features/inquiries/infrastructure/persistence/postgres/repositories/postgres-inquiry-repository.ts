@@ -69,7 +69,7 @@ export class PostgresInquiryRepository implements InquiryRepository {
             const triggerPosition = conversation.messages.findIndex(({id}) => id.value === aiFallbackJob.triggerMessageId);
             const trigger = conversation.messages[triggerPosition];
             if (triggerPosition < 0 || !trigger || trigger.senderType !== "CUSTOMER" || trigger.channel !== "WEBSITE") throw new InquiryPersistenceError();
-            if (operationsPolicy && operationsPolicy.mode !== "DISABLED") await transaction.insert(conversationAiResponseJobs).values({
+            if (operationsPolicy && operationsPolicy.mode !== "DISABLED" && aiFallbackJob.notBefore) await transaction.insert(conversationAiResponseJobs).values({
               id: aiFallbackJob.id, conversationId: conversation.id.value, triggerMessageId: trigger.id.value,
               triggerMessagePosition: triggerPosition, status: "PENDING", notBefore: aiFallbackJob.notBefore,
               executionId: aiFallbackJob.executionId, attempts: 0, createdAt: aiFallbackJob.createdAt,

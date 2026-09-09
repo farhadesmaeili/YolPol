@@ -31,7 +31,7 @@ describe("ReceiveCustomerMessage", () => {
 
   it("passes one Operations-planned fallback job into the durable customer write", async () => {
     const appendCustomerWebsiteForInquiry = vi.fn<CustomerWebsiteConversationMessageWriter["appendCustomerWebsiteForInquiry"]>().mockResolvedValue("created");
-    const plan = {id: "ai_job_message_1", triggerMessageId: "website_message_1", notBefore: new Date("2026-08-25T08:01:00.000Z"), executionId: "ai_fallback_ai_job_message_1", createdAt: new Date("2026-08-25T08:00:00.000Z")};
+    const plan = {id: "ai_job_message_1", triggerMessageId: "website_message_1", notBefore: new Date("2026-08-25T08:01:00.000Z"), continuationNotBefore: new Date("2026-08-25T08:00:00.000Z"), executionId: "ai_fallback_ai_job_message_1", createdAt: new Date("2026-08-25T08:00:00.000Z")};
     const useCase = new ReceiveCustomerMessage({appendCustomerWebsiteForInquiry}, {generate: () => "website_message_1"}, {now: () => new Date("2026-08-25T08:00:00.000Z")}, {plan: vi.fn().mockResolvedValue(plan)});
     await useCase.execute(input);
     expect(appendCustomerWebsiteForInquiry).toHaveBeenCalledWith("inquiry-1", expect.anything(), plan);

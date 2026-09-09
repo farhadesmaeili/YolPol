@@ -12,7 +12,8 @@ export type ConversationAiFailureCategory = AiProviderFailureCategory | "WORKER_
 export type CustomerMessageAiFallbackJobPlan = Readonly<{
   id: string;
   triggerMessageId: string;
-  notBefore: Date;
+  notBefore: Date | null;
+  continuationNotBefore: Date;
   executionId: string;
   createdAt: Date;
 }>;
