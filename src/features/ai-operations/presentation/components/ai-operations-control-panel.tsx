@@ -6,6 +6,8 @@ import type {AiOperationsPolicyEventDto, AiOperationsStatusDto} from "@/features
 import {maximumAiScheduleWindows} from "@/features/ai-operations/domain/value-objects/ai-schedule";
 import {aiOperationsModes, aiOperationsWeekdays, type AiOperationsMode, type AiOperationsWeekday, type AiScheduleWindow} from "@/features/ai-operations/domain/types/ai-operations-types";
 import {updateAiOperationsPolicy} from "@/features/ai-operations/presentation/clients/ai-operations-client";
+import {AiEmergencyStopControl, type AiEmergencyStopControlLabels} from "@/features/ai-operations/presentation/components/ai-emergency-stop-control";
+import {presentAiEmergencyStop, type EnabledAiOperationsMode} from "@/features/ai-operations/presentation/state/ai-emergency-stop-state";
 import {presentAiOperationsUpdate} from "@/features/ai-operations/presentation/state/ai-operations-update-state";
 import {useRouter} from "@/i18n/navigation";
 import type {Locale} from "@/shared/types/locale";
@@ -19,6 +21,7 @@ export type AiOperationsControlPanelLabels = Readonly<{
   effectiveAllowed: string;
   effectiveBlocked: string;
   eligibilityNotice: string;
+  emergencyStop: AiEmergencyStopControlLabels;
   noPolicy: string;
   emergencyOverride: string;
   emergencyStates: Readonly<Record<"INACTIVE" | "ACTIVE" | "INVALID", string>>;
@@ -79,7 +82,11 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
 }>) {
   const router = useRouter();
   const policy = status.policy;
-  const [mode, setMode] = useState<AiOperationsMode>(policy?.mode ?? "DISABLED");
+  const emergencyStop = presentAiEmergencyStop(status, events);
+  const initialMode = policy?.mode === "FALLBACK" || policy?.mode === "SCHEDULED"
+    ? policy.mode
+    : emergencyStop.resumeMode ?? "FALLBACK";
+  const [mode, setMode] = useState<EnabledAiOperationsMode>(initialMode);
   const [businessTimeZone, setBusinessTimeZone] = useState(policy?.businessTimeZone ?? "Asia/Tehran");
   const [graceMinutes, setGraceMinutes] = useState(policy ? String(policy.humanGracePeriodSeconds / 60) : "15");
   const [windows, setWindows] = useState<readonly EditableWindow[]>(() => (policy?.scheduleWindows ?? []).map((window, id) => ({id, ...window})));
@@ -101,7 +108,7 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (working) return;
-    if (mode !== "DISABLED" && !confirmed) { setNotice("confirmation"); return; }
+    if (!confirmed) { setNotice("confirmation"); return; }
     const grace = Number(graceMinutes);
     const graceSeconds = grace * 60;
     if (!Number.isSafeInteger(graceSeconds) || graceSeconds < 60 || graceSeconds > 86_400) { setNotice("invalid"); return; }
@@ -135,6 +142,8 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
         <p className="mt-3 max-w-4xl text-sm leading-6 text-stone-600">{labels.description}</p>
       </header>
 
+      <AiEmergencyStopControl status={status} events={events} mayManage={mayManage} labels={labels.emergencyStop} />
+
       <section className="grid gap-4 lg:grid-cols-2" aria-label={labels.effectiveState}>
         <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
           <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{labels.effectiveState}</p>
@@ -160,7 +169,7 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
         </div>
         <fieldset disabled={!mayManage || working} className="mt-6 grid gap-5">
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label={labels.mode}><select value={mode} onChange={(event) => { setMode(event.target.value as AiOperationsMode); setConfirmed(false); }} className={inputClass}>{aiOperationsModes.map((value) => <option key={value} value={value}>{labels.modes[value]}</option>)}</select></Field>
+            <Field label={labels.mode}><select value={mode} onChange={(event) => { setMode(event.target.value as EnabledAiOperationsMode); setConfirmed(false); }} className={inputClass}>{aiOperationsModes.filter((value) => value !== "DISABLED").map((value) => <option key={value} value={value}>{labels.modes[value]}</option>)}</select></Field>
             <Field label={labels.businessTimeZone}><input dir="ltr" value={businessTimeZone} onChange={(event) => setBusinessTimeZone(event.target.value)} maxLength={64} required className={inputClass} /></Field>
             <Field label={labels.gracePeriodMinutes}><input dir="ltr" type="number" min={1} max={1_440} step="any" value={graceMinutes} onChange={(event) => setGraceMinutes(event.target.value)} required className={inputClass} /></Field>
           </div>
@@ -176,8 +185,8 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
               </div>
             ))}</div>
           </section>
-          {mode !== "DISABLED" && mayManage ? <label className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><input type="checkbox" className="mt-1" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />{labels.confirmEligibility}</label> : null}
-          {mayManage ? <button type="submit" className={mode === "DISABLED" ? dangerButtonClass : primaryButtonClass}>{working ? labels.saving : mode === "DISABLED" ? labels.disableImmediately : labels.save}</button> : null}
+          {mayManage ? <label className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><input type="checkbox" className="mt-1" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />{labels.confirmEligibility}</label> : null}
+          {mayManage ? <button type="submit" className={primaryButtonClass}>{working ? labels.saving : labels.save}</button> : null}
         </fieldset>
         {notice ? <p role={notice === "saved" ? "status" : "alert"} className={`mt-4 rounded-xl p-3 text-sm ${notice === "saved" ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-900"}`}>{notice === "saved" ? labels.saved : labels.errors[notice]}</p> : null}
       </form>
@@ -200,5 +209,4 @@ export function AiOperationsControlPanel({status, events, mayManage, locale, lab
 function Field({label, children}: Readonly<{label: string; children: React.ReactNode}>) { return <label className="block text-sm font-semibold text-stone-800">{label}<span className="mt-2 block">{children}</span></label>; }
 const inputClass = "min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none focus:border-emerald-800 focus:ring-2 focus:ring-emerald-800/20 disabled:bg-stone-100 disabled:text-stone-600";
 const primaryButtonClass = "inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-900 px-5 text-sm font-semibold text-white outline-none hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-60";
-const dangerButtonClass = "inline-flex min-h-11 items-center justify-center rounded-lg bg-red-800 px-5 text-sm font-semibold text-white outline-none hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-60";
 const secondaryButtonClass = "inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold text-stone-800 outline-none hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-60";
