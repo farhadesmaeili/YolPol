@@ -2,7 +2,7 @@ import {readMessageTranslations} from "@/features/conversation-translation/infra
 import {scheduleMessageTranslation} from "@/features/conversation-translation/infrastructure/persistence/schedule-message-translation";
 import {createHash} from "node:crypto";
 
-import {and, asc, eq, gt, inArray, max, sql} from "drizzle-orm";
+import {and, asc, desc, eq, gt, inArray, lt, max, sql} from "drizzle-orm";
 import {drizzle, type NodePgDatabase} from "drizzle-orm/node-postgres";
 import type {Pool} from "pg";
 
@@ -13,6 +13,7 @@ import {conversationChannels, messageSenderTypes} from "@/features/inquiries/dom
 import {InquiryPersistenceError} from "@/features/inquiries/infrastructure/errors/inquiry-persistence-error";
 import {conversationMessages, conversations, inquiryOutbox, inquiryPostgresSchema} from "@/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema";
 import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
+import {conversationAiJobIdFromMessageId} from "@/features/conversation-ai-routing/domain/services/conversation-ai-identities";
 import {conversationAiControls, conversationAiResponseJobs, conversationAiRoutingPostgresSchema} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema";
 import {aiOperationPolicy, aiOperationsPostgresSchema} from "@/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema";
 
@@ -90,9 +91,30 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           if (aiFallbackJob) {
             const [control] = await transaction.select({state: conversationAiControls.state}).from(conversationAiControls)
               .where(eq(conversationAiControls.conversationId, conversation.id)).limit(1);
-            if (operationsPolicy && operationsPolicy.mode !== "DISABLED" && (!control || control.state === "AUTO")) await transaction.insert(conversationAiResponseJobs).values({
+            const [latestResponder] = await transaction.select({
+              id: conversationMessages.id,
+              position: conversationMessages.position,
+              senderType: conversationMessages.senderType,
+            }).from(conversationMessages).where(and(
+              eq(conversationMessages.conversationId, conversation.id),
+              lt(conversationMessages.position, position),
+              inArray(conversationMessages.senderType, ["INTERNAL_USER", "AI_AGENT"]),
+            )).orderBy(desc(conversationMessages.position)).limit(1);
+            const latestAiJobId = latestResponder?.senderType === "AI_AGENT"
+              ? conversationAiJobIdFromMessageId(latestResponder.id)
+              : null;
+            const [successfulAiTurn] = latestAiJobId
+              ? await transaction.select({id: conversationAiResponseJobs.id}).from(conversationAiResponseJobs).where(and(
+                  eq(conversationAiResponseJobs.id, latestAiJobId),
+                  eq(conversationAiResponseJobs.conversationId, conversation.id),
+                  eq(conversationAiResponseJobs.status, "SUCCEEDED"),
+                  lt(conversationAiResponseJobs.triggerMessagePosition, latestResponder.position),
+                )).limit(1)
+              : [];
+            const notBefore = successfulAiTurn ? aiFallbackJob.continuationNotBefore : aiFallbackJob.notBefore;
+            if (notBefore && operationsPolicy && operationsPolicy.mode !== "DISABLED" && (!control || control.state === "AUTO")) await transaction.insert(conversationAiResponseJobs).values({
               id: aiFallbackJob.id, conversationId: conversation.id, triggerMessageId: message.id.value,
-              triggerMessagePosition: position, status: "PENDING", notBefore: aiFallbackJob.notBefore,
+              triggerMessagePosition: position, status: "PENDING", notBefore,
               executionId: aiFallbackJob.executionId, attempts: 0, createdAt: aiFallbackJob.createdAt,
               updatedAt: aiFallbackJob.createdAt, version: 1,
             }).onConflictDoNothing({target: conversationAiResponseJobs.triggerMessageId});

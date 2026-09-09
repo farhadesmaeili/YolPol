@@ -293,6 +293,36 @@ describe("PostgresInquiryRepository", () => {
     expect((await pool.query("select id from inquiry_outbox where aggregate_id=$1", [inquiry.id.value])).rowCount).toBe(0);
   });
 
+  it("persists Inquiry Additional Details as an initial Customer turn with the normal human grace deadline", async () => {
+    const createdAt = new Date("2026-08-27T10:00:00.000Z");
+    const notBefore = new Date("2026-08-27T10:01:00.000Z");
+    const inquiry = new InquiryTestBuilder().with({
+      id: "initial-details-ai-grace",
+      message: "Please confirm the packaging details.",
+      createdAt,
+      privacy: {...inquiryFixture.privacy, acceptedAt: createdAt},
+    }).buildNew();
+    const conversation = Conversation.start({id: inquiry.id.value, inquiryId: inquiry.id.value, channel: "WEBSITE", createdAt});
+    conversation.addMessage({
+      id: `${inquiry.id.value}-initial`, senderType: "CUSTOMER", channel: "WEBSITE", body: inquiry.message!, createdAt,
+    });
+    await pool.query(`insert into ai_operation_policy
+      (id,mode,business_time_zone,human_grace_period_seconds,version,updated_at,updated_by)
+      values ('global','FALLBACK','Asia/Tehran',60,1,$1,'staff:member-1')`, [createdAt]);
+
+    await repository.save(inquiry, undefined, conversation, undefined, {
+      id: "ai_job_initial_details", triggerMessageId: `${inquiry.id.value}-initial`, notBefore, continuationNotBefore: createdAt,
+      executionId: "ai_fallback_ai_job_initial_details", createdAt,
+    });
+
+    expect((await pool.query("select sender_type,body from conversation_messages where conversation_id=$1", [conversation.id.value])).rows).toEqual([
+      {sender_type: "CUSTOMER", body: inquiry.message},
+    ]);
+    expect((await pool.query("select status,not_before from conversation_ai_response_jobs where id='ai_job_initial_details'")).rows).toEqual([
+      {status: "PENDING", not_before: notBefore},
+    ]);
+  });
+
   it("upgrades every historical contact preference without changing legacy item semantics", async () => {
     const splitMigration = (sql: string) => sql.split("--> statement-breakpoint").map((statement) => statement.trim()).filter(Boolean);
     const baseline = await readFile(resolve("drizzle/0000_hot_lorna_dane.sql"), "utf8");

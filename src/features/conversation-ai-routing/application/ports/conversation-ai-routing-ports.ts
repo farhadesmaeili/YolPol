@@ -9,7 +9,7 @@ export interface ConversationAiControlEventIdGenerator { generate(): string; }
 export interface ConversationAiClock { now(): Date; }
 
 export interface AiOperationsFallbackPlanner {
-  execute(input: Readonly<{triggeredAt: Date}>): Promise<Readonly<{status: "scheduled"; notBefore: Date}> | Readonly<{status: "suppressed"; reason: string}>>;
+  execute(input: Readonly<{triggeredAt: Date}>): Promise<Readonly<{status: "scheduled"; notBefore: Date | null; continuationNotBefore: Date}> | Readonly<{status: "suppressed"; reason: string}>>;
 }
 
 export interface AiOperationsAvailabilityEvaluator { execute(): Promise<AiOperationsDecision>; }

@@ -12,7 +12,8 @@ export class ScheduleCustomerAiFallback implements CustomerMessageAiFallbackPlan
       return Object.freeze({
         id,
         triggerMessageId: input.triggerMessageId,
-        notBefore: new Date(decision.notBefore),
+        notBefore: decision.notBefore ? new Date(decision.notBefore) : null,
+        continuationNotBefore: new Date(decision.continuationNotBefore),
         executionId: conversationAiExecutionId(id),
         createdAt: new Date(input.triggeredAt),
       });

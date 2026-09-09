@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 
 import {ConversationAiControl} from "@/features/conversation-ai-routing/domain/entities/conversation-ai-control";
-import {conversationAiExecutionId, conversationAiMessageId} from "@/features/conversation-ai-routing/domain/services/conversation-ai-identities";
+import {conversationAiExecutionId, conversationAiJobIdFromMessageId, conversationAiMessageId} from "@/features/conversation-ai-routing/domain/services/conversation-ai-identities";
 import {StaffAuthorizationPolicy} from "@/features/staff-authentication/application/policies/staff-authorization-policy";
 
 const principal = (role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER") => ({staffAccountId: "account-1", teamMemberId: "member-1", role, displayName: "Staff", actorReference: "staff:member-1"});
@@ -11,6 +11,9 @@ describe("Conversation AI routing domain", () => {
     const jobId = "ai_job_123e4567_e89b_12d3_a456_426614174000";
     expect(conversationAiExecutionId(jobId)).toBe(`ai_fallback_${jobId}`);
     expect(conversationAiMessageId(jobId)).toBe(`ai_response_${jobId}`);
+    expect(conversationAiJobIdFromMessageId(`ai_response_${jobId}`)).toBe(jobId);
+    expect(conversationAiJobIdFromMessageId("unrelated-ai-message")).toBeNull();
+    expect(conversationAiJobIdFromMessageId("ai_response_invalid/id")).toBeNull();
     expect(() => conversationAiMessageId("browser supplied/id")).toThrow();
   });
 

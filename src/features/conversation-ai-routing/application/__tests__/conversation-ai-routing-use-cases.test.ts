@@ -21,8 +21,13 @@ function repository(finalResult: "succeeded" | "cancelled" | "superseded" = "suc
 
 describe("Conversation AI routing use cases", () => {
   it("schedules exactly one stable plan only when AI Operations supplies a not-before instant", async () => {
-    const planner = new ScheduleCustomerAiFallback({execute: vi.fn().mockResolvedValue({status: "scheduled", notBefore: new Date(now.getTime() + 60_000)})}, {generate: () => "ai_job_job_1"});
-    await expect(planner.plan({triggerMessageId: "message-1", triggeredAt: now})).resolves.toMatchObject({id: "ai_job_job_1", triggerMessageId: "message-1", executionId: "ai_fallback_ai_job_job_1"});
+    const planner = new ScheduleCustomerAiFallback({execute: vi.fn().mockResolvedValue({
+      status: "scheduled", notBefore: new Date(now.getTime() + 60_000), continuationNotBefore: now,
+    })}, {generate: () => "ai_job_job_1"});
+    await expect(planner.plan({triggerMessageId: "message-1", triggeredAt: now})).resolves.toMatchObject({
+      id: "ai_job_job_1", triggerMessageId: "message-1", notBefore: new Date(now.getTime() + 60_000),
+      continuationNotBefore: now, executionId: "ai_fallback_ai_job_job_1",
+    });
     const disabled = new ScheduleCustomerAiFallback({execute: vi.fn().mockResolvedValue({status: "suppressed", reason: "DISABLED"})}, {generate: () => "ai_job_unused"});
     await expect(disabled.plan({triggerMessageId: "message-1", triggeredAt: now})).resolves.toBeNull();
   });
