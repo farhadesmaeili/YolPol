@@ -22,7 +22,7 @@ export async function SiteHeader({ locale }: { locale: Locale }) {
   return (
     <header
       dir={isRtl ? "rtl" : "ltr"}
-      className="sticky top-0 z-50 border-b border-stone-950/[0.08] bg-[linear-gradient(135deg,rgba(243,241,235,0.96)_0%,rgba(248,247,242,0.93)_42%,rgba(231,240,233,0.90)_72%,rgba(243,241,235,0.95)_100%)] text-stone-950 shadow-[0_10px_40px_-28px_rgba(6,78,59,0.28)] backdrop-blur-2xl"
+      className="sticky top-0 z-50 overflow-x-clip border-b border-stone-950/[0.08] bg-[linear-gradient(135deg,rgba(243,241,235,0.96)_0%,rgba(248,247,242,0.93)_42%,rgba(231,240,233,0.90)_72%,rgba(243,241,235,0.95)_100%)] text-stone-950 shadow-[0_10px_40px_-28px_rgba(6,78,59,0.28)] backdrop-blur-2xl"
     >
       <HeaderBackground />
 

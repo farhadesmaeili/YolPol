@@ -1,4 +1,4 @@
-import {siteConfig} from "@/shared/config/site";
+import {publicSocialLinks, siteConfig} from "@/shared/config/site";
 import {absoluteUrl} from "@/shared/seo/metadata";
 import type {Locale} from "@/shared/types/locale";
 
@@ -42,6 +42,6 @@ export function createOrganizationJsonLd(locale: Locale): OrganizationJsonLd {
       telephone: href.slice("tel:".length),
     })),
     email: siteConfig.contact.email,
-    sameAs: Object.values(siteConfig.social),
+    sameAs: publicSocialLinks.map(({href}) => href),
   };
 }

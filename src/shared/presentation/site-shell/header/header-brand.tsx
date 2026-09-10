@@ -13,7 +13,7 @@ export function HeaderBrand({ homeLabel }: { homeLabel: string }) {
       <div className="relative flex size-14 shrink-0 items-center justify-center">
         <div
           aria-hidden="true"
-          className="absolute -inset-1.5 animate-[spin_18s_linear_infinite] rounded-full border border-transparent border-t-emerald-800/35 opacity-0 transition-opacity duration-500 group-hover:opacity-100 motion-reduce:animate-none motion-reduce:transition-none"
+          className="pointer-events-none absolute -inset-1.5 animate-[spin_18s_linear_infinite] rounded-full border border-transparent border-t-emerald-800/35 opacity-100 transition-opacity duration-500 motion-reduce:animate-none motion-reduce:transition-none xl:opacity-0 xl:group-hover:opacity-100"
         >
           <span className="absolute left-1/2 top-[-2px] size-1.5 -translate-x-1/2 rounded-full bg-emerald-800" />
         </div>

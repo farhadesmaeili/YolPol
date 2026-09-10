@@ -80,13 +80,31 @@ describe("SiteFooter", () => {
   it("uses centralized contact links, bidi isolation, and safe external links", () => {
     expect(completeFooterSource).toContain("siteConfig.contact.emailHref");
     expect(completeFooterSource).toContain("siteConfig.contact.phones.map");
-    expect(completeFooterSource).toContain("siteConfig.contact.whatsapp.href");
-    expect(completeFooterSource.match(/<LtrIsolate/g)).toHaveLength(3);
+    expect(completeFooterSource).not.toContain("siteConfig.contact.whatsapp");
+    expect(completeFooterSource).toContain("siteConfig.contact.location.officeAddress[locale]");
+    expect(completeFooterSource).toContain("publicSocialLinks.map");
+    expect(completeFooterSource.match(/<LtrIsolate/g)).toHaveLength(4);
     expect(completeFooterSource).toContain('rel="noopener noreferrer"');
     expect(footerSource).toContain('instagram: t("social.instagram")');
-    expect(footerSource).toContain('linkedin: t("social.linkedin")');
     expect(footerSource).toContain('telegram: t("social.telegram")');
     expect(completeFooterSource).toContain("aria-label={label}");
+    expect(completeFooterSource).not.toContain("siteConfig.social.linkedin");
+  });
+
+  it("presents public social links as clean platform labels with subtle icons", () => {
+    const socialLinkSource = completeFooterSource.slice(completeFooterSource.indexOf("function SocialLink"));
+    expect(completeFooterSource).toContain("<SocialIcon id={id} />");
+    expect(completeFooterSource).toContain("social.label");
+    expect(completeFooterSource).not.toContain("social.display");
+    expect(publicSocialLabels()).toEqual(["Instagram", "Telegram"]);
+    expect(socialLinkSource).not.toContain("↗");
+  });
+
+  it("renders the centralized designer attribution as secondary footer content", () => {
+    expect(footerSource).toContain('designedBy={t("footer.designedBy")}');
+    expect(completeFooterSource).toContain("siteConfig.designer.emailHref");
+    expect(completeFooterSource).toContain("siteConfig.designer.name");
+    expect(siteConfig.designer.emailHref).toBe("mailto:farhad.esmaeili.it@gmail.com");
   });
 
   it("uses the approved emerald CTA and accessible decorative treatment", () => {
@@ -134,4 +152,10 @@ function collectKeyPaths(value: unknown, prefix = ""): string[] {
       collectKeyPaths(child, prefix ? `${prefix}.${key}` : key),
     )
     .sort();
+}
+
+function publicSocialLabels(): string[] {
+  return Object.values(siteConfig.social)
+    .filter(({ isPublic }) => isPublic)
+    .map(({ label }) => label);
 }

@@ -29,8 +29,9 @@ function requireUrl(value: string, protocols: readonly string[]): string {
 }
 
 const brandName = "YolPol";
-const publicEmail = "yolpol@gmail.com";
+const publicEmail = "export@yolpol.com";
 const publicWhatsapp = "+98 912 394 5674";
+const designerEmail = "farhad.esmaeili.it@gmail.com";
 
 export const siteConfig = {
   url: "https://yolpol.com",
@@ -46,18 +47,19 @@ export const siteConfig = {
     phones: [
       {
         id: "mobile-primary",
-        display: "+98 912 394 5674",
-        href: requireUrl("tel:+989123945674", ["tel:"]),
+        display: "+98 912 122 1942",
+        href: requireUrl("tel:+989121221942", ["tel:"]),
       },
       {
         id: "mobile-secondary",
-        display: "+98 912 122 1942",
-        href: requireUrl("tel:+989121221942", ["tel:"]),
+        display: "+98 912 394 5674",
+        href: requireUrl("tel:+989123945674", ["tel:"]),
       },
     ],
     whatsapp: {
       display: publicWhatsapp,
       href: requireUrl("https://wa.me/989123945674", ["https:"]),
+      isPublic: false,
     },
     location: {
       summary: {
@@ -75,11 +77,41 @@ export const siteConfig = {
     },
   },
   social: {
-    instagram: requireUrl("https://www.instagram.com/yolpol/", ["https:"]),
-    linkedin: requireUrl("https://www.linkedin.com/company/yolpol/", ["https:"]),
-    telegram: requireUrl("https://t.me/yolpol", ["https:"]),
+    instagram: {
+      id: "instagram",
+      label: "Instagram",
+      display: "@yolpol.hq",
+      href: requireUrl("https://www.instagram.com/yolpol.hq/", ["https:"]),
+      isPublic: true,
+    },
+    linkedin: {
+      id: "linkedin",
+      label: "LinkedIn",
+      display: "LinkedIn",
+      href: requireUrl("https://www.linkedin.com/company/yolpol/", ["https:"]),
+      isPublic: false,
+    },
+    telegram: {
+      id: "telegram",
+      label: "Telegram",
+      display: "@yolpol_hq",
+      href: requireUrl("https://t.me/yolpol_hq", ["https:"]),
+      isPublic: true,
+    },
+  },
+  designer: {
+    name: "Farhad Esmaeili",
+    email: designerEmail,
+    emailHref: requireUrl(`mailto:${designerEmail}`, ["mailto:"]),
   },
 } as const;
+
+type SocialLink = (typeof siteConfig.social)[keyof typeof siteConfig.social];
+type PublicSocialLink = Extract<SocialLink, { isPublic: true }>;
+
+export const publicSocialLinks = Object.values(siteConfig.social).filter(
+  (social): social is PublicSocialLink => social.isPublic,
+);
 
 export const privacyPolicy = {
   publicName: siteConfig.identity.publicName,
