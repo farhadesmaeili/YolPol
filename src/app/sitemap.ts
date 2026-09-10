@@ -3,9 +3,14 @@ import type {MetadataRoute} from "next";
 import {listPublishedProductRoutes} from "@/composition/products/product-catalog";
 import {createProductSitemapEntries} from "@/features/products/presentation/seo/product-sitemap";
 import {routing} from "@/i18n/routing";
+import {searchIndexingEnabled} from "@/shared/config/deployment-environment";
 import {localizedAbsoluteUrl} from "@/shared/seo/metadata";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (!searchIndexingEnabled()) return [];
+
   const staticPaths = [
     "/",
     "/products",

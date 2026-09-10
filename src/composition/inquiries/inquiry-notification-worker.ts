@@ -10,7 +10,7 @@ import {PostgresConversationMessageRepository} from "@/features/inquiries/infras
 import {PostgresInquiryOutbox} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-outbox";
 import {PostgresInquiryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-inquiry-repository";
 import {PostgresTelegramDeliveryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-telegram-delivery-repository";
-import {siteConfig} from "@/shared/config/site";
+import {runtimeApplicationOrigin} from "@/shared/config/deployment-environment";
 
 export type InquiryNotificationWorkerRuntime = Readonly<{
   worker: Pick<ProcessInquiryNotifications, "execute">;
@@ -20,24 +20,31 @@ export type InquiryNotificationWorkerRuntime = Readonly<{
 export type InquiryNotificationWorkerStartupDependencies = Readonly<{
   readPostgresConfiguration(): PoolConfig;
   readTelegramConfiguration(): TelegramOutboundConfig;
+  readApplicationOrigin(): string;
   createPool(config: PoolConfig): Pool;
 }>;
 
 const defaultStartupDependencies: InquiryNotificationWorkerStartupDependencies = Object.freeze({
   readPostgresConfiguration: readPostgresConfig,
   readTelegramConfiguration: readTelegramOutboundConfig,
+  readApplicationOrigin: runtimeApplicationOrigin,
   createPool: createPostgresPool,
 });
+
+export function createStaffInquiryUrl(applicationOrigin: string, inquiryId: string): string {
+  return new URL(`/en/staff/inquiries/${encodeURIComponent(inquiryId)}`, applicationOrigin).toString();
+}
 
 export function createInquiryNotificationWorker(
   dependencies: InquiryNotificationWorkerStartupDependencies = defaultStartupDependencies,
 ): InquiryNotificationWorkerRuntime {
   const postgresConfig = dependencies.readPostgresConfiguration();
   const telegramConfig = dependencies.readTelegramConfiguration();
+  const applicationOrigin = dependencies.readApplicationOrigin();
   const pool = dependencies.createPool(postgresConfig);
   const telegram = new TelegramCommunicationAdapter(telegramConfig.botToken);
   const conversations = new PostgresConversationMessageRepository(pool);
-  const staffInquiryUrl = (inquiryId: string) => new URL(`/en/staff/inquiries/${encodeURIComponent(inquiryId)}`, siteConfig.url).toString();
+  const staffInquiryUrl = (inquiryId: string) => createStaffInquiryUrl(applicationOrigin, inquiryId);
   const worker = new ProcessInquiryNotifications(
     new PostgresInquiryOutbox(pool),
     new PostgresInquiryRepository(pool),

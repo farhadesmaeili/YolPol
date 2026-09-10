@@ -62,7 +62,7 @@ The localized root layout renders one shared header, one main landmark, and one 
 
 ## SEO Foundation
 
-Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. `robots.ts` and `sitemap.ts` use the centrally owned approved production origin, `https://yolpol.com`.
+Each localized home page has translated metadata, a canonical URL, locale alternates, `x-default`, and Open Graph fields. The centrally owned Production public origin remains `https://yolpol.com` for canonical metadata, structured data, and Production sitemap URLs. A separate validated server-side deployment contract owns the runtime application origin used by browser Origin security and operational links. Staging applies request-time `noindex`, `nofollow`, and `noarchive`, serves restrictive robots rules, and suppresses sitemap entries without making localized public pages dynamic.
 
 Product listing and detail metadata use the same centralized origin and localized URL helper. Product alternates include only locales with verified content. Generic JSON-LD serialization and script rendering live in shared presentation SEO; Product presentation and static content routes consume that shared implementation while retaining ownership of their feature-specific structured-data mapping. The sitemap contains localized home/listing pages plus published product detail URLs for each available locale; drafts, archived products, and unavailable locales are excluded through application/composition boundaries.
 
