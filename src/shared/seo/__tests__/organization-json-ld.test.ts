@@ -21,14 +21,13 @@ describe("Organization structured data", () => {
         addressCountry: "IR",
       },
       contactPoint: [
-        {"@type": "ContactPoint", contactType: "sales", telephone: "+989123945674"},
         {"@type": "ContactPoint", contactType: "sales", telephone: "+989121221942"},
+        {"@type": "ContactPoint", contactType: "sales", telephone: "+989123945674"},
       ],
-      email: "yolpol@gmail.com",
+      email: "export@yolpol.com",
       sameAs: [
-        "https://www.instagram.com/yolpol/",
-        "https://www.linkedin.com/company/yolpol/",
-        "https://t.me/yolpol",
+        "https://www.instagram.com/yolpol.hq/",
+        "https://t.me/yolpol_hq",
       ],
     });
   });

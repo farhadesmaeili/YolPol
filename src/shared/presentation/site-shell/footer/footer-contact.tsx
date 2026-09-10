@@ -1,6 +1,6 @@
 import {Fragment, type ReactNode} from "react";
 
-import { siteConfig } from "@/shared/config/site";
+import { publicSocialLinks, siteConfig } from "@/shared/config/site";
 import { LtrIsolate } from "@/shared/presentation/bidi/bidi-isolate";
 import { FooterSectionHeading } from "@/shared/presentation/site-shell/footer/footer-section-heading";
 import type { Locale } from "@/shared/types/locale";
@@ -8,14 +8,12 @@ import type { Locale } from "@/shared/types/locale";
 const contactLinkClass =
   "group flex min-h-11 min-w-0 items-center justify-between gap-3 text-stone-700 outline-none transition-colors duration-300 hover:text-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-800 motion-reduce:transition-none";
 const socialLinkClass =
-  "group inline-flex min-h-11 items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 outline-none transition-colors duration-300 hover:text-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-800 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb] motion-reduce:transition-none";
+  "group inline-flex min-h-11 items-center gap-2 text-xs font-semibold tracking-[0.08em] text-stone-500 outline-none transition-colors duration-300 hover:text-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-800 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb] motion-reduce:transition-none";
 
 type FooterContactLabels = Readonly<{
   heading: string;
-  whatsapp: string;
   location: string;
   instagram: string;
-  linkedin: string;
   telegram: string;
 }>;
 
@@ -40,32 +38,51 @@ export function FooterContact({ labels, isRtl, locale }: { labels: FooterContact
               <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
             </Fragment>
           ))}
-          <a href={siteConfig.contact.whatsapp.href} target="_blank" rel="noopener noreferrer" className={contactLinkClass}>
-            <span>{labels.whatsapp}</span>
-            <LtrIsolate className="shrink-0">{siteConfig.contact.whatsapp.display}</LtrIsolate>
-          </a>
-          <div aria-hidden="true" className="h-px bg-stone-950/[0.07]" />
           <div className="py-2">
             <p className="text-xs font-medium text-stone-400">{labels.location}</p>
-            <p className="mt-2 max-w-xs break-words leading-6 text-stone-700">{siteConfig.contact.location.summary[locale]}</p>
+            <p className="mt-2 max-w-xs break-words leading-6 text-stone-700">{siteConfig.contact.location.officeAddress[locale]}</p>
           </div>
         </address>
       </div>
       <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1">
-        <SocialLink href={siteConfig.social.instagram} label={labels.instagram}>Instagram</SocialLink>
-        <SocialLink href={siteConfig.social.linkedin} label={labels.linkedin}>LinkedIn</SocialLink>
-        <SocialLink href={siteConfig.social.telegram} label={labels.telegram}>Telegram</SocialLink>
+        {publicSocialLinks.map((social) => (
+          <SocialLink key={social.id} href={social.href} id={social.id} label={labels[social.id]}>
+            <LtrIsolate>{social.label}</LtrIsolate>
+          </SocialLink>
+        ))}
       </ul>
     </section>
   );
 }
 
-function SocialLink({ href, label, children }: { href: string; label: string; children: ReactNode }) {
+type PublicSocialId = (typeof publicSocialLinks)[number]["id"];
+
+function SocialLink({ href, id, label, children }: { href: string; id: PublicSocialId; label: string; children: ReactNode }) {
   return (
     <li>
       <a className={socialLinkClass} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
-        {children}<span aria-hidden="true">↗</span>
+        <SocialIcon id={id} />
+        {children}
       </a>
     </li>
+  );
+}
+
+function SocialIcon({ id }: { id: PublicSocialId }) {
+  if (id === "instagram") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-4 shrink-0" stroke="currentColor" strokeWidth="1.7">
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-4 shrink-0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m21 3-7.6 18-4.3-7.1L3 10.8 21 3Z" />
+      <path d="m9.1 13.9 5.1-4.6" />
+    </svg>
   );
 }

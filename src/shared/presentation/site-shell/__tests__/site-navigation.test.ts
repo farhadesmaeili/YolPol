@@ -43,6 +43,15 @@ describe("site shell boundaries", () => {
     expect(completeHeaderSource).not.toContain("ACTIVE");
   });
 
+  it("keeps the logo orbit active on compact screens and hover-only on desktop", () => {
+    expect(headerComponentSource).toContain("animate-[spin_18s_linear_infinite]");
+    expect(headerComponentSource).toContain("opacity-100");
+    expect(headerComponentSource).toContain("xl:opacity-0");
+    expect(headerComponentSource).toContain("xl:group-hover:opacity-100");
+    expect(headerComponentSource).toContain("pointer-events-none absolute -inset-1.5");
+    expect(headerComponentSource).toContain("motion-reduce:animate-none");
+  });
+
   it("keeps desktop and compact navigation on one non-overlapping breakpoint", () => {
     expect(navigationSource).toContain("xl:hidden");
     expect(navigationSource).toContain("xl:flex");
@@ -50,10 +59,11 @@ describe("site shell boundaries", () => {
     expect(navigationSource).not.toMatch(/(?:w-screen|min-w-\[\d)/u);
   });
 
-  it("keeps the mobile trigger above decoration with an explicit touch target", () => {
+  it("keeps the responsive Header orbit pointer-inert and clear of the mobile trigger", () => {
     expect(headerComponentSource).toMatch(/pointer-events-none/g);
-    expect(headerComponentSource).toContain("-start-10 top-1/2 size-20");
-    expect(headerComponentSource).toContain("lg:-start-20 lg:size-44");
+    expect(headerComponentSource).toContain("-start-10 top-full size-20");
+    expect(headerComponentSource).toContain("lg:-start-20 lg:top-1/2 lg:size-44");
+    expect(headerSource).toContain("overflow-x-clip");
     expect(headerComponentSource).not.toContain("top-1/2 hidden size-44");
     expect(triggerSource).toContain("pointer-events-auto");
     expect(triggerSource).toContain("touch-manipulation");

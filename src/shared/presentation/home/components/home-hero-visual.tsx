@@ -58,6 +58,15 @@ function HomeHeroOrbits() {
       <div className="absolute left-1/2 top-1/2 size-[min(105vw,850px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.08] border-t-emerald-800/60 animate-[spin_28s_linear_infinite] motion-reduce:animate-none" />
       <div className="absolute left-1/2 top-1/2 size-[min(88vw,700px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-950/[0.06] border-b-stone-950/25 animate-[spin_38s_linear_infinite] [animation-direction:reverse] motion-reduce:animate-none" />
       <div className="absolute left-1/2 top-1/2 size-[min(70vw,580px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-emerald-900/[0.18] animate-[spin_18s_linear_infinite] motion-reduce:animate-none" />
+      <div className="absolute left-1/2 top-1/2 z-20 size-[min(105vw,850px)] -translate-x-1/2 -translate-y-1/2 animate-[spin_28s_linear_infinite] motion-reduce:animate-none">
+        <span data-home-orbit-orb="" className="absolute left-1/2 top-[-4px] size-2 -translate-x-1/2 rounded-full bg-emerald-800/80 shadow-[0_0_12px_rgba(6,78,59,0.4)]" />
+      </div>
+      <div className="absolute left-1/2 top-1/2 z-20 size-[min(88vw,700px)] -translate-x-1/2 -translate-y-1/2 animate-[spin_38s_linear_infinite] [animation-direction:reverse] motion-reduce:animate-none">
+        <span data-home-orbit-orb="" className="absolute left-[-3px] top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-stone-700/55 shadow-[0_0_10px_rgba(68,64,60,0.3)]" />
+      </div>
+      <div className="absolute left-1/2 top-1/2 z-20 size-[min(70vw,580px)] -translate-x-1/2 -translate-y-1/2 animate-[spin_18s_linear_infinite] motion-reduce:animate-none">
+        <span data-home-orbit-orb="" className="absolute bottom-[-3px] left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-emerald-700/65 shadow-[0_0_10px_rgba(4,120,87,0.3)]" />
+      </div>
       <div className="absolute left-1/2 top-[8%] h-[84%] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-stone-950/[0.07] to-transparent" />
       <div className="absolute start-[4%] top-1/2 h-px w-[92%] -translate-y-1/2 bg-gradient-to-r from-transparent via-stone-950/[0.07] to-transparent" />
     </div>

@@ -67,16 +67,17 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
             locale={locale}
             labels={{
               heading: t("footer.contact"),
-              whatsapp: t("contact.whatsapp"),
               location: t("contact.location"),
               instagram: t("social.instagram"),
-              linkedin: t("social.linkedin"),
               telegram: t("social.telegram"),
             }}
           />
         </div>
 
-        <FooterExportStrip rights={t("footer.rights")} />
+        <FooterExportStrip
+          designedBy={t("footer.designedBy")}
+          rights={t("footer.rights")}
+        />
       </div>
 
       <span aria-hidden="true" className="pointer-events-none absolute start-4 top-4 z-30 h-9 w-9 border-s border-t border-stone-950/15 sm:start-6 sm:top-6" />

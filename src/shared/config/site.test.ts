@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {describe, expect, it} from "vitest";
 
-import {legalNavigation, primaryNavigation, privacyPolicy, publicProductCategories, siteConfig} from "@/shared/config/site";
+import {legalNavigation, primaryNavigation, privacyPolicy, publicProductCategories, publicSocialLinks, siteConfig} from "@/shared/config/site";
 
 describe("site configuration", () => {
   it("owns the approved production origin", () => {
@@ -26,13 +26,13 @@ describe("site configuration", () => {
 
   it("owns exact contact destinations with safe schemes", () => {
     expect(siteConfig.contact).toEqual({
-      email: "yolpol@gmail.com",
-      emailHref: "mailto:yolpol@gmail.com",
+      email: "export@yolpol.com",
+      emailHref: "mailto:export@yolpol.com",
       phones: [
-        {id: "mobile-primary", display: "+98 912 394 5674", href: "tel:+989123945674"},
-        {id: "mobile-secondary", display: "+98 912 122 1942", href: "tel:+989121221942"},
+        {id: "mobile-primary", display: "+98 912 122 1942", href: "tel:+989121221942"},
+        {id: "mobile-secondary", display: "+98 912 394 5674", href: "tel:+989123945674"},
       ],
-      whatsapp: {display: "+98 912 394 5674", href: "https://wa.me/989123945674"},
+      whatsapp: {display: "+98 912 394 5674", href: "https://wa.me/989123945674", isPublic: false},
       location: {
         summary: {en: "Tehran, Iran", tr: "Tahran, İran", fa: "تهران، ایران", ar: "طهران، إيران"},
         officeAddress: {
@@ -43,8 +43,16 @@ describe("site configuration", () => {
         },
       },
     });
-    expect(siteConfig.social).toEqual({instagram: "https://www.instagram.com/yolpol/", linkedin: "https://www.linkedin.com/company/yolpol/", telegram: "https://t.me/yolpol"});
-    for (const href of Object.values(siteConfig.social)) expect(new URL(href).protocol).toBe("https:");
+    expect(siteConfig.social).toEqual({
+      instagram: {id: "instagram", label: "Instagram", display: "@yolpol.hq", href: "https://www.instagram.com/yolpol.hq/", isPublic: true},
+      linkedin: {id: "linkedin", label: "LinkedIn", display: "LinkedIn", href: "https://www.linkedin.com/company/yolpol/", isPublic: false},
+      telegram: {id: "telegram", label: "Telegram", display: "@yolpol_hq", href: "https://t.me/yolpol_hq", isPublic: true},
+    });
+    expect(publicSocialLinks.map(({id, label, href}) => ({id, label, href}))).toEqual([
+      {id: "instagram", label: "Instagram", href: "https://www.instagram.com/yolpol.hq/"},
+      {id: "telegram", label: "Telegram", href: "https://t.me/yolpol_hq"},
+    ]);
+    for (const {href} of Object.values(siteConfig.social)) expect(new URL(href).protocol).toBe("https:");
     expect(JSON.stringify({primaryNavigation, siteConfig})).not.toContain('"#"');
   });
 
@@ -52,9 +60,23 @@ describe("site configuration", () => {
     const source = readFileSync("src/shared/config/site.ts", "utf8");
     expect(siteConfig.contact.phones).toHaveLength(2);
     expect(siteConfig.contact.phones.map(({id}) => id)).toEqual(["mobile-primary", "mobile-secondary"]);
+    expect(siteConfig.contact.phones[0]).toEqual({
+      id: "mobile-primary",
+      display: "+98 912 122 1942",
+      href: "tel:+989121221942",
+    });
     expect(siteConfig.contact.whatsapp.href).toBe("https://wa.me/989123945674");
-    expect(siteConfig.contact.phones[1].display).not.toBe(siteConfig.contact.whatsapp.display);
+    expect(siteConfig.contact.whatsapp.isPublic).toBe(false);
+    expect(siteConfig.contact.phones[0].display).not.toBe(siteConfig.contact.whatsapp.display);
     expect(source).not.toMatch(/whatsapp:[\s\S]{0,200}phones\[0\]/u);
+  });
+
+  it("owns the public designer attribution without additional personal details", () => {
+    expect(siteConfig.designer).toEqual({
+      name: "Farhad Esmaeili",
+      email: "farhad.esmaeili.it@gmail.com",
+      emailHref: "mailto:farhad.esmaeili.it@gmail.com",
+    });
   });
 
   it("owns stable approved Privacy facts and a footer-only route", () => {

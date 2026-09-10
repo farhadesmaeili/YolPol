@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {describe, expect, it} from "vitest";
 
-import {siteConfig} from "@/shared/config/site";
+import {publicSocialLinks, siteConfig} from "@/shared/config/site";
 import {supportedLocales} from "@/shared/types/locale";
 
 const componentSource = readFileSync(
@@ -11,15 +11,16 @@ const componentSource = readFileSync(
 const routeSource = readFileSync("src/app/[locale]/contact/page.tsx", "utf8");
 
 describe("localized public Contact presentation", () => {
-  it("renders both centralized phones and keeps WhatsApp independent", () => {
+  it("renders both centralized phones without exposing the retained WhatsApp destination", () => {
     expect(siteConfig.contact.phones.map(({href}) => href)).toEqual([
-      "tel:+989123945674",
       "tel:+989121221942",
+      "tel:+989123945674",
     ]);
     expect(componentSource).toContain("siteConfig.contact.phones.map");
     expect(componentSource).toContain("href={phone.href}");
-    expect(componentSource).toContain("siteConfig.contact.whatsapp.href");
     expect(siteConfig.contact.whatsapp.href).toBe("https://wa.me/989123945674");
+    expect(siteConfig.contact.whatsapp.isPublic).toBe(false);
+    expect(componentSource).not.toContain("siteConfig.contact.whatsapp");
     expect(componentSource).not.toContain("phones[0]");
   });
 
@@ -36,5 +37,8 @@ describe("localized public Contact presentation", () => {
     expect(componentSource).toContain('rel="noopener noreferrer"');
     expect(componentSource).toContain("model.isRtl");
     expect(routeSource).toContain('locale === "fa" || locale === "ar"');
+    expect(componentSource).toContain("publicSocialLinks.map");
+    expect(publicSocialLinks.map(({id}) => id)).toEqual(["instagram", "telegram"]);
+    expect(componentSource).not.toContain("siteConfig.social.linkedin");
   });
 });

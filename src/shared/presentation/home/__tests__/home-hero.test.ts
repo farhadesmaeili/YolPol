@@ -70,7 +70,7 @@ describe("homepage facts and assets", () => {
   it("preserves the user image bytes", () => {
     const desktop = readFileSync("public/images/home/hero/yolpol-home-hero-desktop.webp");
     const mobile = readFileSync("public/images/home/hero/yolpol-home-hero-mobile.webp");
-    expect(createHash("sha256").update(desktop).digest("hex")).toBe("234dae1a541df3b7ebd8b2b3997d4b1c9e30f8828498353d23686d00ad79c3fc");
+    expect(createHash("sha256").update(desktop).digest("hex")).toBe("5ce510a48269dbfaca5989b546c093c0fcc73c8826248af7816b077caeb3f649");
     expect(desktop.equals(mobile)).toBe(true);
   });
 
@@ -97,6 +97,15 @@ describe("homepage facts and assets", () => {
     expect(combinedSource).toContain("aspect-square");
   });
 
+  it("keeps one visible, responsive orb on each pointer-inert Hero orbit", () => {
+    expect(combinedSource.match(/data-home-orbit-orb=/g)).toHaveLength(3);
+    expect(combinedSource).toContain("pointer-events-none absolute inset-0 overflow-hidden");
+    expect(combinedSource).toContain("size-[min(105vw,850px)]");
+    expect(combinedSource).toContain("size-[min(88vw,700px)]");
+    expect(combinedSource).toContain("size-[min(70vw,580px)]");
+    expect(combinedSource.match(/z-20[^"]*motion-reduce:animate-none/g)).toHaveLength(3);
+  });
+
   it("keeps approved crawlable actions and removes fabricated status claims", () => {
     expect(combinedSource).toContain('href="/products"');
     expect(combinedSource).toContain('href="/inquiry"');
@@ -119,5 +128,25 @@ describe("homepage localization", () => {
       expect(Object.keys(messages).sort()).toEqual(expectedKeys);
       expect(Object.values(messages).every((value) => value.trim().length > 0)).toBe(true);
     }
+    expect(homeMessages.map(({heading, description}) => ({heading, description}))).toEqual([
+      {
+        heading: "Wholesale goods supply in Iran for domestic and international buyers",
+        description: "YOLPOL helps business buyers source wholesale goods in Iran through a commercial process based on price and availability inquiries.",
+      },
+      {
+        heading: "İran'da yerel ve uluslararası alıcılar için toptan mal tedariki",
+        description: "YOLPOL, ticari alıcıların İran'daki toptan malları fiyat ve stok durumu sorgulamasına dayalı ticari bir süreç üzerinden tedarik etmelerine yardımcı olur.",
+      },
+      {
+        heading: "تأمین عمده کالا در ایران برای خریداران داخلی و بین‌المللی",
+        description: "یول‌پل به خریداران تجاری کمک می‌کند کالاهای عمده را در ایران از طریق یک فرآیند تجاری مبتنی بر استعلام قیمت و موجودی تأمین کنند.",
+      },
+      {
+        heading: "توريد السلع بالجملة في إيران للمشترين المحليين والدوليين",
+        description: "تساعد YOLPOL المشترين التجاريين على تأمين السلع بالجملة في إيران من خلال عملية تجارية قائمة على الاستعلام عن الأسعار ومدى التوفر.",
+      },
+    ]);
+    expect(routeSource).toContain('const isRtl = locale === "fa" || locale === "ar"');
+    expect(JSON.stringify(homeMessages)).not.toMatch(/internalUnitPrice|margin|unit cost/iu);
   });
 });

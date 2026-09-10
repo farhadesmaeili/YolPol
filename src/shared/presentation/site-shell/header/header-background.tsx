@@ -16,7 +16,7 @@ export function HeaderBackground() {
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -start-10 top-1/2 size-20 -translate-y-1/2 lg:-start-20 lg:size-44"
+        className="pointer-events-none absolute -start-10 top-full size-20 -translate-y-1/2 lg:-start-20 lg:top-1/2 lg:size-44"
       >
         <div className="absolute inset-0 animate-[spin_32s_linear_infinite] rounded-full border border-stone-950/[0.045] border-t-emerald-800/25 motion-reduce:animate-none">
           <span className="absolute left-1/2 top-[-3px] size-1.5 -translate-x-1/2 rounded-full bg-emerald-800/70" />

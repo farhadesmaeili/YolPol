@@ -1,6 +1,7 @@
 import { siteConfig } from "@/shared/config/site";
+import { LtrIsolate } from "@/shared/presentation/bidi/bidi-isolate";
 
-export function FooterExportStrip({ rights }: { rights: string }) {
+export function FooterExportStrip({ designedBy, rights }: { designedBy: string; rights: string }) {
   return (
     <>
       <div className="relative overflow-hidden border-y border-stone-950/[0.09] py-6">
@@ -20,7 +21,18 @@ export function FooterExportStrip({ rights }: { rights: string }) {
       </div>
 
       <div className="relative flex flex-col gap-4 py-7 text-start sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-stone-500">© {new Date().getFullYear()} {siteConfig.identity.publicName}. {rights}</p>
+        <div className="space-y-1.5">
+          <p className="text-xs text-stone-500">© {new Date().getFullYear()} {siteConfig.identity.publicName}. {rights}</p>
+          <p className="text-[10px] text-stone-400">
+            {designedBy}{" "}
+            <a
+              href={siteConfig.designer.emailHref}
+              className="outline-none transition-colors hover:text-stone-600 focus-visible:ring-2 focus-visible:ring-emerald-800 motion-reduce:transition-none"
+            >
+              <LtrIsolate>{siteConfig.designer.name}</LtrIsolate>
+            </a>
+          </p>
+        </div>
         <div aria-hidden="true" dir="ltr" className="flex max-w-full flex-wrap items-center gap-3 text-[8px] font-semibold uppercase tracking-[0.25em] text-stone-400">
           <span>IR</span><span className="h-px w-6 bg-stone-950/15" /><span>B2B</span><span className="h-px w-6 bg-stone-950/15" /><span>WHOLESALE</span><span className="h-px w-6 bg-stone-950/15" /><span>SUPPLY</span>
         </div>
