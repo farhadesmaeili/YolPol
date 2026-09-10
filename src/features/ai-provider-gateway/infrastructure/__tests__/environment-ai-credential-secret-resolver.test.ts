@@ -11,11 +11,22 @@ describe("EnvironmentAiCredentialSecretResolver", () => {
     await expect(resolver.resolve(reference)).resolves.toBe("fake-value");
   });
 
-  it("prefers a Docker-Secret-friendly file binding", async () => {
+  it("resolves a Docker-Secret-friendly file binding", async () => {
     const read = vi.fn(async () => " file-secret\n");
-    const resolver = new EnvironmentAiCredentialSecretResolver(bindings, {TEST_GROQ_KEY: "environment-secret", TEST_GROQ_KEY_FILE: " C:\\temporary\\secret "}, read);
+    const resolver = new EnvironmentAiCredentialSecretResolver(bindings, {TEST_GROQ_KEY_FILE: " C:\\temporary\\secret "}, read);
     await expect(resolver.resolve(reference)).resolves.toBe("file-secret");
     expect(read).toHaveBeenCalledWith("C:\\temporary\\secret");
+  });
+
+  it("rejects ambiguous direct and file-backed configuration with the standard safe failure", async () => {
+    const resolver = new EnvironmentAiCredentialSecretResolver(bindings, {
+      TEST_GROQ_KEY: "direct-secret",
+      TEST_GROQ_KEY_FILE: "C:\\temporary\\secret",
+    });
+    await expect(resolver.resolve(reference)).rejects.toMatchObject({
+      category: "MISSING_SECRET",
+      message: "The AI provider credential is unavailable.",
+    });
   });
 
   it.each([
