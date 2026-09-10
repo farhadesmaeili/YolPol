@@ -13,7 +13,7 @@ export const legacyExportLogisticsRedirects: Awaited<
 }));
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
   reactCompiler: true,
   allowedDevOrigins: [...getAllowedNextDevelopmentHosts()],
   redirects: () => legacyExportLogisticsRedirects,
