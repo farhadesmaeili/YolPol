@@ -1,7 +1,6 @@
-import {readFile} from "node:fs/promises";
-
 import type {AiCredentialSecretResolver} from "@/features/ai-provider-gateway/application/ports/ai-provider-gateway-ports";
 import {AiProviderFailure} from "@/features/ai-provider-gateway/domain/errors/ai-provider-gateway-errors";
+import {readEnvironmentSecret} from "@/shared/infrastructure/config/environment-secret";
 
 export type AiCredentialSecretBinding = Readonly<{
   environmentVariable: string;
@@ -15,18 +14,17 @@ export class EnvironmentAiCredentialSecretResolver implements AiCredentialSecret
   constructor(
     private readonly bindings: Readonly<Record<string, AiCredentialSecretBinding>>,
     private readonly environment: Environment = process.env,
-    private readonly readSecretFile: SecretFileReader = (path) => readFile(path, "utf8"),
+    private readonly readSecretFile?: SecretFileReader,
   ) {}
 
   async resolve(credentialReference: string): Promise<string> {
     const binding = this.bindings[credentialReference];
     if (!binding) throw new AiProviderFailure("MISSING_SECRET");
     try {
-      const filePath = binding.fileEnvironmentVariable ? this.environment[binding.fileEnvironmentVariable]?.trim() : undefined;
-      const rawValue = filePath ? await this.readSecretFile(filePath) : this.environment[binding.environmentVariable];
-      const secret = rawValue?.trim();
-      if (!secret) throw new AiProviderFailure("MISSING_SECRET");
-      return secret;
+      return await readEnvironmentSecret({
+        valueVariable: binding.environmentVariable,
+        fileVariable: binding.fileEnvironmentVariable,
+      }, this.environment, this.readSecretFile);
     } catch (error) {
       if (error instanceof AiProviderFailure) throw error;
       throw new AiProviderFailure("MISSING_SECRET");
