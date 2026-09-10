@@ -8,9 +8,19 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const {runConversationAiFallbackWorkerOneShot} = await import("./conversation-ai-fallback-runtime");
+  const {parseDeploymentEnvironment} = await import("../../src/shared/config/deployment-environment");
+  const {nodeWorkerShutdownSource} = await import("./continuous-worker-runtime");
+  const {runConversationAiFallbackWorkerCommand} = await import("./conversation-ai-fallback-runtime");
   const {createConversationAiWorker} = await import("../../src/composition/conversation-ai-routing/conversation-ai-worker");
-  process.exitCode = await runConversationAiFallbackWorkerOneShot({createRuntime: createConversationAiWorker, logger: console});
+  process.exitCode = await runConversationAiFallbackWorkerCommand({
+    environment: process.env,
+    createRuntime: () => {
+      parseDeploymentEnvironment(process.env);
+      return createConversationAiWorker();
+    },
+    signals: nodeWorkerShutdownSource,
+    logger: console,
+  });
 }
 
 if (require.main === module) void main().catch(() => {

@@ -1,21 +1,18 @@
 import {createConversationTranslationWorker} from "../../src/composition/conversation-translation/conversation-translation-worker";
 import {parseDeploymentEnvironment} from "../../src/shared/config/deployment-environment";
-import {nodeWorkerShutdownSource} from "./continuous-worker-runtime";
-import {runConversationTranslationWorkerCommand} from "./conversation-translation-runtime";
+import {runConversationTranslationWorkerOneShot} from "./conversation-translation-runtime";
 
 export async function main(): Promise<void> {
-  process.exitCode = await runConversationTranslationWorkerCommand({
-    environment: process.env,
+  process.exitCode = await runConversationTranslationWorkerOneShot({
     createRuntime: () => {
       parseDeploymentEnvironment(process.env);
       return createConversationTranslationWorker();
     },
-    signals: nodeWorkerShutdownSource,
     logger: console,
   });
 }
 
 if (require.main === module) void main().catch(() => {
-  console.error("Conversation translation worker failed.");
+  console.error("Conversation translation one-shot worker failed.");
   process.exitCode = 1;
 });

@@ -1,9 +1,12 @@
 import {createInquiryNotificationWorker} from "../../src/composition/inquiries/inquiry-notification-worker";
-import {runInquiryNotificationWorkerOneShot} from "./inquiry-notification-runtime";
+import {nodeWorkerShutdownSource} from "./continuous-worker-runtime";
+import {runInquiryNotificationWorkerCommand} from "./inquiry-notification-runtime";
 
 export async function main(): Promise<void> {
-  process.exitCode = await runInquiryNotificationWorkerOneShot({
+  process.exitCode = await runInquiryNotificationWorkerCommand({
+    environment: process.env,
     createRuntime: createInquiryNotificationWorker,
+    signals: nodeWorkerShutdownSource,
     logger: console,
   });
 }

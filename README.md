@@ -26,7 +26,7 @@ Generate a migration only after an intentional schema change with `pnpm db:gener
 
 ## Local workers
 
-Run Development workers as separate, explicit processes with `pnpm dev:inquiry-notifications` and `pnpm dev:ai-fallback`. These commands load the ignored local Development environment before importing worker composition. The production-style `pnpm worker:inquiry-notifications` and `pnpm worker:ai-fallback` commands remain environment-only and do not load `.env.local`.
+Run Development workers as separate, explicit processes with `pnpm dev:inquiry-notifications`, `pnpm dev:conversation-translation`, and `pnpm dev:ai-fallback`. These commands load the ignored local Development environment before importing worker composition, then poll continuously until SIGINT or SIGTERM. The production `pnpm worker:inquiry-notifications`, `pnpm worker:conversation-translation`, and `pnpm worker:ai-fallback` commands are also long-running but remain environment-only and do not load `.env.local`. Append `:once` to a production worker command to process exactly one bounded batch for a manual diagnostic or controlled scheduled run.
 
 After a machine restart, the normal Development workflow requires no manual PowerShell environment exports:
 
@@ -40,6 +40,9 @@ pnpm dev:host
 pnpm dev:inquiry-notifications
 
 # Terminal 3
+pnpm dev:conversation-translation
+
+# Terminal 4
 pnpm dev:ai-fallback
 ```
 

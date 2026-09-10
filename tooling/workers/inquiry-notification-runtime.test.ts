@@ -7,6 +7,7 @@ import {
   readInquiryNotificationDevPollMilliseconds,
   runInquiryNotificationDevelopmentCommand,
   runInquiryNotificationDevelopmentWorker,
+  runInquiryNotificationWorkerCommand,
   runInquiryNotificationWorkerOneShot,
   type InquiryNotificationShutdownSource,
 } from "./inquiry-notification-runtime";
@@ -124,7 +125,10 @@ describe("Inquiry notification worker runtime", () => {
     });
 
     expect(order).toEqual(["execute-failed", "delay", "execute-retried", "delay"]);
-    expect(operationalLogger.error).toHaveBeenCalledWith(JSON.stringify({event: "inquiry_notification_dev_iteration_failed"}));
+    expect(operationalLogger.error).toHaveBeenCalledWith(JSON.stringify({
+      event: "inquiry_notification_dev_worker_iteration_failed",
+      retryMilliseconds: 5_000,
+    }));
     expect(JSON.stringify(operationalLogger.error.mock.calls)).not.toContain("123456:BOT_SECRET_SENTINEL");
     expect(value.close).toHaveBeenCalledTimes(1);
   });
@@ -220,5 +224,23 @@ describe("Inquiry notification worker runtime", () => {
     expect(createRuntime).toHaveBeenCalledTimes(1);
     expect(value.execute).toHaveBeenCalledTimes(1);
     expect(value.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("adapts the production command to the existing bounded Inquiry batch", async () => {
+    const signals = new FakeShutdownSignals();
+    const value = fakeRuntime();
+    const delay = vi.fn(async () => { signals.emit("SIGTERM"); });
+
+    await expect(runInquiryNotificationWorkerCommand({
+      environment: {INQUIRY_NOTIFICATION_WORKER_POLL_MS: "3000"},
+      createRuntime: () => value.runtime,
+      delay,
+      signals,
+      logger: logger(),
+    })).resolves.toBe(0);
+
+    expect(value.execute).toHaveBeenCalledOnce();
+    expect(delay).toHaveBeenCalledWith(3_000, expect.any(AbortSignal));
+    expect(value.close).toHaveBeenCalledOnce();
   });
 });

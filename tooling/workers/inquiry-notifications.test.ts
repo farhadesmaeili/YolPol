@@ -18,19 +18,21 @@ const developmentEntrypoint = resolve(repositoryPath, "tooling/workers/inquiry-n
 describe("Inquiry notification worker entrypoint", () => {
   it("accepts the configured runner's CommonJS transformation", () => {
     const packageJson = JSON.parse(readFileSync(resolve(repositoryPath, "package.json"), "utf8")) as {scripts?: Record<string, string>};
-    expect(packageJson.scripts?.["worker:inquiry-notifications"]).toBe("pnpm exec tsx tooling/workers/inquiry-notifications.ts");
+    expect(packageJson.scripts?.["worker:inquiry-notifications"]).toBe("node --conditions=react-server --import tsx tooling/workers/inquiry-notifications.ts");
+    expect(packageJson.scripts?.["worker:inquiry-notifications:once"]).toBe("node --conditions=react-server --import tsx tooling/workers/inquiry-notifications-once.ts");
 
     const source = readFileSync(entrypoint, "utf8");
     const transformed = esbuild.transformSync(source, {format: "cjs", loader: "ts", platform: "node"});
 
     expect(source).toMatch(/async function main\(\): Promise<void>/u);
+    expect(source).toContain("runInquiryNotificationWorkerCommand");
     expect(source).not.toContain("loadDevelopmentEnv");
     expect(transformed.code).toContain("main().catch");
   });
 
   it("keeps a separate CommonJS-compatible development polling entrypoint", () => {
     const packageJson = JSON.parse(readFileSync(resolve(repositoryPath, "package.json"), "utf8")) as {scripts?: Record<string, string>};
-    expect(packageJson.scripts?.["dev:inquiry-notifications"]).toBe("pnpm exec tsx tooling/workers/inquiry-notifications-dev.ts");
+    expect(packageJson.scripts?.["dev:inquiry-notifications"]).toBe("node --conditions=react-server --import tsx tooling/workers/inquiry-notifications-dev.ts");
 
     const source = readFileSync(developmentEntrypoint, "utf8");
     const transformed = esbuild.transformSync(source, {format: "cjs", loader: "ts", platform: "node"});
