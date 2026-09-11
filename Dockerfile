@@ -63,6 +63,35 @@ USER 1001:1001
 
 CMD ["node", "tooling/migrations/run-migrations.mjs"]
 
+FROM postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94 AS postgresql-operations-client
+
+FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS operations-runtime
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+RUN apk add --no-cache age jq krb5-libs libedit libldap libpq lz4-libs zstd-libs \
+    && addgroup -g 1001 yolpol \
+    && adduser -D -H -u 1001 -G yolpol -s /sbin/nologin yolpol
+
+COPY --from=postgresql-operations-client /usr/local/bin/pg_dump /usr/local/bin/pg_restore /usr/local/bin/psql /usr/local/bin/
+COPY --from=postgresql-operations-client /usr/local/lib/libpq.so.5.17 /usr/local/lib/libpq.so.5.17
+COPY --from=postgresql-operations-client /usr/local/share/postgresql /usr/local/share/postgresql
+
+RUN ln -s libpq.so.5.17 /usr/local/lib/libpq.so.5
+
+COPY --chmod=0555 tooling/backup-restore/backup-restore.sh /usr/local/bin/yolpol-backup-restore
+
+USER 1001:1001
+
+ENTRYPOINT ["/usr/local/bin/yolpol-backup-restore"]
+CMD ["help"]
+
+FROM operations-runtime AS operations-test
+
+COPY --chmod=0555 tooling/backup-restore/test-backup-restore.sh /usr/local/bin/test-yolpol-backup-restore
+
+ENTRYPOINT ["/usr/local/bin/test-yolpol-backup-restore"]
+
 FROM base AS runtime
 
 ENV NODE_ENV=production

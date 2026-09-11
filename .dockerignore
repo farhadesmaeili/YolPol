@@ -36,5 +36,8 @@ compose*.yml
 *.log
 *.pem
 *.tsbuildinfo
+**/yolpol-*.dump.age
+**/yolpol-*.manifest.json
+**/yolpol-*.partial.*
 .DS_Store
 Thumbs.db

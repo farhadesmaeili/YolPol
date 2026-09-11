@@ -21,13 +21,15 @@ describe("Staging Compose deployment contract", () => {
     const targets = [...dockerfile.matchAll(/^FROM .+ AS ([a-z-]+)$/gmu)].map((match) => match[1]);
     expect(targets).toContain("worker-runtime");
     expect(targets).toContain("migration-runtime");
+    expect(targets).toContain("operations-runtime");
+    expect(targets).toContain("operations-test");
     expect(targets.at(-1)).toBe("runtime");
     expect(serviceBlock("web")).toContain("target: runtime");
     expect(serviceBlock("inquiry-notifications")).toContain("target: worker-runtime");
     expect(serviceBlock("migrate")).toContain("target: migration-runtime");
   });
 
-  it("defines only the active Staging services and isolates the migration job", () => {
+  it("defines active services and keeps all migration/backup/restore operations explicit", () => {
     for (const service of [
       "edge",
       "web",
@@ -36,13 +38,25 @@ describe("Staging Compose deployment contract", () => {
       "conversation-translation",
       "conversation-ai-fallback",
       "migrate",
+      "backup-create",
+      "backup-verify",
+      "backup-deep-verify",
+      "backup-retention",
+      "restore",
     ]) expect(serviceBlock(service)).toBeTruthy();
 
     expect(compose).toContain("name: yolpol-staging");
     expect(serviceBlock("migrate")).toContain('profiles: ["migration"]');
     expect(serviceBlock("migrate")).toContain('restart: "no"');
+    for (const service of ["backup-create", "backup-verify", "backup-deep-verify", "backup-retention"]) {
+      expect(serviceBlock(service)).toContain('profiles: ["backup"]');
+      expect(serviceBlock(service)).toContain('restart: "no"');
+    }
+    expect(serviceBlock("restore")).toContain('profiles: ["restore"]');
+    expect(serviceBlock("restore")).toContain('restart: "no"');
+    expect(serviceBlock("backup-verify")).toContain("network_mode: none");
+    expect(serviceBlock("backup-deep-verify")).toContain("network_mode: none");
     expect(compose).not.toContain("container_name:");
-    expect(compose).not.toContain("retention:");
     expect(compose).not.toContain("channel-delivery");
   });
 
@@ -61,6 +75,8 @@ describe("Staging Compose deployment contract", () => {
     expect(serviceBlock("inquiry-notifications")).not.toContain("GROQ_API_KEY_FILE");
     expect(serviceBlock("conversation-translation")).toContain("GROQ_API_KEY_FILE: /run/secrets/groq_api_key");
     expect(serviceBlock("conversation-ai-fallback")).toContain("GROQ_API_KEY_FILE: /run/secrets/groq_api_key");
+    expect(serviceBlock("backup-deep-verify")).toContain("YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity");
+    expect(serviceBlock("restore")).toContain("YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity");
     expect(compose).not.toMatch(/(?:TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET|GROQ_API_KEY):/u);
   });
 });
