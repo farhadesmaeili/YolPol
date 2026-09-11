@@ -26,6 +26,43 @@ COPY . .
 RUN --mount=type=cache,id=corepack,target=/root/.cache/node/corepack \
     pnpm build
 
+FROM dependencies AS production-dependencies
+
+RUN --mount=type=cache,id=corepack,target=/root/.cache/node/corepack \
+    pnpm prune --prod
+
+FROM base AS worker-runtime
+
+ENV NODE_ENV=production
+
+RUN groupadd --gid 1001 nodejs \
+    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin nextjs
+
+COPY --from=production-dependencies /app/node_modules ./node_modules
+COPY package.json tsconfig.json ./
+COPY tooling/workers ./tooling/workers
+COPY src ./src
+
+USER 1001:1001
+
+CMD ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/inquiry-notifications.ts"]
+
+FROM base AS migration-runtime
+
+ENV NODE_ENV=production
+
+RUN groupadd --gid 1001 nodejs \
+    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin nextjs
+
+COPY --from=production-dependencies /app/node_modules ./node_modules
+COPY package.json ./
+COPY drizzle ./drizzle
+COPY tooling/migrations ./tooling/migrations
+
+USER 1001:1001
+
+CMD ["node", "tooling/migrations/run-migrations.mjs"]
+
 FROM base AS runtime
 
 ENV NODE_ENV=production
