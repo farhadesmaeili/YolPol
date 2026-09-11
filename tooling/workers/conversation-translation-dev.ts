@@ -8,8 +8,18 @@ export async function main(): Promise<void> {
     return;
   }
   const {createConversationTranslationWorker} = await import("../../src/composition/conversation-translation/conversation-translation-worker");
-  const {runConversationTranslationWorkerOneShot} = await import("./conversation-translation-runtime");
-  process.exitCode = await runConversationTranslationWorkerOneShot({createRuntime: createConversationTranslationWorker, logger: console});
+  const {parseDeploymentEnvironment} = await import("../../src/shared/config/deployment-environment");
+  const {nodeWorkerShutdownSource} = await import("./continuous-worker-runtime");
+  const {runConversationTranslationWorkerCommand} = await import("./conversation-translation-runtime");
+  process.exitCode = await runConversationTranslationWorkerCommand({
+    environment: process.env,
+    createRuntime: () => {
+      parseDeploymentEnvironment(process.env);
+      return createConversationTranslationWorker();
+    },
+    signals: nodeWorkerShutdownSource,
+    logger: console,
+  });
 }
 
 if (require.main === module) void main().catch(() => {
