@@ -10,6 +10,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:backup-restore": "docker build --target operations-test -t yolpol-backup-restore-test:local . && docker run --rm yolpol-backup-restore-test:local",
+    "test:backup-restore:disposable": "node tooling/backup-restore/run-disposable-validation.mjs",
     "test:integration": "node tooling/testing/run-inquiry-postgres-integration.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

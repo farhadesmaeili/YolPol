@@ -13,6 +13,25 @@ x-application-environment: &application-environment
   YOLPOL_GIT_REVISION: "${YOLPOL_GIT_REVISION:?Set YOLPOL_GIT_REVISION to the deployed Git SHA}"
   YOLPOL_LOG_LEVEL: info
 
+x-backup-operation: &backup-operation
+  image: "${YOLPOL_OPERATIONS_IMAGE_REPOSITORY:-yolpol-operations}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+    target: operations-runtime
+  restart: "no"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  mem_limit: "${YOLPOL_STAGING_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_STAGING_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
 services:
   edge:
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
@@ -197,6 +216,96 @@ services:
     pids_limit: 100
     logging: *json-logging
 
+  backup-create:
+    <<: *backup-operation
+    profiles: ["backup"]
+    restart: "no"
+    command: ["create"]
+    env_file:
+      - path: "${YOLPOL_STAGING_BACKUP_DATABASE_ENV_FILE:?Set YOLPOL_STAGING_BACKUP_DATABASE_ENV_FILE}"
+        required: false
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: staging
+      YOLPOL_GIT_REVISION: "${YOLPOL_GIT_REVISION:?Set YOLPOL_GIT_REVISION to the deployed Git SHA}"
+      YOLPOL_BACKUP_AGE_RECIPIENT: "${YOLPOL_STAGING_BACKUP_AGE_RECIPIENT:-}"
+    volumes:
+      - type: bind
+        source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  backup-verify:
+    <<: *backup-operation
+    profiles: ["backup"]
+    restart: "no"
+    command: ["help"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+    volumes:
+      - type: bind
+        source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+        read_only: true
+    network_mode: none
+
+  backup-deep-verify:
+    <<: *backup-operation
+    profiles: ["backup"]
+    restart: "no"
+    command: ["help"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity
+    secrets:
+      - backup_age_identity
+    volumes:
+      - type: bind
+        source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+        read_only: true
+    network_mode: none
+
+  backup-retention:
+    <<: *backup-operation
+    profiles: ["backup"]
+    restart: "no"
+    command: ["prune"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: staging
+      YOLPOL_BACKUP_RETENTION_COUNT: "${YOLPOL_STAGING_BACKUP_RETENTION_COUNT:-14}"
+    volumes:
+      - type: bind
+        source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+    network_mode: none
+
+  restore:
+    <<: *backup-operation
+    profiles: ["restore"]
+    restart: "no"
+    command: ["help"]
+    env_file:
+      - path: "${YOLPOL_STAGING_RESTORE_DATABASE_ENV_FILE:?Set YOLPOL_STAGING_RESTORE_DATABASE_ENV_FILE}"
+        required: false
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity
+    secrets:
+      - backup_age_identity
+    volumes:
+      - type: bind
+        source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+        read_only: true
+    networks:
+      - backend
+
 networks:
   edge:
   backend:
@@ -215,3 +324,5 @@ secrets:
     file: "${YOLPOL_STAGING_TELEGRAM_WEBHOOK_SECRET_FILE:?Set YOLPOL_STAGING_TELEGRAM_WEBHOOK_SECRET_FILE}"
   groq_api_key:
     file: "${YOLPOL_STAGING_GROQ_API_KEY_FILE:?Set YOLPOL_STAGING_GROQ_API_KEY_FILE}"
+  backup_age_identity:
+    file: "${YOLPOL_STAGING_BACKUP_AGE_IDENTITY_FILE:?Set YOLPOL_STAGING_BACKUP_AGE_IDENTITY_FILE}"

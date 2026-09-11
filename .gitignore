@@ -35,6 +35,10 @@ yarn-error.log*
 !.env.example
 /deploy/staging/runtime.env
 /deploy/staging/secrets/
+/backups/
+**/yolpol-*.dump.age
+**/yolpol-*.manifest.json
+**/yolpol-*.partial.*
 
 # vercel
 .vercel
