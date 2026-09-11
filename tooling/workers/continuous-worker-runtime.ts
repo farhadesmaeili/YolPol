@@ -1,3 +1,8 @@
+import {
+  createStructuredLogger,
+  type StructuredLogger,
+} from "../../src/shared/infrastructure/observability/structured-logger";
+
 const shutdownSignals = ["SIGINT", "SIGTERM"] as const;
 
 export const defaultWorkerPollMilliseconds = 2_000;
@@ -11,10 +16,7 @@ export type ContinuousWorkerRuntime<TResult> = Readonly<{
   close(): Promise<void>;
 }>;
 
-export type WorkerOperationalLogger = Readonly<{
-  info(message: string): void;
-  error(message: string): void;
-}>;
+export type WorkerOperationalLogger = Pick<StructuredLogger, "info" | "error">;
 
 export type WorkerShutdownSource = Readonly<{
   on(signal: WorkerShutdownSignal, listener: () => void): void;
@@ -27,6 +29,17 @@ export const nodeWorkerShutdownSource: WorkerShutdownSource = Object.freeze({
   on: (signal, listener) => { process.on(signal, listener); },
   off: (signal, listener) => { process.off(signal, listener); },
 });
+
+export function createWorkerOperationalLogger(service: string): StructuredLogger {
+  return createStructuredLogger({service});
+}
+
+export function logUnhandledWorkerFailure(service: string): void {
+  createStructuredLogger({
+    service,
+    environment: {NODE_ENV: process.env.NODE_ENV, YOLPOL_LOG_LEVEL: "info"},
+  }).error("worker.unhandled_failure");
+}
 
 export function readWorkerPollMilliseconds(input: Readonly<{
   environment: Readonly<Record<string, string | undefined>>;
@@ -78,7 +91,7 @@ export async function runContinuousWorker<TResult>(input: Readonly<{
   try {
     runtime = input.createRuntime();
   } catch {
-    input.logger.error(JSON.stringify({event: `${input.workerName}_startup_failed`}));
+    input.logger.error("worker.startup_failed", {worker: input.workerName});
     return 1;
   }
 
@@ -92,7 +105,7 @@ export async function runContinuousWorker<TResult>(input: Readonly<{
   const requestShutdown = (signal: WorkerShutdownSignal) => {
     if (shutdownRequested) return;
     shutdownRequested = true;
-    input.logger.info(JSON.stringify({event: `${input.workerName}_stopping`, signal}));
+    input.logger.info("worker.stopping", {worker: input.workerName, signal});
     abortDelay.abort();
   };
 
@@ -102,7 +115,7 @@ export async function runContinuousWorker<TResult>(input: Readonly<{
       input.signals.on(signal, listener);
       registeredSignals.push({signal, listener});
     }
-    input.logger.info(JSON.stringify({event: `${input.workerName}_started`, pollMilliseconds: input.pollMilliseconds}));
+    input.logger.info("worker.started", {worker: input.workerName, pollMilliseconds: input.pollMilliseconds});
 
     while (!shutdownRequested) {
       let waitMilliseconds = input.pollMilliseconds;
@@ -111,29 +124,29 @@ export async function runContinuousWorker<TResult>(input: Readonly<{
         consecutiveFailures = 0;
         const summary = input.summarize(result);
         if ((summary.claimed ?? 0) > 0) {
-          input.logger.info(JSON.stringify({event: `${input.workerName}_iteration_completed`, ...summary}));
+          input.logger.info("worker.iteration_completed", {worker: input.workerName, ...summary});
         }
       } catch {
         consecutiveFailures += 1;
         waitMilliseconds = workerFailureDelayMilliseconds(input.pollMilliseconds, consecutiveFailures);
-        input.logger.error(JSON.stringify({event: `${input.workerName}_iteration_failed`, retryMilliseconds: waitMilliseconds}));
+        input.logger.error("worker.iteration_failed", {worker: input.workerName, retryMilliseconds: waitMilliseconds});
       }
       if (!shutdownRequested) await delay(waitMilliseconds, abortDelay.signal);
     }
   } catch {
-    input.logger.error(JSON.stringify({event: `${input.workerName}_runtime_failed`}));
+    input.logger.error("worker.runtime_failed", {worker: input.workerName});
     exitCode = 1;
   } finally {
     for (const {signal, listener} of registeredSignals) input.signals.off(signal, listener);
     try {
       await runtime.close();
     } catch {
-      input.logger.error(JSON.stringify({event: `${input.workerName}_shutdown_failed`}));
+      input.logger.error("worker.shutdown_failed", {worker: input.workerName});
       exitCode = 1;
     }
   }
 
-  input.logger.info(JSON.stringify({event: `${input.workerName}_stopped`}));
+  input.logger.info("worker.stopped", {worker: input.workerName});
   return exitCode;
 }
 
@@ -156,16 +169,17 @@ export async function runConfiguredContinuousWorker<TResult>(input: Readonly<{
       defaultMilliseconds: input.defaultPollMilliseconds,
     });
   } catch {
-    input.logger.error(JSON.stringify({event: `${input.workerName}_startup_failed`}));
+    input.logger.error("worker.startup_failed", {worker: input.workerName});
     return 1;
   }
   return runContinuousWorker({...input, pollMilliseconds});
 }
 
 export async function runWorkerOneShot<TResult>(input: Readonly<{
+  workerName: string;
   createRuntime(): ContinuousWorkerRuntime<TResult>;
+  summarize(result: TResult): Readonly<Record<string, number>>;
   isFailure(result: TResult): boolean;
-  failureMessage: string;
   logger: WorkerOperationalLogger;
 }>): Promise<number> {
   let runtime: ContinuousWorkerRuntime<TResult> | undefined;
@@ -173,14 +187,17 @@ export async function runWorkerOneShot<TResult>(input: Readonly<{
   try {
     runtime = input.createRuntime();
     const result = await runtime.worker.execute();
-    input.logger.info(JSON.stringify(result));
+    input.logger.info("worker.once_completed", {worker: input.workerName, ...input.summarize(result)});
     if (input.isFailure(result)) exitCode = 1;
   } catch {
-    input.logger.error(input.failureMessage);
+    input.logger.error("worker.once_failed", {worker: input.workerName});
     exitCode = 1;
   } finally {
     try { await runtime?.close(); }
-    catch { exitCode = 1; }
+    catch {
+      input.logger.error("worker.shutdown_failed", {worker: input.workerName});
+      exitCode = 1;
+    }
   }
   return exitCode;
 }

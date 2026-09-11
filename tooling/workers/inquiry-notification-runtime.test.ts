@@ -63,7 +63,10 @@ describe("Inquiry notification worker runtime", () => {
     expect(createRuntime).toHaveBeenCalledTimes(1);
     expect(value.execute).toHaveBeenCalledTimes(1);
     expect(value.close).toHaveBeenCalledTimes(1);
-    expect(operationalLogger.info).toHaveBeenCalledWith(JSON.stringify(emptyResult));
+    expect(operationalLogger.info).toHaveBeenCalledWith("worker.once_completed", {
+      worker: "inquiry_notification_worker",
+      ...emptyResult,
+    });
   });
 
   it("closes one-shot resources exactly once after a safe failure", async () => {
@@ -72,7 +75,7 @@ describe("Inquiry notification worker runtime", () => {
 
     await expect(runInquiryNotificationWorkerOneShot({createRuntime: () => value.runtime, logger: operationalLogger})).resolves.toBe(1);
     expect(value.close).toHaveBeenCalledTimes(1);
-    expect(operationalLogger.error).toHaveBeenCalledWith("Inquiry notification worker failed.");
+    expect(operationalLogger.error).toHaveBeenCalledWith("worker.once_failed", {worker: "inquiry_notification_worker"});
     expect(JSON.stringify(operationalLogger.error.mock.calls)).not.toContain("postgresql://secret@example.test/yolpol");
   });
 
@@ -125,10 +128,10 @@ describe("Inquiry notification worker runtime", () => {
     });
 
     expect(order).toEqual(["execute-failed", "delay", "execute-retried", "delay"]);
-    expect(operationalLogger.error).toHaveBeenCalledWith(JSON.stringify({
-      event: "inquiry_notification_dev_worker_iteration_failed",
+    expect(operationalLogger.error).toHaveBeenCalledWith("worker.iteration_failed", {
+      worker: "inquiry_notification_dev_worker",
       retryMilliseconds: 5_000,
-    }));
+    });
     expect(JSON.stringify(operationalLogger.error.mock.calls)).not.toContain("123456:BOT_SECRET_SENTINEL");
     expect(value.close).toHaveBeenCalledTimes(1);
   });
@@ -204,7 +207,10 @@ describe("Inquiry notification worker runtime", () => {
 
     expect(createRuntime).not.toHaveBeenCalled();
     expect(signals.listenerCount()).toBe(0);
-    expect(operationalLogger.error).toHaveBeenCalledWith("Inquiry notification development worker is unavailable in production.");
+    expect(operationalLogger.error).toHaveBeenCalledWith("worker.startup_failed", {
+      worker: "inquiry_notification_dev_worker",
+      reason: "production_environment",
+    });
   });
 
   it("keeps the development command available when NODE_ENV is not production", async () => {
