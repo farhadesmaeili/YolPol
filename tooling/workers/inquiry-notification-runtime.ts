@@ -44,7 +44,8 @@ export async function runInquiryNotificationWorkerOneShot(input: Readonly<{
 }>): Promise<number> {
   return runWorkerOneShot({
     ...input,
-    failureMessage: "Inquiry notification worker failed.",
+    workerName: "inquiry_notification_worker",
+    summarize,
     isFailure: (result) => result.scheduledForRetry > 0 || result.permanentFailures > 0 || result.unknown > 0,
   });
 }
@@ -98,7 +99,7 @@ export async function runInquiryNotificationDevelopmentCommand(input: Readonly<{
   logger: InquiryNotificationOperationalLogger;
 }>): Promise<number> {
   if (input.environment.NODE_ENV === "production") {
-    input.logger.error("Inquiry notification development worker is unavailable in production.");
+    input.logger.error("worker.startup_failed", {worker: "inquiry_notification_dev_worker", reason: "production_environment"});
     return 1;
   }
   try {
@@ -110,7 +111,7 @@ export async function runInquiryNotificationDevelopmentCommand(input: Readonly<{
       logger: input.logger,
     });
   } catch {
-    input.logger.error("Inquiry notification development worker failed.");
+    input.logger.error("worker.startup_failed", {worker: "inquiry_notification_dev_worker"});
     return 1;
   }
 }

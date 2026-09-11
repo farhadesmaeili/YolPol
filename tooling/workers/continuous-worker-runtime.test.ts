@@ -65,7 +65,7 @@ describe("continuous worker runtime", () => {
     expect(createRuntime).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     expect(signals.listenerCount()).toBe(0);
-    expect(operationalLogger.info).not.toHaveBeenCalledWith(expect.stringContaining("iteration_completed"));
+    expect(operationalLogger.info).not.toHaveBeenCalledWith("worker.iteration_completed", expect.anything());
   });
 
   it.each(["SIGINT", "SIGTERM"] as const)("lets the active iteration finish after %s", async (signal) => {
@@ -98,8 +98,8 @@ describe("continuous worker runtime", () => {
     expect(execute).toHaveBeenCalledOnce();
     expect(delay).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
-    expect(operationalLogger.info).toHaveBeenCalledWith(JSON.stringify({event: "test_worker_stopping", signal}));
-    expect(operationalLogger.info).toHaveBeenCalledWith(JSON.stringify({event: "test_worker_stopped"}));
+    expect(operationalLogger.info).toHaveBeenCalledWith("worker.stopping", {worker: "test_worker", signal});
+    expect(operationalLogger.info).toHaveBeenCalledWith("worker.stopped", {worker: "test_worker"});
   });
 
   it("backs off repeated unexpected failures and never logs their details", async () => {
@@ -174,7 +174,7 @@ describe("continuous worker runtime", () => {
       signals,
       logger: operationalLogger,
     })).resolves.toBe(1);
-    expect(operationalLogger.error).toHaveBeenCalledWith(JSON.stringify({event: "test_worker_shutdown_failed"}));
+    expect(operationalLogger.error).toHaveBeenCalledWith("worker.shutdown_failed", {worker: "test_worker"});
   });
 
   it("validates bounded integer polling and caps failure backoff", () => {

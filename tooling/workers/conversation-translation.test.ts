@@ -37,10 +37,16 @@ describe("Conversation translation worker boundaries", () => {
   it("closes resources and logs only aggregate counters or a generic error", async () => {
     const close = vi.fn().mockResolvedValue(undefined); const info = vi.fn(); const error = vi.fn();
     expect(await runConversationTranslationWorkerOneShot({createRuntime: () => ({close, worker: {execute: async () => ({claimed: 1, succeeded: 1, failed: 0, skipped: 0})}}), logger: {info, error}})).toBe(0);
-    expect(info).toHaveBeenCalledWith('{"claimed":1,"succeeded":1,"failed":0,"skipped":0}');
+    expect(info).toHaveBeenCalledWith("worker.once_completed", {
+      worker: "conversation_translation_worker",
+      claimed: 1,
+      succeeded: 1,
+      failed: 0,
+      skipped: 0,
+    });
     expect(close).toHaveBeenCalledOnce();
     expect(await runConversationTranslationWorkerOneShot({createRuntime: () => ({close, worker: {execute: async () => { throw new Error("Private content must not be logged"); }}}), logger: {info, error}})).toBe(1);
-    expect(error).toHaveBeenCalledExactlyOnceWith("Conversation translation worker failed.");
+    expect(error).toHaveBeenCalledExactlyOnceWith("worker.once_failed", {worker: "conversation_translation_worker"});
     expect(close).toHaveBeenCalledTimes(2);
   });
 });

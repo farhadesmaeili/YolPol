@@ -17,7 +17,12 @@ export async function runConversationTranslationWorkerOneShot(input: Readonly<{
   createRuntime(): TranslationWorkerRuntime;
   logger: WorkerOperationalLogger;
 }>): Promise<number> {
-  return runWorkerOneShot({...input, failureMessage: "Conversation translation worker failed.", isFailure: (result) => result.failed > 0});
+  return runWorkerOneShot({
+    ...input,
+    workerName: "conversation_translation_worker",
+    summarize: (result) => result,
+    isFailure: (result) => result.failed > 0,
+  });
 }
 
 export function runConversationTranslationWorkerCommand(input: Readonly<{
