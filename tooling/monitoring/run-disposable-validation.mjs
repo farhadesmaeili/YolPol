@@ -30,8 +30,7 @@ const run = (command, args, options = {}) => execFileSync(command, args, {
 const docker = (args, options) => run("docker", args, options);
 const composeEnvironment = {
   ...process.env,
-  YOLPOL_MONITORING_IMAGE_TAG: "validation-0059",
-  YOLPOL_MONITORING_OPERATIONS_IMAGE_REPOSITORY: "yolpol-operations-metrics",
+  YOLPOL_OPERATIONS_METRICS_IMAGE: "yolpol-operations-metrics:local",
   YOLPOL_MONITORING_BIND_ADDRESS: "127.0.0.1",
   YOLPOL_PROMETHEUS_PORT: "19090",
   YOLPOL_ALERTMANAGER_PORT: "19093",

@@ -1,5 +1,13 @@
 FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS base
 
+ARG YOLPOL_SOURCE_URL="https://github.com/farhadesmaeili/YolPol"
+ARG YOLPOL_GIT_REVISION="unknown"
+ARG YOLPOL_RELEASE_VERSION="development"
+
+LABEL org.opencontainers.image.source=$YOLPOL_SOURCE_URL \
+      org.opencontainers.image.revision=$YOLPOL_GIT_REVISION \
+      org.opencontainers.image.version=$YOLPOL_RELEASE_VERSION
+
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -92,6 +100,14 @@ CMD ["node", "operations-metrics.cjs"]
 FROM postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94 AS postgresql-operations-client
 
 FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS operations-runtime
+
+ARG YOLPOL_SOURCE_URL="https://github.com/farhadesmaeili/YolPol"
+ARG YOLPOL_GIT_REVISION="unknown"
+ARG YOLPOL_RELEASE_VERSION="development"
+
+LABEL org.opencontainers.image.source=$YOLPOL_SOURCE_URL \
+      org.opencontainers.image.revision=$YOLPOL_GIT_REVISION \
+      org.opencontainers.image.version=$YOLPOL_RELEASE_VERSION
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 

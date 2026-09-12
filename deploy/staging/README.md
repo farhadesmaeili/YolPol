@@ -27,7 +27,9 @@ The intended server layout is:
     backups/                  encrypted artifacts and adjacent manifests only
 ```
 
-Create `runtime.env` from `runtime.env.example`, replace its revision/tag and paths, and keep it outside Git. The `secrets` directory should be accessible only to the deployment operator (for example mode `700`). Secret files and database env files should be mode `600`, or equivalently restricted. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; on Linux, the deployment service identity must own the credential files as host UID/GID 1001, or a restrictive ACL/group mapping must grant container UID 1001 read access. Verify this exact non-root read path on the target host before activation.
+Create `runtime.env` from `runtime.env.example`, copy its full Git revision and five immutable image references from one checksum-verified release manifest, replace its paths, and keep it outside Git. The Staging project uses the web, worker, migration, and backup/restore refs; Monitoring consumes the fifth Operations Metrics ref. SemVer tags are readable aliases only. Future deployment must use `repository@sha256:digest` values and `docker compose --no-build`; it must never use `latest` or rebuild a release on the server. Local validation can omit the image variables and retain the Compose `build` definitions plus explicit `:local` defaults.
+
+The `secrets` directory should be accessible only to the deployment operator (for example mode `700`). Secret files and database env files should be mode `600`, or equivalently restricted. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; on Linux, the deployment service identity must own the credential files as host UID/GID 1001, or a restrictive ACL/group mapping must grant container UID 1001 read access. Verify this exact non-root read path on the target host before activation.
 
 `postgres.env` contains only the PostgreSQL image initialization variables `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The application, migration, backup, and explicit restore-target database environment files each contain only a complete `DATABASE_URL`. Do not place any of those values in `runtime.env`, Compose YAML, shell history, or Git. `restore-database.env` must identify a separately provisioned empty recovery database, never the currently active Staging database.
 
@@ -44,7 +46,7 @@ The root Dockerfile has four runtime targets:
 
 Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, and restore services are also profile-gated one-shot tools. None starts during a normal `up`.
 
-## Release order
+## Local build and future release order
 
 Run commands from this directory, using the host-only settings file:
 
@@ -59,6 +61,8 @@ docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration ru
 docker compose --env-file /opt/yolpol/staging/runtime.env up -d web inquiry-notifications conversation-translation conversation-ai-fallback
 docker compose --env-file /opt/yolpol/staging/runtime.env up -d edge
 ```
+
+The first line is local validation only. On the future server, verify the release manifest checksum, populate the digest refs, and replace it with `docker compose --env-file /opt/yolpol/staging/runtime.env --no-build pull`. Add `--no-build` to release `run` and `up` commands so promotion consumes the published artifacts without rebuilding. The full release, promotion, pre-migration backup, and rollback procedures live in `deploy/release/README.md`.
 
 The migration runner uses the committed Drizzle migrations and holds a PostgreSQL advisory lock for the entire operation. A second migration waits rather than racing. Migration failure exits non-zero; no application service mutates the schema. Readiness remains responsible for rejecting a database older than `0022_global_translation_settings`. Production must treat the backup, verification, off-server durability confirmation, migration, and readiness checks as one explicit release gate; backup is never hidden inside application or migration startup.
 
