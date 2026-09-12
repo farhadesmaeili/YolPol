@@ -1,0 +1,215 @@
+name: yolpol-monitoring
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "${YOLPOL_MONITORING_LOG_MAX_SIZE:-10m}"
+    max-file: "${YOLPOL_MONITORING_LOG_MAX_FILES:-3}"
+
+x-service-security: &service-security
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  logging: *json-logging
+
+services:
+  prometheus:
+    <<: *service-security
+    image: quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${YOLPOL_PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${YOLPOL_PROMETHEUS_RETENTION_SIZE:-2GB}
+      - --web.listen-address=0.0.0.0:9090
+    ports:
+      - "${YOLPOL_MONITORING_BIND_ADDRESS:-127.0.0.1}:${YOLPOL_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    networks:
+      - monitoring
+    mem_limit: "${YOLPOL_PROMETHEUS_MEMORY_LIMIT:-512m}"
+    cpus: "${YOLPOL_PROMETHEUS_CPU_LIMIT:-0.50}"
+    pids_limit: 150
+
+  alertmanager:
+    <<: *service-security
+    image: quay.io/prometheus/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=${YOLPOL_ALERTMANAGER_RETENTION:-120h}
+      - --web.listen-address=0.0.0.0:9093
+    ports:
+      - "${YOLPOL_MONITORING_BIND_ADDRESS:-127.0.0.1}:${YOLPOL_ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ${YOLPOL_ALERTMANAGER_CONFIG_FILE:-./alertmanager/alertmanager.local.yml}:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    secrets:
+      - alert_telegram_bot_token
+      - alert_telegram_chat_id
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    networks:
+      - monitoring
+      - alert_egress
+    mem_limit: "${YOLPOL_ALERTMANAGER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_ALERTMANAGER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
+  node-exporter:
+    <<: *service-security
+    image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    restart: unless-stopped
+    user: "65534:65534"
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run/credentials/.+|sys|var/lib/docker/.+)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    networks:
+      - monitoring
+    mem_limit: "${YOLPOL_NODE_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_NODE_EXPORTER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
+  cadvisor:
+    <<: *service-security
+    image: ghcr.io/google/cadvisor:v0.60.5@sha256:763aecf1c32c2be8a1a75f9abfc2fc461005c9dbbaa39cb356b354aac1296dbe
+    restart: unless-stopped
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,perf_event,process,referenced_memory,resctrl,sched,tcp,udp
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+    mem_limit: "${YOLPOL_CADVISOR_MEMORY_LIMIT:-256m}"
+    cpus: "${YOLPOL_CADVISOR_CPU_LIMIT:-0.30}"
+    pids_limit: 150
+
+  postgres-exporter:
+    <<: *service-security
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
+    restart: unless-stopped
+    command:
+      - --log.format=json
+      - --no-collector.locks
+      - --no-collector.replication
+      - --no-collector.replication_slots
+      - --no-collector.stat_archiver
+      - --no-collector.stat_bgwriter
+      - --no-collector.stat_progress_vacuum
+      - --no-collector.stat_replication
+      - --no-collector.stat_user_tables
+      - --no-collector.statio_user_tables
+      - --no-collector.wal
+    environment:
+      DATA_SOURCE_URI_FILE: /run/secrets/staging_postgres_exporter_uri
+      DATA_SOURCE_USER_FILE: /run/secrets/staging_postgres_exporter_user
+      DATA_SOURCE_PASS_FILE: /run/secrets/staging_postgres_exporter_password
+      PG_EXPORTER_COLLECTION_TIMEOUT: 5s
+    secrets:
+      - staging_postgres_exporter_uri
+      - staging_postgres_exporter_user
+      - staging_postgres_exporter_password
+    networks:
+      - monitoring
+      - staging_backend
+    mem_limit: "${YOLPOL_POSTGRES_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_POSTGRES_EXPORTER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
+  blackbox-exporter:
+    <<: *service-security
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+    restart: unless-stopped
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    networks:
+      - monitoring
+      - staging_edge
+    mem_limit: "${YOLPOL_BLACKBOX_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_BLACKBOX_EXPORTER_CPU_LIMIT:-0.10}"
+    pids_limit: 100
+
+  operations-exporter:
+    <<: *service-security
+    image: "${YOLPOL_MONITORING_OPERATIONS_IMAGE_REPOSITORY:-yolpol-operations-metrics}:${YOLPOL_MONITORING_IMAGE_TAG:?Set YOLPOL_MONITORING_IMAGE_TAG to the deployed Git SHA}"
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: monitoring-runtime
+    restart: unless-stopped
+    environment:
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: staging
+      YOLPOL_MONITORING_DATABASE_URL_FILE: /run/secrets/staging_operations_database_url
+      YOLPOL_MONITORING_BACKUP_ENABLED: "${YOLPOL_MONITORING_STAGING_BACKUP_ENABLED:-false}"
+      YOLPOL_MONITORING_BACKUP_DIRECTORY: /backups
+      YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS: "${YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS:-300000}"
+      YOLPOL_MONITORING_PORT: "9464"
+    secrets:
+      - staging_operations_database_url
+    volumes:
+      - type: bind
+        source: "${YOLPOL_MONITORING_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
+        target: /backups
+        read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    networks:
+      - monitoring
+      - staging_backend
+    mem_limit: "${YOLPOL_OPERATIONS_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_OPERATIONS_EXPORTER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
+networks:
+  monitoring:
+    internal: true
+  alert_egress:
+  staging_edge:
+    external: true
+    name: "${YOLPOL_MONITORING_STAGING_EDGE_NETWORK:-yolpol-staging_edge}"
+  staging_backend:
+    external: true
+    name: "${YOLPOL_MONITORING_STAGING_BACKEND_NETWORK:-yolpol-staging_backend}"
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+
+secrets:
+  alert_telegram_bot_token:
+    file: "${YOLPOL_MONITORING_TELEGRAM_BOT_TOKEN_FILE:?Set YOLPOL_MONITORING_TELEGRAM_BOT_TOKEN_FILE}"
+  alert_telegram_chat_id:
+    file: "${YOLPOL_MONITORING_TELEGRAM_CHAT_ID_FILE:?Set YOLPOL_MONITORING_TELEGRAM_CHAT_ID_FILE}"
+  staging_postgres_exporter_uri:
+    file: "${YOLPOL_MONITORING_STAGING_POSTGRES_URI_FILE:?Set YOLPOL_MONITORING_STAGING_POSTGRES_URI_FILE}"
+  staging_postgres_exporter_user:
+    file: "${YOLPOL_MONITORING_STAGING_POSTGRES_USER_FILE:?Set YOLPOL_MONITORING_STAGING_POSTGRES_USER_FILE}"
+  staging_postgres_exporter_password:
+    file: "${YOLPOL_MONITORING_STAGING_POSTGRES_PASSWORD_FILE:?Set YOLPOL_MONITORING_STAGING_POSTGRES_PASSWORD_FILE}"
+  staging_operations_database_url:
+    file: "${YOLPOL_MONITORING_STAGING_OPERATIONS_DATABASE_URL_FILE:?Set YOLPOL_MONITORING_STAGING_OPERATIONS_DATABASE_URL_FILE}"

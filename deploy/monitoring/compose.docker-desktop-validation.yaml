@@ -1,0 +1,7 @@
+# Docker Desktop does not support the Linux host root mount's rslave propagation.
+# This override is only for the disposable validation harness; production keeps
+# the rslave mount declared in compose.yaml.
+services:
+  node-exporter:
+    volumes:
+      - /:/host/root:ro
