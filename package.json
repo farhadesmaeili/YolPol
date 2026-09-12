@@ -14,6 +14,7 @@
     "test:backup-restore:disposable": "node tooling/backup-restore/run-disposable-validation.mjs",
     "test:monitoring": "vitest run tooling/monitoring",
     "test:monitoring:disposable": "node tooling/monitoring/run-disposable-validation.mjs",
+    "test:release": "vitest run tooling/release",
     "test:integration": "node tooling/testing/run-inquiry-postgres-integration.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -32,7 +33,14 @@
     "dev:inquiry-notifications": "node --conditions=react-server --import tsx tooling/workers/inquiry-notifications-dev.ts",
     "dev:ai-fallback": "node --conditions=react-server --import tsx tooling/workers/conversation-ai-fallback-dev.ts",
     "telegram:webhook:set": "pnpm exec tsx tooling/telegram/set-telegram-webhook.ts",
-    "telegram:webhook:info": "pnpm exec tsx tooling/telegram/get-telegram-webhook-info.ts"
+    "telegram:webhook:info": "pnpm exec tsx tooling/telegram/get-telegram-webhook-info.ts",
+    "release:validate-tag": "pnpm exec tsx tooling/release/cli.ts validate-tag",
+    "release:migration-fingerprint": "pnpm exec tsx tooling/release/cli.ts migration-fingerprint",
+    "release:manifest:generate": "pnpm exec tsx tooling/release/cli.ts generate-manifest",
+    "release:manifest:validate": "pnpm exec tsx tooling/release/cli.ts validate-manifest",
+    "release:manifest:checksum": "pnpm exec tsx tooling/release/cli.ts checksum",
+    "release:manifest:verify": "pnpm exec tsx tooling/release/cli.ts verify-checksum",
+    "release:rollback:plan": "pnpm exec tsx tooling/release/cli.ts plan-rollback"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

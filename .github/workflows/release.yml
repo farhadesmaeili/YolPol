@@ -1,0 +1,346 @@
+name: Release Publication
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  validate:
+    name: Validate release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      git_sha: ${{ steps.metadata.outputs.git_sha }}
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate tag and package version
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm release:validate-tag --tag "$GITHUB_REF_NAME"
+          version="$(node -p "require('./package.json').version")"
+          git_sha="$(git rev-parse "$GITHUB_REF_NAME^{commit}")"
+          [[ "$git_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'git_sha=%s\n' "$git_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tagged commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${{ steps.metadata.outputs.git_sha }}" refs/remotes/origin/main
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run isolated integration tests
+        run: pnpm test:integration
+        env:
+          POSTGRES_TEST_PORT: "55432"
+          POSTGRES_TEST_DB: yolpol_integration
+          POSTGRES_TEST_USER: yolpol_test
+          POSTGRES_TEST_PASSWORD: release-validation-only
+
+      - name: Validate Drizzle migrations
+        run: pnpm db:check
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgresql://yolpol_release:release-validation-only@127.0.0.1:1/yolpol_release
+
+      - name: Build production application
+        run: pnpm build
+
+  publish-images:
+    name: Publish ${{ matrix.role }} image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: web
+            target: runtime
+            package: yolpol-web
+          - role: worker
+            target: worker-runtime
+            package: yolpol-worker
+          - role: migration
+            target: migration-runtime
+            package: yolpol-migration
+          - role: backup-restore
+            target: operations-runtime
+            package: yolpol-backup-restore
+          - role: operations-metrics
+            target: monitoring-runtime
+            package: yolpol-operations-metrics
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.git_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve publication references
+        id: refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          repository="ghcr.io/${owner}/${{ matrix.package }}"
+          printf 'repository=%s\n' "$repository" >> "$GITHUB_OUTPUT"
+          printf 'sha_ref=%s:sha-%s\n' "$repository" "${{ needs.validate.outputs.git_sha }}" >> "$GITHUB_OUTPUT"
+          printf 'semver_ref=%s:%s\n' "$repository" "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing SHA identity
+        id: existing-sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "${{ steps.refs.outputs.sha_ref }}" >inspect.out 2>inspect.err; then
+            cat inspect.out
+            printf 'exists=true\n' >> "$GITHUB_OUTPUT"
+          elif grep -Eqi 'manifest unknown|not found' inspect.err; then
+            printf 'exists=false\n' >> "$GITHUB_OUTPUT"
+          else
+            cat inspect.err >&2
+            exit 1
+          fi
+
+      - name: Verify existing SHA image metadata
+        if: steps.existing-sha.outputs.exists == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "${{ steps.refs.outputs.sha_ref }}"
+          architecture="$(docker image inspect --format '{{.Architecture}}' "${{ steps.refs.outputs.sha_ref }}")"
+          source="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.source"}}' "${{ steps.refs.outputs.sha_ref }}")"
+          revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${{ steps.refs.outputs.sha_ref }}")"
+          version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "${{ steps.refs.outputs.sha_ref }}")"
+          test "$architecture" = "amd64"
+          test "$source" = "${{ github.server_url }}/${{ github.repository }}"
+          test "$revision" = "${{ needs.validate.outputs.git_sha }}"
+          test "$version" = "${{ needs.validate.outputs.version }}"
+
+      - name: Build and publish SHA identity
+        if: steps.existing-sha.outputs.exists == 'false'
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.refs.outputs.sha_ref }}
+          build-args: |
+            YOLPOL_SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+            YOLPOL_GIT_REVISION=${{ needs.validate.outputs.git_sha }}
+            YOLPOL_RELEASE_VERSION=${{ needs.validate.outputs.version }}
+          cache-from: type=gha,scope=release-${{ matrix.role }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.role }}
+
+      - name: Resolve immutable digest
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest="$(docker buildx imagetools inspect "${{ steps.refs.outputs.sha_ref }}" --format '{{json .Manifest}}' | jq -er '.digest')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'value=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Check existing SemVer alias
+        id: existing-semver
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "${{ steps.refs.outputs.semver_ref }}" >inspect.out 2>inspect.err; then
+            cat inspect.out
+            printf 'exists=true\n' >> "$GITHUB_OUTPUT"
+          elif grep -Eqi 'manifest unknown|not found' inspect.err; then
+            printf 'exists=false\n' >> "$GITHUB_OUTPUT"
+          else
+            cat inspect.err >&2
+            exit 1
+          fi
+
+      - name: Verify existing SemVer alias is unchanged
+        if: steps.existing-semver.outputs.exists == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(docker buildx imagetools inspect "${{ steps.refs.outputs.semver_ref }}" --format '{{json .Manifest}}' | jq -er '.digest')"
+          test "$existing" = "${{ steps.digest.outputs.value }}"
+
+      - name: Create SemVer alias from immutable digest
+        if: steps.existing-semver.outputs.exists == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create --prefer-index=false \
+            --tag "${{ steps.refs.outputs.semver_ref }}" \
+            "${{ steps.refs.outputs.repository }}@${{ steps.digest.outputs.value }}"
+          created="$(docker buildx imagetools inspect "${{ steps.refs.outputs.semver_ref }}" --format '{{json .Manifest}}' | jq -er '.digest')"
+          test "$created" = "${{ steps.digest.outputs.value }}"
+
+      - name: Create image manifest input
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-image
+          jq -n \
+            --arg role "${{ matrix.role }}" \
+            --arg repository "${{ steps.refs.outputs.repository }}" \
+            --arg digest "${{ steps.digest.outputs.value }}" \
+            '{role: $role, repository: $repository, digest: $digest}' \
+            > "release-image/${{ matrix.role }}.json"
+
+      - name: Upload image manifest input
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-image-${{ matrix.role }}
+          path: release-image/${{ matrix.role }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create release manifest
+    needs: [validate, publish-images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.git_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download published image records
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-image-*
+          path: release-images
+          merge-multiple: true
+
+      - name: Generate and verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          pnpm release:manifest:generate \
+            --tag "$GITHUB_REF_NAME" \
+            --git-sha "${{ needs.validate.outputs.git_sha }}" \
+            --repository "${{ github.server_url }}/${{ github.repository }}" \
+            --images-dir release-images \
+            --output release-assets/release-manifest.json
+          pnpm release:manifest:validate --manifest release-assets/release-manifest.json
+          pnpm release:manifest:checksum \
+            --manifest release-assets/release-manifest.json \
+            --output release-assets/release-manifest.sha256
+          pnpm release:manifest:verify \
+            --manifest release-assets/release-manifest.json \
+            --checksum release-assets/release-manifest.sha256
+
+      - name: Upload workflow release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets-${{ github.ref_name }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or safely complete GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            mkdir existing-assets
+            existing_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME")"
+            for asset in release-manifest.json release-manifest.sha256; do
+              if jq -e --arg name "$asset" '.assets[] | select(.name == $name)' <<<"$existing_json" >/dev/null; then
+                gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir existing-assets
+                cmp "release-assets/$asset" "existing-assets/$asset"
+              else
+                gh release upload "$GITHUB_REF_NAME" "release-assets/$asset" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+          else
+            gh release create "$GITHUB_REF_NAME" release-assets/release-manifest.json release-assets/release-manifest.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "YOLPOL $GITHUB_REF_NAME"
+          fi

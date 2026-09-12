@@ -10,6 +10,8 @@ Prometheus and Alertmanager publish loopback-only ports `127.0.0.1:9090` and `12
 
 The initial 30-second scrape/evaluation interval avoids high-frequency database and host polling. Prometheus retains at most 15 days and 2 GB by default. Its named volume and Alertmanager's named volume are isolated from Staging PostgreSQL/Caddy volumes. Metrics history and silences are rebuildable operational state and are not part of the critical PostgreSQL backup flow.
 
+The repository-owned Operations Exporter remains locally buildable with the Compose `build` entry and `yolpol-operations-metrics:local` default. Future Staging/Production activation must set `YOLPOL_OPERATIONS_METRICS_IMAGE` to the checksum-verified release manifest's immutable `repository@sha256:digest` reference and run Compose with `--no-build`. It must be the same digest accepted in Staging; a SemVer tag or `latest` is not a deployment identity. Upstream monitoring image pins remain unchanged.
+
 Grafana is deliberately deferred. Prometheus provides the query/expression UI needed to activate and tune this alerting foundation; another long-running dashboard service is not justified on the initial approximately 4-vCPU/8-GB host.
 
 ## Service inventory and access

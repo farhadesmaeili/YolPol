@@ -29,6 +29,14 @@ describe("Staging Compose deployment contract", () => {
     expect(serviceBlock("migrate")).toContain("target: migration-runtime");
   });
 
+  it("accepts explicit release image references while retaining local build defaults", () => {
+    expect(serviceBlock("web")).toContain('${YOLPOL_WEB_IMAGE:-yolpol-web:local}');
+    expect(serviceBlock("inquiry-notifications")).toContain('${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}');
+    expect(serviceBlock("migrate")).toContain('${YOLPOL_MIGRATION_IMAGE:-yolpol-migration:local}');
+    expect(compose).toContain('${YOLPOL_BACKUP_RESTORE_IMAGE:-yolpol-backup-restore:local}');
+    expect(compose).not.toContain(":latest");
+  });
+
   it("defines active services and keeps all migration/backup/restore operations explicit", () => {
     for (const service of [
       "edge",

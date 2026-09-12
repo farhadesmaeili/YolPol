@@ -14,7 +14,7 @@ x-application-environment: &application-environment
   YOLPOL_LOG_LEVEL: info
 
 x-backup-operation: &backup-operation
-  image: "${YOLPOL_OPERATIONS_IMAGE_REPOSITORY:-yolpol-operations}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+  image: "${YOLPOL_BACKUP_RESTORE_IMAGE:-yolpol-backup-restore:local}"
   build:
     context: ../..
     dockerfile: Dockerfile
@@ -55,7 +55,7 @@ services:
     logging: *json-logging
 
   web:
-    image: "${YOLPOL_WEB_IMAGE_REPOSITORY:-yolpol-web}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_WEB_IMAGE:-yolpol-web:local}"
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -111,7 +111,7 @@ services:
     logging: *json-logging
 
   inquiry-notifications:
-    image: "${YOLPOL_WORKER_IMAGE_REPOSITORY:-yolpol-worker}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -139,7 +139,7 @@ services:
     logging: *json-logging
 
   conversation-translation:
-    image: "${YOLPOL_WORKER_IMAGE_REPOSITORY:-yolpol-worker}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -168,7 +168,7 @@ services:
     logging: *json-logging
 
   conversation-ai-fallback:
-    image: "${YOLPOL_WORKER_IMAGE_REPOSITORY:-yolpol-worker}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -198,7 +198,7 @@ services:
 
   migrate:
     profiles: ["migration"]
-    image: "${YOLPOL_MIGRATION_IMAGE_REPOSITORY:-yolpol-migration}:${YOLPOL_IMAGE_TAG:?Set YOLPOL_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_MIGRATION_IMAGE:-yolpol-migration:local}"
     build:
       context: ../..
       dockerfile: Dockerfile

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yolpol.com/schemas/release-manifest-v1.json",
+  "title": "YOLPOL Release Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifestVersion", "version", "tag", "gitSha", "repository", "platform", "database", "images"],
+  "properties": {
+    "manifestVersion": {"const": 1},
+    "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+    "tag": {"type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "repository": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/[^/]+/[^/]+$"},
+    "platform": {"const": "linux/amd64"},
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latestMigration", "migrationSetSha256"],
+      "properties": {
+        "latestMigration": {"type": "string", "pattern": "^[0-9]{4}_[a-z0-9_]+$"},
+        "migrationSetSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "dockerTarget", "repository", "shaTag", "semverTag", "digest", "immutableRef"],
+        "properties": {
+          "role": {"enum": ["web", "worker", "migration", "backup-restore", "operations-metrics"]},
+          "dockerTarget": {"enum": ["runtime", "worker-runtime", "migration-runtime", "operations-runtime", "monitoring-runtime"]},
+          "repository": {"type": "string", "pattern": "^ghcr\\.io/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"},
+          "shaTag": {"type": "string", "pattern": "^sha-[0-9a-f]{40}$"},
+          "semverTag": {"type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+          "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "immutableRef": {"type": "string", "pattern": "^ghcr\\.io/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*@sha256:[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

@@ -156,7 +156,7 @@ services:
 
   operations-exporter:
     <<: *service-security
-    image: "${YOLPOL_MONITORING_OPERATIONS_IMAGE_REPOSITORY:-yolpol-operations-metrics}:${YOLPOL_MONITORING_IMAGE_TAG:?Set YOLPOL_MONITORING_IMAGE_TAG to the deployed Git SHA}"
+    image: "${YOLPOL_OPERATIONS_METRICS_IMAGE:-yolpol-operations-metrics:local}"
     build:
       context: ../..
       dockerfile: Dockerfile
