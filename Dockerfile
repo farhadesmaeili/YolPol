@@ -31,6 +31,17 @@ FROM dependencies AS production-dependencies
 RUN --mount=type=cache,id=corepack,target=/root/.cache/node/corepack \
     pnpm prune --prod
 
+FROM dependencies AS monitoring-build
+
+COPY tooling/monitoring ./tooling/monitoring
+
+RUN ./node_modules/.bin/esbuild tooling/monitoring/run-operations-metrics.ts \
+    --bundle \
+    --platform=node \
+    --format=cjs \
+    --external:pg-native \
+    --outfile=/tmp/operations-metrics.cjs
+
 FROM base AS worker-runtime
 
 ENV NODE_ENV=production
@@ -62,6 +73,21 @@ COPY tooling/migrations ./tooling/migrations
 USER 1001:1001
 
 CMD ["node", "tooling/migrations/run-migrations.mjs"]
+
+FROM base AS monitoring-runtime
+
+ENV NODE_ENV=production
+
+RUN groupadd --gid 1001 nodejs \
+    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin monitoring
+
+COPY --from=monitoring-build /tmp/operations-metrics.cjs ./operations-metrics.cjs
+
+USER 1001:1001
+
+EXPOSE 9464
+
+CMD ["node", "operations-metrics.cjs"]
 
 FROM postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94 AS postgresql-operations-client
 

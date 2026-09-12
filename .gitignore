@@ -35,6 +35,8 @@ yarn-error.log*
 !.env.example
 /deploy/staging/runtime.env
 /deploy/staging/secrets/
+/deploy/monitoring/runtime.env
+/deploy/monitoring/secrets/
 /backups/
 **/yolpol-*.dump.age
 **/yolpol-*.manifest.json
