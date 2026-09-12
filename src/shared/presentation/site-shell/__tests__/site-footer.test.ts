@@ -104,7 +104,7 @@ describe("SiteFooter", () => {
     expect(footerSource).toContain('designedBy={t("footer.designedBy")}');
     expect(completeFooterSource).toContain("siteConfig.designer.emailHref");
     expect(completeFooterSource).toContain("siteConfig.designer.name");
-    expect(siteConfig.designer.emailHref).toBe("mailto:farhad.esmaeili.it@gmail.com");
+    expect(siteConfig.designer.emailHref).toBe("https://www.linkedin.com/in/farhad-esmaeili");
   });
 
   it("uses the approved emerald CTA and accessible decorative treatment", () => {

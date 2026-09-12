@@ -75,7 +75,7 @@ describe("site configuration", () => {
     expect(siteConfig.designer).toEqual({
       name: "Farhad Esmaeili",
       email: "farhad.esmaeili.it@gmail.com",
-      emailHref: "mailto:farhad.esmaeili.it@gmail.com",
+      emailHref: "https://www.linkedin.com/in/farhad-esmaeili",
     });
   });
 
