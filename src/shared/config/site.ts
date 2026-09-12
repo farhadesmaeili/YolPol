@@ -102,7 +102,7 @@ export const siteConfig = {
   designer: {
     name: "Farhad Esmaeili",
     email: designerEmail,
-    emailHref: requireUrl(`mailto:${designerEmail}`, ["mailto:"]),
+    emailHref: requireUrl("https://www.linkedin.com/in/farhad-esmaeili", ["https:"]),
   },
 } as const;
 
