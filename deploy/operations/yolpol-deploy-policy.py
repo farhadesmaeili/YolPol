@@ -464,13 +464,19 @@ def normalized_mounts(service: dict[str, Any]) -> set[tuple[str, str, str, bool]
         require(isinstance(kind, str) and isinstance(source, str) and isinstance(target, str), "Compose volume fields")
         bind_options = volume.get("bind", {})
         volume_options = volume.get("volume", {})
-        require(isinstance(bind_options, dict) and set(bind_options).issubset({"propagation"}), "Compose bind options")
+        require(isinstance(bind_options, dict), "Compose bind options")
         require(isinstance(volume_options, dict) and volume_options == {}, "Compose named-volume options")
-        propagation = bind_options.get("propagation")
-        require(
-            propagation is None or (source, target, propagation) == ("/", "/host/root", "rslave"),
-            "Compose bind propagation",
-        )
+        if kind == "bind":
+            require(set(bind_options).issubset({"create_host_path", "propagation"}), "Compose bind options")
+            create_host_path = bind_options.get("create_host_path")
+            require(create_host_path is None or create_host_path is False, "Compose bind host-path creation")
+            propagation = bind_options.get("propagation")
+            require(
+                propagation is None or (source, target, propagation) == ("/", "/host/root", "rslave"),
+                "Compose bind propagation",
+            )
+        else:
+            require(bind_options == {}, "Compose non-bind options")
         result.add((kind, source, target, read_only))
     require(len(result) == len(volumes), "duplicate Compose volume")
     return result

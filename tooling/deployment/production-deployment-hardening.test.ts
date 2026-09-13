@@ -153,7 +153,8 @@ describe("Production deployment hardening", () => {
       });
       expect(staging.status, staging.stderr).toBe(0);
       const stagingModel: unknown = JSON.parse(staging.stdout);
-      expect(runResolvedPolicy("staging", stagingModel).status).toBe(0);
+      const stagingPolicy = runResolvedPolicy("staging", stagingModel);
+      expect(stagingPolicy.status, stagingPolicy.stderr).toBe(0);
 
       const privilegedStaging = structuredClone(requireObject(stagingModel));
       const stagingServices = requireObject(privilegedStaging.services);
@@ -174,6 +175,15 @@ describe("Production deployment hardening", () => {
       else throw new Error("Expected web volumes to be absent or an array.");
       expect(runResolvedPolicy("staging", socketInjection).status).toBe(1);
 
+      const hostPathCreation = structuredClone(requireObject(stagingModel));
+      const edge = requireObject(requireObject(hostPathCreation.services).edge);
+      const edgeVolumes = edge.volumes;
+      if (!Array.isArray(edgeVolumes)) throw new Error("Expected edge volumes.");
+      const caddyfileMount = edgeVolumes.map(requireObject).find((volume) => volume.target === "/etc/caddy/Caddyfile");
+      if (caddyfileMount === undefined) throw new Error("Expected Caddyfile mount.");
+      requireObject(caddyfileMount.bind).create_host_path = true;
+      expect(runResolvedPolicy("staging", hostPathCreation).status).toBe(1);
+
       const profileInjection = structuredClone(requireObject(stagingModel));
       requireObject(requireObject(profileInjection.services).web).profiles = ["attacker"];
       expect(runResolvedPolicy("staging", profileInjection).status).toBe(1);
@@ -187,7 +197,8 @@ describe("Production deployment hardening", () => {
       ], {cwd: repositoryRoot, encoding: "utf8", maxBuffer: 8_000_000, timeout: 20_000});
       expect(monitoring.status, monitoring.stderr).toBe(0);
       const monitoringModel: unknown = JSON.parse(monitoring.stdout);
-      expect(runResolvedPolicy("monitoring", monitoringModel).status).toBe(0);
+      const monitoringPolicy = runResolvedPolicy("monitoring", monitoringModel);
+      expect(monitoringPolicy.status, monitoringPolicy.stderr).toBe(0);
 
       const publicMonitoring = structuredClone(requireObject(monitoringModel));
       const monitoringServices = requireObject(publicMonitoring.services);

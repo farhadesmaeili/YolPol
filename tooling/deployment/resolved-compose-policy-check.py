@@ -105,5 +105,6 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except (policy.PolicyError, OSError, ValueError, TypeError):
+    except (policy.PolicyError, OSError, ValueError, TypeError) as error:
+        print(f"resolved-compose-policy-check: {error}", file=sys.stderr)
         raise SystemExit(1)

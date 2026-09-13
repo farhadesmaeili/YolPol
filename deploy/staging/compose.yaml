@@ -44,7 +44,12 @@ services:
       - "${YOLPOL_STAGING_BIND_ADDRESS:-0.0.0.0}:${YOLPOL_STAGING_HTTPS_PORT:-443}:443"
       - "${YOLPOL_STAGING_BIND_ADDRESS:-0.0.0.0}:${YOLPOL_STAGING_HTTPS_PORT:-443}:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -233,6 +238,8 @@ services:
       - type: bind
         source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
         target: /backups
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,6 +258,8 @@ services:
         source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
         target: /backups
         read_only: true
+        bind:
+          create_host_path: false
     network_mode: none
 
   backup-deep-verify:
@@ -268,6 +277,8 @@ services:
         source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
         target: /backups
         read_only: true
+        bind:
+          create_host_path: false
     network_mode: none
 
   backup-retention:
@@ -283,6 +294,8 @@ services:
       - type: bind
         source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
         target: /backups
+        bind:
+          create_host_path: false
     network_mode: none
 
   restore:
@@ -303,6 +316,8 @@ services:
         source: "${YOLPOL_STAGING_BACKUP_DIRECTORY:-/opt/yolpol/staging/backups}"
         target: /backups
         read_only: true
+        bind:
+          create_host_path: false
     networks:
       - backend
 
