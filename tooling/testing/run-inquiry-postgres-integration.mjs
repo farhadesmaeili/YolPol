@@ -2,13 +2,13 @@ import {createRequire} from "node:module";
 import {dirname, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 
-import {acquireLifecycleLock, assertSafeCleanupArguments, cleanupArguments, createCommandRunner, createIdempotentCleanup, integrationService} from "./inquiry-postgres-lifecycle.mjs";
+import {acquireLifecycleLock, assertSafeCleanupArguments, cleanupArguments, createCommandRunner, createIdempotentCleanup, integrationDatabaseUrl, integrationService} from "./inquiry-postgres-lifecycle.mjs";
 
 const require = createRequire(import.meta.url);
 const repositoryPath = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const vitestCli = resolve(dirname(require.resolve("vitest/package.json")), "vitest.mjs");
 const composePrefix = ["compose", "--project-directory", repositoryPath, "--profile", "integration"];
-const integrationUrl = "postgresql://yolpol_test:local-integration-only@127.0.0.1:55432/yolpol_integration";
+const integrationUrl = integrationDatabaseUrl(process.env);
 const runner = createCommandRunner({cwd: repositoryPath});
 const lock = acquireLifecycleLock({repositoryPath});
 const cleanupAction = () => {
