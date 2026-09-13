@@ -6,7 +6,7 @@ This directory defines the future host-level `yolpol-monitoring` Compose project
 
 One Prometheus and Alertmanager pair is shared by environments on the same host. Staging collectors use the deterministic networks created by Compose project `yolpol-staging`: `yolpol-staging_edge` for Blackbox HTTP probes and `yolpol-staging_backend` for PostgreSQL collectors. The internal `yolpol-monitoring_monitoring` network carries scrape traffic. Only Alertmanager joins `alert_egress`; collectors do not receive a general Internet path through the monitoring project.
 
-Prometheus and Alertmanager publish loopback-only ports `127.0.0.1:9090` and `127.0.0.1:9093`. Use an authenticated SSH tunnel on a future host. Do not proxy either UI through public Caddy. Node Exporter, cAdvisor, PostgreSQL Exporter, Blackbox Exporter, and the operations exporter publish no host ports.
+Prometheus and Alertmanager publish loopback-only ports `127.0.0.1:9090` and `127.0.0.1:9093`. Loopback is a network-exposure control, not authentication: any local host account able to connect to those ports can use the UIs. Keep local accounts trusted and minimal. Do not proxy either UI through public Caddy. The current VPS SSH policy disables TCP forwarding, so remote UI access is intentionally unavailable until a separate authenticated administrative-access design is reviewed. Node Exporter, cAdvisor, PostgreSQL Exporter, Blackbox Exporter, and the Operations Exporter publish no host ports.
 
 The initial 30-second scrape/evaluation interval avoids high-frequency database and host polling. Prometheus retains at most 15 days and 2 GB by default. Its named volume and Alertmanager's named volume are isolated from Staging PostgreSQL/Caddy volumes. Metrics history and silences are rebuildable operational state and are not part of the critical PostgreSQL backup flow.
 
@@ -62,9 +62,9 @@ Alertmanager inhibits warnings superseded by the same critical condition, readin
 
 cAdvisor reliably provides current presence and container start time with stable Compose labels. It does not provide a trustworthy Docker restart counter for this design. Container absence, recent start time during investigation, Docker restart policy, and alert history are the supported signals. No worker HTTP endpoint or persisted heartbeat is added. Prometheus cannot alert about its own total process/host failure; a future independent external watchdog is still required.
 
-## Credentials and database role
+## Credentials, host ownership, and database role
 
-Future host layout:
+The authoritative VPS hierarchy and restricted sudo wrapper are documented in `deploy/operations/README.md`. The Monitoring portion remains:
 
 ```text
 /opt/yolpol/monitoring/
@@ -82,7 +82,7 @@ Future host layout:
     staging-operations-database-url
 ```
 
-Keep `secrets/` mode `700` and files mode `600` or equivalently restricted to the deployment identity and required container UID. Telegram alert credentials belong to a dedicated YOLPOL Operations bot/channel and must not reuse the application/Staff bot automatically. `staging-operations-database-url` is a complete connection URL in a mounted file; it is never an environment value or log field.
+Keep `secrets/` `root:root` mode `700`; `yolpol-operator` must not traverse it. Compose file-backed secrets retain numeric host ownership on Linux. Alertmanager and PostgreSQL Exporter secret files use their upstream UID/GID `65534:65534` with mode `400`; the repository-owned Operations Exporter database URL uses the container-only UID/GID `10001:10001` with mode `400`. Telegram alert credentials belong to a dedicated YOLPOL Operations bot/channel and must not reuse the application/Staff bot automatically. `staging-operations-database-url` is a complete connection URL in a mounted file; it is never an environment value or log field.
 
 Initially, local validation may use a disposable owner credential. Do not call that least privilege. On a real host, provision a dedicated login outside Drizzle migrations. The intended PostgreSQL 17 contract is conceptually:
 
@@ -117,6 +117,6 @@ From the repository root, `pnpm test:monitoring:disposable` runs the complete st
 
 For a disposable runtime smoke test, use unique container/network names, tmpfs or temporary host directories instead of named volumes, the local null receiver, synthetic PostgreSQL, and synthetic backup pairs. Stop and remove only those disposable containers/networks. Never use `docker compose down -v`, delete `yolpol-staging_*` volumes, or point the exporter at Development data.
 
-Future activation order is: provision `/opt/yolpol/monitoring`; create restricted database and dedicated Ops Telegram secret files; keep the local null receiver while starting collectors; verify every Prometheus target and alert rule; select `alertmanager.telegram.yml`; trigger one controlled test alert; confirm firing and resolved messages; then declare delivery operational. This branch performs none of those external steps and sends no Telegram call.
+Future activation order is: provision `/opt/yolpol/monitoring` under the root-owned contract; create restricted database and dedicated Ops Telegram secret files; validate through `/opt/yolpol/bin/yolpol-deploy`; keep the local null receiver while root starts the seven explicitly named services using the exact command in `deploy/operations/README.md`; verify every Prometheus target and alert rule; select `alertmanager.telegram.yml` only through an interactive root change; trigger one controlled test alert; confirm firing and resolved messages; then declare delivery operational. The operator wrapper cannot activate Monitoring because cAdvisor's Docker socket access is root-equivalent. This branch performs none of those external steps and sends no Telegram call.
 
 Future Production integration reuses Prometheus, Alertmanager, Node Exporter, and cAdvisor. Add explicit Production edge/backend external networks, dedicated PostgreSQL/operations exporter instances and secret files, Production Blackbox targets, and fixed `environment="production"` labels. Do not share database credentials or create a second monitoring stack.

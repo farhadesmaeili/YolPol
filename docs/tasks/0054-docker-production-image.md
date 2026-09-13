@@ -1,5 +1,7 @@
 # Docker Production Image
 
+> Historical validation note: the UID/GID `1001:1001` evidence below describes this task's original checkout. Task 0061 supersedes the active first-party runtime identity with container-only `10001:10001`.
+
 ## Goal and scope
 
 This feature packages the YOLPOL Next.js web application as a deterministic, multi-stage, non-root production image. It preserves the CI Validation Foundation, Deployment Environment Contract, and Environment and Secrets Hardening contracts. It does not add deployment Compose services, a reverse proxy, image publishing, deployment automation, a database migration, a migration job, worker loops, or observability endpoints.

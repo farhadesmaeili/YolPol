@@ -1,0 +1,443 @@
+#!/bin/sh
+
+set -eu
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+HOME=/root
+DOCKER_CONFIG=/root/.docker
+TMPDIR=/opt/yolpol/runtime/tmp
+LC_ALL=C
+IFS=' '
+export PATH HOME DOCKER_CONFIG TMPDIR LC_ALL
+unset BASH_ENV CDPATH ENV GLOBIGNORE LD_LIBRARY_PATH LD_PRELOAD NODE_OPTIONS NODE_PATH \
+  PYTHONCASEOK PYTHONHOME PYTHONINSPECT PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE PYTHONWARNINGS \
+  DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_API_VERSION \
+  COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_PATH_SEPARATOR \
+  COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE COMPOSE_CONVERT_WINDOWS_PATHS \
+  COMPOSE_IGNORE_ORPHANS COMPOSE_REMOVE_ORPHANS COMPOSE_PARALLEL_LIMIT \
+  COMPOSE_ANSI COMPOSE_STATUS_STDOUT COMPOSE_PROGRESS COMPOSE_MENU COMPOSE_EXPERIMENTAL
+umask 077
+
+YOLPOL_ROOT=/opt/yolpol
+WRAPPER=/opt/yolpol/bin/yolpol-deploy
+POLICY=/opt/yolpol/bin/yolpol-deploy-policy
+RUNTIME_DIRECTORY=/opt/yolpol/runtime
+RUNTIME_TMP=/opt/yolpol/runtime/tmp
+LOCK_FILE=/opt/yolpol/runtime/deployment.lock
+AUDIT_LOG=/opt/yolpol/runtime/deployment-audit.log
+OPERATION_LOG=/opt/yolpol/runtime/deployment-operation.log
+LAST_BACKUP_FILE=/opt/yolpol/runtime/last-backup-created-at
+LOGROTATE_CONFIG=/etc/logrotate.d/yolpol-deploy
+RELEASE_DIRECTORY=/opt/yolpol/releases
+ACTIVE_RELEASE_DIRECTORY=/opt/yolpol/releases/active
+RELEASE_MANIFEST=/opt/yolpol/releases/active/release-manifest.json
+RELEASE_CHECKSUM=/opt/yolpol/releases/active/release-manifest.sha256
+STAGING_DIRECTORY=/opt/yolpol/staging
+STAGING_COMPOSE=/opt/yolpol/staging/compose.yaml
+STAGING_ENV=/opt/yolpol/staging/runtime.env
+STAGING_BACKUPS=/opt/yolpol/staging/backups
+MONITORING_DIRECTORY=/opt/yolpol/monitoring
+MONITORING_COMPOSE=/opt/yolpol/monitoring/compose.yaml
+MONITORING_ENV=/opt/yolpol/monitoring/runtime.env
+COMPOSE=/usr/libexec/docker/cli-plugins/docker-compose
+MIN_BACKUP_FREE_KIB=5242880
+MIN_BACKUP_INTERVAL_SECONDS=900
+
+usage() {
+  printf '%s\n' \
+    'Usage: yolpol-deploy <command>' \
+    '       yolpol-deploy backup-verify <backup-id>' \
+    '' \
+    'Commands:' \
+    '  validate' \
+    '  status' \
+    '  health' \
+    '  pull-approved-images' \
+    '  deploy-database' \
+    '  migrate' \
+    '  deploy-app' \
+    '  deploy-workers' \
+    '  deploy-edge' \
+    '  backup-create' \
+    '  backup-verify <backup-id>' >&2
+}
+
+fail() {
+  printf 'yolpol-deploy: %s\n' "$1" >&2
+  return 1
+}
+
+ACTOR=${SUDO_USER:-root}
+case "$ACTOR" in
+  *[!A-Za-z0-9._-]*|'') ACTOR=unknown ;;
+esac
+
+ACTION=invalid
+BACKUP_ID=''
+BACKUP_AUDIT_ID=none
+MUTATING=false
+REQUEST_VALID=false
+REQUEST_ERROR='invalid request'
+
+validate_backup_id() {
+  candidate=$1
+  [ -n "$candidate" ] || return 1
+  [ "${#candidate}" -le 104 ] || return 1
+  case "$candidate" in
+    *[!A-Za-z0-9-]*) return 1 ;;
+  esac
+  printf '%s' "$candidate" | /usr/bin/grep -Eq '^yolpol-staging-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$'
+}
+
+if [ "$#" -ge 1 ]; then
+  candidate_action=$1
+  shift
+  case "$candidate_action" in
+    validate|status|health)
+      if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
+      ;;
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|backup-create)
+      if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
+      ;;
+    backup-verify)
+      if [ "$#" -ne 1 ]; then
+        REQUEST_ERROR='backup-verify requires exactly one backup ID'
+      elif validate_backup_id "$1"; then
+        ACTION=backup-verify
+        BACKUP_ID=$1
+        BACKUP_AUDIT_ID=$1
+        MUTATING=true
+        REQUEST_VALID=true
+      else
+        REQUEST_ERROR='invalid backup ID'
+      fi
+      ;;
+    *) REQUEST_ERROR='unknown command' ;;
+  esac
+else
+  REQUEST_ERROR='missing command'
+fi
+
+require_root() {
+  [ "$(/usr/bin/id -u)" = 0 ] || fail 'must run as root through the approved sudo rule'
+}
+
+require_no_extended_acl() {
+  acl=$(/usr/bin/getfacl -cp -- "$1") || fail 'ACL inspection failed'
+  if printf '%s\n' "$acl" | /usr/bin/grep -Eq '^(user|group):[^:]+:|^mask::|^default:'; then
+    fail 'extended ACLs are prohibited on trusted paths'
+  fi
+}
+
+require_directory() {
+  path=$1
+  owner=$2
+  group=$3
+  mode=$4
+  [ -d "$path" ] && [ ! -L "$path" ] || fail 'trusted directory contract failed'
+  [ "$(/usr/bin/stat -c '%u:%g:%a' "$path")" = "$owner:$group:$mode" ] || fail 'trusted directory ownership contract failed'
+  require_no_extended_acl "$path"
+}
+
+require_file() {
+  path=$1
+  owner=$2
+  group=$3
+  mode=$4
+  [ -f "$path" ] && [ ! -L "$path" ] || fail 'trusted file contract failed'
+  [ "$(/usr/bin/stat -c '%u:%g:%a' "$path")" = "$owner:$group:$mode" ] || fail 'trusted file ownership contract failed'
+  require_no_extended_acl "$path"
+}
+
+require_nonempty_file() {
+  require_file "$1" "$2" "$3" "$4"
+  [ -s "$1" ] || fail 'required file is empty'
+}
+
+require_system_symlink() {
+  path=$1
+  expected=$2
+  [ -L "$path" ] || fail 'trusted system symlink is unavailable'
+  [ "$(/usr/bin/readlink -f -- "$path")" = "$expected" ] || fail 'trusted system symlink target failed'
+  [ "$(/usr/bin/stat -c '%u:%g' "$path")" = '0:0' ] || fail 'trusted system symlink owner failed'
+}
+
+require_trusted_executable() {
+  executable=$1
+  [ -x "$executable" ] || fail 'trusted executable is unavailable'
+  resolved=$(/usr/bin/readlink -f -- "$executable") || fail 'trusted executable resolution failed'
+  case "$resolved" in
+    /usr/bin/*|/usr/libexec/docker/cli-plugins/*) ;;
+    *) fail 'trusted executable resolved outside approved system directories' ;;
+  esac
+  [ -f "$resolved" ] && [ ! -L "$resolved" ] || fail 'trusted executable target failed'
+  metadata=$(/usr/bin/stat -c '%u:%g:%a' "$resolved") || fail 'trusted executable metadata failed'
+  executable_owner=${metadata%%:*}
+  remainder=${metadata#*:}
+  executable_group=${remainder%%:*}
+  executable_mode=${remainder##*:}
+  [ "$executable_owner:$executable_group" = '0:0' ] || fail 'trusted executable owner failed'
+  [ $((0$executable_mode & 022)) -eq 0 ] || fail 'trusted executable is group/world writable'
+  require_no_extended_acl "$resolved"
+}
+
+require_system_trust() {
+  require_directory / 0 0 755
+  require_directory /opt 0 0 755
+  require_directory /usr 0 0 755
+  require_directory /usr/bin 0 0 755
+  require_system_symlink /bin /usr/bin
+  require_directory /usr/libexec 0 0 755
+  require_directory /usr/libexec/docker 0 0 755
+  require_directory /usr/libexec/docker/cli-plugins 0 0 755
+  require_directory /var 0 0 755
+  require_directory /run 0 0 755
+  require_directory /etc 0 0 755
+  require_directory /etc/logrotate.d 0 0 755
+  require_directory /root 0 0 700
+  require_directory /root/.docker 0 0 700
+  require_file /root/.docker/config.json 0 0 600
+  for executable in /bin/sh /usr/bin/awk /usr/bin/date /usr/bin/df /usr/bin/env /usr/bin/flock /usr/bin/getfacl \
+    /usr/bin/grep /usr/bin/id /usr/bin/python3 /usr/bin/readlink /usr/bin/stat /usr/bin/sync \
+    /usr/bin/touch /usr/bin/docker "$COMPOSE"; do
+    require_trusted_executable "$executable"
+  done
+}
+
+require_base_contract() {
+  require_system_trust
+  require_directory "$YOLPOL_ROOT" 0 0 755
+  require_directory /opt/yolpol/bin 0 0 755
+  require_directory /opt/yolpol/incoming 1001 1001 700
+  require_directory "$RELEASE_DIRECTORY" 0 0 700
+  require_directory "$ACTIVE_RELEASE_DIRECTORY" 0 0 700
+  require_directory "$RUNTIME_DIRECTORY" 0 0 700
+  require_directory "$RUNTIME_TMP" 0 0 700
+  require_file "$WRAPPER" 0 0 755
+  require_file "$POLICY" 0 0 555
+  require_file "$LOCK_FILE" 0 0 600
+  require_file "$AUDIT_LOG" 0 0 600
+  require_file "$OPERATION_LOG" 0 0 600
+  require_file "$LAST_BACKUP_FILE" 0 0 600
+  require_file "$LOGROTATE_CONFIG" 0 0 644
+  require_nonempty_file "$RELEASE_MANIFEST" 0 0 600
+  require_nonempty_file "$RELEASE_CHECKSUM" 0 0 600
+  [ -S /var/run/docker.sock ] || fail 'Docker socket is unavailable'
+  socket_owner=$(/usr/bin/stat -c '%u' /var/run/docker.sock)
+  socket_group=$(/usr/bin/stat -c '%g' /var/run/docker.sock)
+  socket_mode=$(/usr/bin/stat -c '%a' /var/run/docker.sock)
+  [ "$socket_owner" = 0 ] || fail 'Docker socket owner failed'
+  [ $((0$socket_mode & 007)) -eq 0 ] || fail 'Docker socket is world accessible'
+  operator_groups=$(/usr/bin/id -G yolpol-operator) || fail 'operator identity is unavailable'
+  case " $operator_groups " in *" $socket_group "*) fail 'operator must not have Docker socket group access' ;; esac
+}
+
+require_staging_filesystem() {
+  require_directory "$STAGING_DIRECTORY" 0 0 750
+  require_directory /opt/yolpol/staging/secrets 0 0 700
+  require_file "$STAGING_COMPOSE" 0 0 644
+  require_file /opt/yolpol/staging/Caddyfile 0 0 644
+  require_file "$STAGING_ENV" 0 0 600
+  for file in postgres.env app-database.env migration-database.env backup-database.env; do require_nonempty_file "/opt/yolpol/staging/secrets/$file" 0 0 400; done
+  for file in telegram-bot-token telegram-webhook-secret groq-api-key; do require_nonempty_file "/opt/yolpol/staging/secrets/$file" 10001 10001 400; done
+  require_directory "$STAGING_BACKUPS" 10001 10001 700
+}
+
+require_monitoring_filesystem() {
+  require_directory "$MONITORING_DIRECTORY" 0 0 750
+  require_directory /opt/yolpol/monitoring/prometheus 0 0 755
+  require_directory /opt/yolpol/monitoring/prometheus/rules 0 0 755
+  require_directory /opt/yolpol/monitoring/alertmanager 0 0 755
+  require_directory /opt/yolpol/monitoring/blackbox 0 0 755
+  require_directory /opt/yolpol/monitoring/secrets 0 0 700
+  require_file "$MONITORING_COMPOSE" 0 0 644
+  require_file /opt/yolpol/monitoring/prometheus/prometheus.yml 0 0 644
+  require_file /opt/yolpol/monitoring/prometheus/rules/yolpol-alerts.yml 0 0 644
+  require_file /opt/yolpol/monitoring/alertmanager/alertmanager.local.yml 0 0 644
+  require_file /opt/yolpol/monitoring/alertmanager/alertmanager.telegram.yml 0 0 644
+  require_file /opt/yolpol/monitoring/blackbox/blackbox.yml 0 0 644
+  require_file "$MONITORING_ENV" 0 0 600
+  for file in alert-telegram-bot-token alert-telegram-chat-id staging-postgres-exporter-uri staging-postgres-exporter-user staging-postgres-exporter-password; do require_nonempty_file "/opt/yolpol/monitoring/secrets/$file" 65534 65534 400; done
+  require_nonempty_file /opt/yolpol/monitoring/secrets/staging-operations-database-url 10001 10001 400
+}
+
+staging_compose() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-staging --project-directory "$STAGING_DIRECTORY" --env-file "$STAGING_ENV" -f "$STAGING_COMPOSE" "$@"
+}
+
+monitoring_compose() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-monitoring --project-directory "$MONITORING_DIRECTORY" --env-file "$MONITORING_ENV" -f "$MONITORING_COMPOSE" "$@"
+}
+
+validate_staging_contract() {
+  require_staging_filesystem
+  /usr/bin/python3 -I -B "$POLICY" validate-staging
+  if ! resolved_compose=$(staging_compose --profile migration --profile backup config --format json 2>/dev/null); then
+    fail 'Staging Compose resolution failed'
+  fi
+  printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-staging-compose
+  resolved_compose=''
+}
+
+validate_monitoring_contract() {
+  require_monitoring_filesystem
+  /usr/bin/python3 -I -B "$POLICY" validate-monitoring
+  if ! resolved_compose=$(monitoring_compose config --format json 2>/dev/null); then
+    fail 'Monitoring Compose resolution failed'
+  fi
+  printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-monitoring-compose
+  resolved_compose=''
+}
+
+read_revision() {
+  /usr/bin/python3 -I -B - "$STAGING_ENV" <<'PY'
+import re
+import sys
+try:
+    lines = open(sys.argv[1], encoding="ascii").read().splitlines()
+    values = [line.removeprefix("YOLPOL_GIT_REVISION=") for line in lines if line.startswith("YOLPOL_GIT_REVISION=")]
+    print(values[0] if len(values) == 1 and re.fullmatch(r"[0-9a-f]{40}", values[0]) else "unknown", end="")
+except (OSError, UnicodeError):
+    print("unknown", end="")
+PY
+}
+
+audit() {
+  result=$1
+  exit_code=$2
+  timestamp=$(/usr/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
+  revision=$(read_revision)
+  printf 'timestamp=%s actor=%s action=%s revision=%s backup_id=%s result=%s exit_code=%s\n' \
+    "$timestamp" "$ACTOR" "$ACTION" "$revision" "$BACKUP_AUDIT_ID" "$result" "$exit_code" >> "$AUDIT_LOG" || return 1
+  /usr/bin/sync -f "$AUDIT_LOG"
+}
+
+run_sensitive() {
+  timestamp=$(/usr/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
+  printf 'timestamp=%s actor=%s action=%s output=begin\n' "$timestamp" "$ACTOR" "$ACTION" >> "$OPERATION_LOG" || fail 'operation log preflight failed'
+  if "$@" >> "$OPERATION_LOG" 2>&1; then
+    /usr/bin/sync -f "$OPERATION_LOG"
+    return 0
+  fi
+  exit_code=$?
+  /usr/bin/sync -f "$OPERATION_LOG" || true
+  fail 'operation failed; root must inspect the protected operation log'
+  return "$exit_code"
+}
+
+RESULT=failure
+finish() {
+  exit_code=$?
+  trap - 0 HUP INT TERM
+  if ! audit "$RESULT" "$exit_code"; then
+    printf '%s\n' 'yolpol-deploy: final audit write failed; started record remains authoritative' >&2
+    [ "$exit_code" -ne 0 ] || exit_code=1
+  fi
+  exit "$exit_code"
+}
+
+check_backup_capacity() {
+  available_kib=$(/usr/bin/df -Pk "$STAGING_BACKUPS" | /usr/bin/awk 'END {print $4}')
+  case "$available_kib" in *[!0-9]*|'') fail 'backup capacity check failed' ;; esac
+  [ "$available_kib" -ge "$MIN_BACKUP_FREE_KIB" ] || fail 'backup free-space floor not met'
+  last_backup=$(/usr/bin/stat -c '%Y' "$LAST_BACKUP_FILE") || fail 'backup throttle state failed'
+  now=$(/usr/bin/date -u +%s)
+  case "$last_backup:$now" in *[!0-9:]*) fail 'backup throttle state failed' ;; esac
+  [ "$now" -ge "$last_backup" ] || fail 'backup throttle clock moved backwards'
+  [ $((now - last_backup)) -ge "$MIN_BACKUP_INTERVAL_SECONDS" ] || fail 'backup creation is rate limited'
+}
+
+show_status() {
+  validate_staging_contract
+  validate_monitoring_contract
+  staging_compose ps
+  monitoring_compose ps
+}
+
+check_health() {
+  validate_staging_contract
+  for service in web postgres inquiry-notifications conversation-translation conversation-ai-fallback; do
+    staging_compose ps --status running --services | /usr/bin/grep -Fxq "$service" || fail 'required Staging service is not running'
+  done
+  staging_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then((response)=>{if(!response.ok)process.exit(1);process.stdout.write('ready\\n')}).catch(()=>process.exit(1))"
+}
+
+run_mutating_action() {
+  exec 9>>"$LOCK_FILE"
+  /usr/bin/flock -x 9
+  case "$ACTION" in
+    pull-approved-images)
+      validate_staging_contract
+      validate_monitoring_contract
+      staging_compose --profile migration --profile backup pull
+      monitoring_compose pull
+      ;;
+    deploy-database)
+      validate_staging_contract
+      staging_compose up -d --no-build --no-deps postgres
+      ;;
+    migrate)
+      validate_staging_contract
+      run_sensitive staging_compose --profile migration run --rm --no-deps --no-build --interactive=false --no-TTY migrate
+      ;;
+    deploy-app)
+      validate_staging_contract
+      staging_compose up -d --no-build --no-deps web
+      ;;
+    deploy-workers)
+      validate_staging_contract
+      staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback
+      ;;
+    deploy-edge)
+      validate_staging_contract
+      staging_compose up -d --no-build --no-deps edge
+      ;;
+    backup-create)
+      validate_staging_contract
+      check_backup_capacity
+      run_sensitive staging_compose --profile backup run --rm --no-deps --no-build --interactive=false --no-TTY backup-create
+      /usr/bin/touch "$LAST_BACKUP_FILE"
+      ;;
+    backup-verify)
+      validate_staging_contract
+      run_sensitive staging_compose --profile backup run --rm --no-deps --no-build --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
+      ;;
+  esac
+}
+
+if [ "$REQUEST_VALID" != true ] && [ "$(/usr/bin/id -u)" != 0 ]; then
+  printf 'yolpol-deploy: %s\n' "$REQUEST_ERROR" >&2
+  usage
+  exit 64
+fi
+
+require_root
+require_base_contract
+
+if [ "$REQUEST_VALID" != true ]; then
+  ACTION=invalid
+  if ! audit denied 64; then fail 'audit preflight failed for denied invocation'; fi
+  printf 'yolpol-deploy: %s\n' "$REQUEST_ERROR" >&2
+  usage
+  exit 64
+fi
+
+trap finish 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+audit started 0 || fail 'audit preflight failed'
+
+if [ "$MUTATING" = true ]; then
+  run_mutating_action
+else
+  case "$ACTION" in
+    validate) validate_staging_contract; validate_monitoring_contract ;;
+    status) show_status ;;
+    health) check_health ;;
+  esac
+fi
+
+RESULT=success

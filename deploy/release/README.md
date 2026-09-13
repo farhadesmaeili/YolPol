@@ -71,7 +71,7 @@ Manifest generation additionally takes `--git-sha`, `--repository`, `--images-di
 
 ## Promotion and migration gate
 
-Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Copy the five immutable references and full Git SHA from one checksum-verified manifest into the environment's host-only runtime settings. Use Compose with `--no-build`. Production must never rebuild source or substitute a same-named tag.
+Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Root copies the five immutable references and full Git SHA from one checksum-verified manifest into the environment's root-owned runtime settings. On the VPS, `yolpol-operator` invokes only the restricted `/opt/yolpol/bin/yolpol-deploy` command surface; the wrapper fixes Compose paths, sanitizes the environment, verifies digest-only references, and uses `--no-build`. Production must never rebuild source or substitute a same-named tag.
 
 When a release includes migrations, preserve this explicit gate:
 
@@ -99,7 +99,7 @@ No web or worker startup runs migrations, and the release workflow never accesse
 6. If compatibility requires database recovery, use a validated pre-migration encrypted backup, restore it into a separate database, validate it, and perform only an explicitly reviewed controlled cutover using the backup/restore runbook.
 7. Record the resulting active release and retain both manifests.
 
-The planner only validates JSON and emits a plan. It never invokes Docker, PostgreSQL, Drizzle, backup restore, or network operations.
+The planner only validates JSON and emits a plan. It never invokes Docker, PostgreSQL, Drizzle, backup restore, or network operations. The restricted deployment and sudo installation contract is documented in `deploy/operations/README.md`; restore and destructive retention are deliberately excluded from it.
 
 ## First Production release procedure (do not run from this feature)
 
@@ -112,7 +112,7 @@ The planner only validates JSON and emits a plan. It never invokes Docker, Postg
 7. After explicit operator approval, create an annotated (signed when the operator's established signing setup is available) `vMAJOR.MINOR.PATCH` tag on that `main` commit.
 8. Push the tag.
 9. Confirm the release workflow validates the source and publishes all five SHA identities and safe SemVer aliases.
-10. Download and independently verify `release-manifest.json` and `release-manifest.sha256` from the GitHub Release.
+10. Select the approved tag independently, download `release-manifest.json` and `release-manifest.sha256` over an authenticated GitHub channel from `farhadesmaeili/YolPol`, verify the checksum and strict manifest schema, and compare its source/full commit to the approved release record. A checksum received with an operator-controlled upload proves integrity only, not authenticity.
 11. Populate Staging with the manifest's exact Git SHA and image digests; run Compose with `--no-build`.
 12. Complete Staging acceptance testing.
 13. Before any migration, complete the encrypted backup, integrity, deep archive, off-server verification, and durability gate.

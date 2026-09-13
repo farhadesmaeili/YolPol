@@ -1,0 +1,10 @@
+/opt/yolpol/runtime/deployment-audit.log /opt/yolpol/runtime/deployment-operation.log {
+    weekly
+    size 10M
+    rotate 13
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0600 root root
+}
