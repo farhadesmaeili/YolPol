@@ -1,0 +1,7 @@
+import {describe, expect, it, vi} from "vitest";
+import {ProductApplicationLogisticsAdapter} from "@/features/export-logistics/infrastructure/adapters/product-application-logistics-adapter";
+
+describe("ProductApplicationLogisticsAdapter", () => {
+  it("maps a Product application DTO without exposing its aggregate", async () => { const product = {id:"p",sku:"S",slug:"s",categories:[],status:"published",locale:"en",name:"Bottle",shortDescription:"s",fullDescription:"f",applications:[],seoTitle:"t",seoDescription:"d",specifications:{},packaging:{unitsPerPackage:1,packagesPerPallet:2,unitsPerPallet:2,palletGrossWeightKg:3},pricing:{mode:"inquiry" as const},images:[],createdAt:"2025-01-01",updatedAt:"2025-01-01"} as const; const adapter = new ProductApplicationLogisticsAdapter({listPublished: vi.fn().mockResolvedValue([product]), findById: vi.fn().mockResolvedValue({status:"found",product})}); await expect(adapter.listPublished("en")).resolves.toEqual([{id:"p",sku:"S",name:"Bottle",status:"published",locale:"en",packaging:{unitsPerPackage:1,packagesPerPallet:2,unitsPerPallet:2,palletGrossWeightKg:3}}]); });
+  it("maps an invalid Product application identifier to malformed catalog data", async () => { const adapter = new ProductApplicationLogisticsAdapter({listPublished: vi.fn(), findById: vi.fn().mockResolvedValue({status: "invalid_product_id"})}); await expect(adapter.findById("valid-request-id", "en")).resolves.toEqual({status: "malformed_catalog_data"}); });
+});

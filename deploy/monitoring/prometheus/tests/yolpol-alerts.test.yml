@@ -1,0 +1,158 @@
+rule_files:
+  - ../rules/yolpol-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-web",probe="liveness",environment="staging",service="web",instance="http://web:3000/api/health/live"}'
+        values: '0+0x5'
+      - series: 'probe_success{job="blackbox-web",probe="readiness",environment="staging",service="web",instance="http://web:3000/api/health/ready"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: YolpolWebLivenessUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolWebLivenessUnavailable
+              category: availability
+              environment: staging
+              instance: http://web:3000/api/health/live
+              job: blackbox-web
+              probe: liveness
+              service: web
+              severity: critical
+            exp_annotations:
+              summary: YOLPOL web liveness has been unavailable for two minutes.
+      - eval_time: 3m
+        alertname: YolpolWebReadinessUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolWebReadinessUnavailable
+              category: readiness
+              environment: staging
+              instance: http://web:3000/api/health/ready
+              job: blackbox-web
+              probe: readiness
+              service: web
+              severity: critical
+            exp_annotations:
+              summary: YOLPOL web readiness has been unavailable for two minutes.
+
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node",environment="host",instance="node-exporter:9100",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '50+0x8'
+      - series: 'node_filesystem_size_bytes{job="node",environment="host",instance="node-exporter:9100",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: '1000+0x8'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolHostDiskLowCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolHostDiskLowCritical
+              category: disk
+              device: /dev/sda1
+              environment: host
+              fstype: ext4
+              instance: node-exporter:9100
+              job: node
+              mountpoint: /
+              service: linux-host
+              severity: critical
+            exp_annotations:
+              summary: Host filesystem free capacity is below 8 percent.
+
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolInquiryNotificationWorkerAbsent
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolInquiryNotificationWorkerAbsent
+              category: container
+              container_label_com_docker_compose_project: yolpol-staging
+              container_label_com_docker_compose_service: inquiry-notifications
+              environment: staging
+              job: cadvisor
+              service: inquiry-notifications
+              severity: critical
+            exp_annotations:
+              summary: The expected Inquiry Notification worker container is absent.
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_queue_oldest_eligible_age_seconds{environment="staging",queue="inquiry_notification"}'
+        values: '1900+0x8'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolQueueStaleCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolQueueStaleCritical
+              category: queue
+              environment: staging
+              queue: inquiry_notification
+              service: operations-exporter
+              severity: critical
+            exp_annotations:
+              summary: Eligible YOLPOL queue work has been waiting for more than 30 minutes.
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_backup_monitoring_enabled{environment="staging"}'
+        values: '1+0x20'
+      - series: 'yolpol_backup_valid_pair_exists{environment="staging"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_latest_valid_age_seconds{environment="staging"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolBackupMissing
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolBackupMissing
+              category: backup
+              environment: staging
+              service: backup
+              severity: critical
+            exp_annotations:
+              summary: Backup freshness monitoring is enabled but no valid encrypted backup pair exists.
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_backup_monitoring_enabled{environment="staging"}'
+        values: '1+0x20'
+      - series: 'yolpol_backup_valid_pair_exists{environment="staging"}'
+        values: '1+0x20'
+      - series: 'yolpol_backup_latest_valid_age_seconds{environment="staging"}'
+        values: '50000+0x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: YolpolBackupStaleCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolBackupStaleCritical
+              category: backup
+              environment: staging
+              service: backup
+              severity: critical
+            exp_annotations:
+              summary: The latest valid encrypted backup is more than twelve hours old.
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_backup_monitoring_enabled{environment="staging"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_valid_pair_exists{environment="staging"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_latest_valid_age_seconds{environment="staging"}'
+        values: '99999+0x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: YolpolBackupMissing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: YolpolBackupStaleCritical
+        exp_alerts: []

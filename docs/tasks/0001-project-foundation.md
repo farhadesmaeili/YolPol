@@ -21,4 +21,4 @@ Product entities and repositories, databases, authentication, payments, CMS/admi
 
 ## Launch Note
 
-`https://example.com` is a placeholder site origin in `src/shared/config/site.ts`. Replace it only after the production domain is confirmed.
+The placeholder origin used during foundation work was replaced with the approved production origin, `https://yolpol.com`, in Task 0006.

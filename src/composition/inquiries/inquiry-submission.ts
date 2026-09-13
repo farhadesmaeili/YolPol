@@ -1,0 +1,42 @@
+import "server-only";
+
+import {randomUUID} from "node:crypto";
+
+import {findProductDtoById} from "@/composition/products/product-catalog";
+import {getInquiryRepository} from "@/composition/inquiries/inquiry-persistence";
+import type {InquiryProductCatalog, InquiryRepository} from "@/features/inquiries/application/ports/inquiry-ports";
+import {SubmitInquiry} from "@/features/inquiries/application/use-cases/submit-inquiry";
+import {CreateConversationAccess} from "@/features/inquiries/application/use-cases/create-conversation-access";
+import {NodeConversationAccessTokenService} from "@/features/inquiries/infrastructure/security/conversation-access-token-service";
+import {supportedLocales} from "@/shared/types/locale";
+import {getConversationAiRouting} from "@/composition/conversation-ai-routing/conversation-ai-routing";
+import type {CustomerMessageAiFallbackPlanner} from "@/features/conversation-ai-routing/application/ports/conversation-ai-routing-ports";
+
+export const inquiryProductCatalog: InquiryProductCatalog = {
+  async findById(id) {
+    const localized = await Promise.all(supportedLocales.map(async (locale) => ({locale, result: await findProductDtoById(id, locale)})));
+    const found = localized.find(({result}) => result.status === "found");
+    if (!found || found.result.status !== "found") return null;
+    return {
+      id: found.result.product.id,
+      sku: found.result.product.sku,
+      slug: found.result.product.slug,
+      status: found.result.product.status,
+      localizedNames: Object.fromEntries(localized.flatMap(({locale, result}) => result.status === "found" ? [[locale, result.product.name]] : [])),
+      packaging: found.result.product.packaging ? {
+        unitsPerPackage: found.result.product.packaging.unitsPerPackage,
+        packagesPerPallet: found.result.product.packaging.packagesPerPallet,
+        unitsPerPallet: found.result.product.packaging.unitsPerPallet,
+        grossPalletWeightGrams: found.result.product.packaging.palletGrossWeightKg * 1_000,
+      } : undefined,
+    };
+  },
+};
+
+export function getInquirySubmission(): SubmitInquiry {
+  return createInquirySubmission(getInquiryRepository(), getConversationAiRouting().scheduler);
+}
+
+export function createInquirySubmission(repository: InquiryRepository, aiFallback: CustomerMessageAiFallbackPlanner = {plan: async () => null}): SubmitInquiry {
+  return new SubmitInquiry(repository, inquiryProductCatalog, {generate: () => randomUUID()}, {now: () => new Date()}, new CreateConversationAccess(new NodeConversationAccessTokenService()), aiFallback);
+}

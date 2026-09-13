@@ -1,43 +1,71 @@
-import {getTranslations, setRequestLocale} from "next-intl/server";
+import { hasLocale } from "next-intl";
+import { getTranslations, setRequestLocale } from "next-intl/server";
+import { notFound } from "next/navigation";
 
-import {Link} from "@/i18n/navigation";
-import type {Locale} from "@/i18n/routing";
+import { getExportCapacityPolicy } from "@/composition/export-logistics/export-logistics";
+import { routing, type Locale } from "@/i18n/routing";
+import { formatHumanNumber } from "@/shared/presentation/bidi/bidi-isolate";
+import { HomeHero } from "@/shared/presentation/home/components/home-hero";
+import type { HomeHeroViewModel } from "@/shared/presentation/home/view-models/home-hero-view-model";
+import {JsonLdScript} from "@/shared/presentation/seo/json-ld-script";
+import {createOrganizationJsonLd} from "@/shared/seo/organization-json-ld";
 
 type HomePageProps = {
-  params: Promise<{locale: Locale}>;
+  params: Promise<{ locale: string }>;
 };
 
-export default async function HomePage({params}: HomePageProps) {
-  const {locale} = await params;
+export default async function HomePage({ params }: HomePageProps) {
+  const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
+
   setRequestLocale(locale);
-  const translations = await getTranslations("HomePage");
-  const navigation = await getTranslations("Navigation");
-  const common = await getTranslations("Common");
+  const translations = await getTranslations({ locale, namespace: "HomePage" });
+  const capacity = getExportCapacityPolicy();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
-      <nav aria-label={navigation("primary")} className="flex items-center justify-between">
-        <Link href="/" className="text-xl font-semibold tracking-tight">
-          YolPol
-        </Link>
-        <span className="text-sm text-stone-600">{navigation("products")}</span>
-      </nav>
-      <section className="flex flex-1 flex-col justify-center py-20">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-800">
-          {translations("eyebrow")}
-        </p>
-        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
-          {translations("heading")}
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">
-          {translations("description")}
-        </p>
-        <div className="mt-8">
-          <span className="inline-flex rounded-full bg-emerald-900 px-5 py-3 text-sm font-medium text-white">
-            {common("requestQuote")}
-          </span>
-        </div>
-      </section>
-    </main>
+    <>
+      <HomeHero model={createHomeHeroModel(locale, translations, capacity)} />
+      <JsonLdScript data={createOrganizationJsonLd(locale)} />
+    </>
   );
+}
+
+function createHomeHeroModel(
+  locale: Locale,
+  t: Awaited<ReturnType<typeof getTranslations<"HomePage">>>,
+  capacity: ReturnType<typeof getExportCapacityPolicy>,
+): HomeHeroViewModel {
+  const isRtl = locale === "fa" || locale === "ar";
+  return {
+    locale,
+    isRtl,
+    arrow: isRtl ? "←" : "→",
+    eyebrow: t("eyebrow"),
+    heading: t("heading"),
+    description: t("description"),
+    catalog: t("catalog"),
+    imageAlt: t("imageAlt"),
+    inquiryCta: t("inquiryCta"),
+    productsCta: t("productsCta"),
+    glassExport: t("glassExport"),
+    exportPlanning: t("exportPlanning"),
+    referenceConfiguration: t("referenceConfiguration"),
+    capacityTitle: t("capacityTitle"),
+    capacityDescription: t("capacityDescription"),
+    palletsLabel: t("pallets"),
+    palletLayout: t("palletLayout"),
+    maximumGrossWeight: t("maximumGrossWeight"),
+    tradeMode: t("tradeMode"),
+    exportLabel: t("exportLabel"),
+    capacitySummary: t("capacitySummary"),
+    kilograms: t("kilograms"),
+    planningLimit: t("planningLimit"),
+    transportationNote: t("transportationNote"),
+    networkLabel: t("networkLabel"),
+    technicalIndex: t("technicalIndex"),
+    palletCount: capacity.maxPallets,
+    formattedPalletCount: formatHumanNumber(locale, capacity.maxPallets),
+    layout: `${formatHumanNumber(locale, 13)} × ${formatHumanNumber(locale, 2)}`,
+    grossWeightKilograms: capacity.maxGrossWeightKilograms,
+  };
 }

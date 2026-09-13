@@ -1,0 +1,23 @@
+export type StaffCapabilities = Readonly<{
+  mayAccessStaffPanel: boolean;
+  mayViewInquiries: boolean;
+  mayViewCustomerConversation: boolean;
+  mayReplyToCustomerConversation: boolean;
+  mayControlConversationAi: boolean;
+  mayPublishStaffTyping: boolean;
+  mayUpdateInquiryWorkflow: boolean;
+  mayViewAiOperations: boolean;
+  mayManageAiOperations: boolean;
+  mayViewAiProviderRegistry: boolean;
+  mayManageAiProviders: boolean;
+  mayManageAiCredentialReferences: boolean;
+  mayViewTranslationSettings: boolean;
+  mayManageTranslationSettings: boolean;
+  mayManageTeam: boolean;
+  mayCreateStaffInvitation: boolean;
+  mayDeactivateStaffMember: boolean;
+  mayReactivateStaffMember: boolean;
+  mayChangeStaffRole: boolean;
+  mayAssignAdminRole: boolean;
+  mayAssignSuperAdminRole: boolean;
+}>;

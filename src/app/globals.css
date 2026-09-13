@@ -1,14 +1,56 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "YolPol Persian";
+  src: url("/fonts/persian/brand-persian.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "YolPol Arabic";
+  src: url("/fonts/arabic/brand-arabic.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #18201d;
+  --background: #f7f6f1;
+  --surface: #ffffff;
+  --brand-primary: #4f5d2f;
+  --brand-accent: #b49a5a;
+  --foreground: #161a17;
+  --muted-foreground: #5f655f;
+  --border: #d9d9d1;
+  --focus: #4f5d2f;
+  --header-background: #f7f6f1;
+  --footer-background: #161a17;
+  --footer-foreground: #f7f6f1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-brand: var(--brand-primary);
+  --color-accent: var(--brand-accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-focus: var(--focus);
+  --color-header: var(--header-background);
+  --color-footer: var(--footer-background);
+  --color-footer-foreground: var(--footer-foreground);
   --font-sans: Arial, Helvetica, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -16,4 +58,43 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
+}
+
+.font-brand-persian {
+  font-family: "YolPol Persian", Arial, Helvetica, sans-serif;
+}
+
+.font-brand-arabic {
+  font-family: "YolPol Arabic", Arial, Helvetica, sans-serif;
+}
+
+a,
+button,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-viewport {
+  height: clamp(18rem, 52dvh, 34rem);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scroll-behavior: auto;
+}
+
+.chat-composer {
+  padding-bottom: max(.75rem, env(safe-area-inset-bottom));
+}
+
+.inquiry-summary > summary::-webkit-details-marker { display: none; }
+
+@keyframes inquiry-reveal {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.inquiry-reveal, .chat-message { animation: inquiry-reveal 180ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .inquiry-reveal, .chat-message { animation: none; }
+  .customer-chat *, .inquiry-form * { scroll-behavior: auto; }
 }

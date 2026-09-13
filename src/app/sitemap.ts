@@ -1,24 +1,42 @@
 import type {MetadataRoute} from "next";
 
-import {getPathname} from "@/i18n/navigation";
+import {listPublishedProductRoutes} from "@/composition/products/product-catalog";
+import {createProductSitemapEntries} from "@/features/products/presentation/seo/product-sitemap";
 import {routing} from "@/i18n/routing";
-import {siteConfig} from "@/shared/config/site";
+import {searchIndexingEnabled} from "@/shared/config/deployment-environment";
+import {localizedAbsoluteUrl} from "@/shared/seo/metadata";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return routing.locales.map((locale) => ({
-    url: new URL(getPathname({locale, href: "/"}), siteConfig.url).toString(),
-    changeFrequency: "monthly",
-    priority: locale === routing.defaultLocale ? 1 : 0.9,
-    alternates: {
-      languages: Object.fromEntries(
-        routing.locales.map((alternateLocale) => [
-          alternateLocale,
-          new URL(
-            getPathname({locale: alternateLocale, href: "/"}),
-            siteConfig.url,
-          ).toString(),
-        ]),
-      ),
-    },
-  }));
+export const dynamic = "force-dynamic";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (!searchIndexingEnabled()) return [];
+
+  const staticPaths = [
+    "/",
+    "/products",
+    "/products/olive-oil",
+    "/products/food",
+    "/products/beverage",
+    "/about",
+    "/contact",
+    "/wholesale-process",
+    "/inquiry",
+    "/privacy",
+  ];
+  const staticEntries = staticPaths.flatMap((pathname, pathIndex) => {
+    const languages = Object.fromEntries(
+      routing.locales.map((locale) => [
+        locale,
+        localizedAbsoluteUrl(locale, pathname),
+      ]),
+    );
+    return routing.locales.map((locale) => ({
+      url: localizedAbsoluteUrl(locale, pathname),
+      changeFrequency: "monthly" as const,
+      priority: pathIndex === 0 ? (locale === routing.defaultLocale ? 1 : 0.9) : pathIndex === 1 ? 0.8 : 0.7,
+      alternates: {languages},
+    }));
+  });
+  const productRoutes = await listPublishedProductRoutes();
+  return [...staticEntries, ...createProductSitemapEntries(productRoutes)];
 }

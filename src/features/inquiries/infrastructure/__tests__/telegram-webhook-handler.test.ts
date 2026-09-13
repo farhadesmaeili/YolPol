@@ -1,0 +1,126 @@
+import {describe, expect, it, vi} from "vitest";
+
+import type {ReceiveTelegramReplyResult} from "@/features/inquiries/application/results/receive-telegram-reply-result";
+import {createTelegramWebhookHandler, telegramWebhookRequestSizeLimit} from "@/features/inquiries/infrastructure/http/telegram-webhook-handler";
+
+const secret = "test-webhook-secret";
+const validUpdate = {
+  update_id: 987654,
+  message: {
+    message_id: 45,
+    from: {id: 456},
+    chat: {id: -100123},
+    text: "We can ship next week.",
+    reply_to_message: {message_id: 44, text: "Inquiry #1234"},
+  },
+};
+
+function request(body: string, headers: HeadersInit = {}): Request {
+  return new Request("https://yolpol.com/api/webhooks/telegram", {
+    method: "POST",
+    body,
+    headers: {"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": secret, ...headers},
+  });
+}
+
+function handler(result: ReceiveTelegramReplyResult = {status: "created"}) {
+  const execute = vi.fn().mockResolvedValue(result);
+  const startExecute = vi.fn().mockResolvedValue(undefined);
+  return {execute, startExecute, handle: createTelegramWebhookHandler(() => ({execute}), () => ({execute: startExecute}), () => secret)};
+}
+
+describe("Telegram webhook handler", () => {
+  it("authenticates, parses, and accepts a valid update", async () => {
+    const {execute, handle} = handler();
+    const response = await handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({senderExternalId: "456", externalRecipientId: "-100123", repliedMessageId: "44", body: "We can ship next week."}));
+  });
+
+  it("returns the same success contract for a duplicate update", async () => {
+    const response = await handler({status: "duplicate"}).handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+  });
+
+  it.each([
+    {status: "unauthorized"},
+    {status: "conversation_not_found"},
+    {status: "invalid_reply"},
+  ] as const)("acknowledges and conceals the non-actionable %s result", async (result) => {
+    const response = await handler(result).handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+  });
+
+  it.each([
+    ["ordinary private text", {update_id: 2, message: {message_id: 2, from: {id: 456}, chat: {id: 456}, text: "Hello"}}],
+    ["ordinary group text", {update_id: 3, message: {message_id: 3, from: {id: 456}, chat: {id: -100123}, text: "Test message"}}],
+    ["an unsupported update type", {update_id: 4, callback_query: {id: "callback-1", from: {id: 456}}}],
+    ["a text message without reply_to_message", {...validUpdate, update_id: 5, message: {...validUpdate.message, reply_to_message: undefined}}],
+  ] as const)("acknowledges %s without gateway execution", async (_name, update) => {
+    const {execute, startExecute, handle} = handler();
+    const response = await handle(request(JSON.stringify(update)));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({status: "accepted"});
+    expect(execute).not.toHaveBeenCalled();
+    expect(startExecute).not.toHaveBeenCalled();
+  });
+
+  it("routes /start to onboarding before reply handling, including reply_to_message", async () => {
+    const {execute, startExecute, handle} = handler();
+    const update = {...validUpdate, message: {...validUpdate.message, from: {id: 456, is_bot: false}, chat: {id: 456, type: "private"}, text: "/start ypt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}};
+    const response = await handle(request(JSON.stringify(update)));
+    expect(response.status).toBe(200);
+    expect(startExecute).toHaveBeenCalledWith(expect.objectContaining({telegramUserId: "456", chatType: "private"}));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable server failure when persistence fails", async () => {
+    const response = await handler({status: "persistence_failed"}).handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({status: "error", code: "service_unavailable"});
+  });
+
+  it("rejects a missing or invalid secret before parsing or execution", async () => {
+    const {execute, startExecute, handle} = handler();
+    for (const supplied of [undefined, "wrong-secret"]) {
+      const headers = new Headers({"Content-Type": "application/json"});
+      if (supplied) headers.set("X-Telegram-Bot-Api-Secret-Token", supplied);
+      const response = await handle(new Request("https://yolpol.com/api/webhooks/telegram", {method: "POST", body: JSON.stringify(validUpdate), headers}));
+      expect(response.status).toBe(401);
+      expect(await response.text()).not.toContain(secret);
+    }
+    expect(execute).not.toHaveBeenCalled();
+    expect(startExecute).not.toHaveBeenCalled();
+  });
+
+  it("never invokes onboarding for an unauthenticated /start update", async () => {
+    const {execute, startExecute, handle} = handler();
+    const update = {update_id: 11, message: {message_id: 1, from: {id: 456, is_bot: false}, chat: {id: 456, type: "private"}, text: `/start ypt_${"A".repeat(43)}`}};
+    const response = await handle(new Request("https://yolpol.com/api/webhooks/telegram", {method: "POST", body: JSON.stringify(update), headers: {"Content-Type": "application/json"}}));
+    expect(response.status).toBe(401);
+    expect(startExecute).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [request("{"), 400, "invalid_request"],
+    [request(JSON.stringify({update_id: 1})), 400, "invalid_update"],
+    [request("{}", {"Content-Type": "text/plain"}), 415, "unsupported_media_type"],
+    [request("x".repeat(telegramWebhookRequestSizeLimit + 1)), 413, "payload_too_large"],
+  ])("rejects unsafe request bodies", async (input, status, code) => {
+    const response = await handler().handle(input);
+    expect(response.status).toBe(status);
+    expect(await response.json()).toMatchObject({code});
+  });
+
+  it("fails closed when webhook configuration is unavailable without exposing details", async () => {
+    const configuredSecret = "never-expose-this-value";
+    const handle = createTelegramWebhookHandler(() => ({async execute() { return {status: "created"}; }}), () => ({async execute() {}}), () => { throw new Error(configuredSecret); });
+    const response = await handle(request(JSON.stringify(validUpdate)));
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain(configuredSecret);
+  });
+});

@@ -1,0 +1,335 @@
+groups:
+  - name: yolpol-availability
+    rules:
+      - alert: YolpolWebLivenessUnavailable
+        expr: probe_success{job="blackbox-web", probe="liveness"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+          service: web
+        annotations:
+          summary: YOLPOL web liveness has been unavailable for two minutes.
+
+      - alert: YolpolWebReadinessUnavailable
+        expr: probe_success{job="blackbox-web", probe="readiness"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: readiness
+          service: web
+        annotations:
+          summary: YOLPOL web readiness has been unavailable for two minutes.
+
+      - alert: YolpolPostgresExporterDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: dependency
+          service: postgres
+        annotations:
+          summary: PostgreSQL metrics collection is unavailable.
+
+      - alert: YolpolOperationsExporterDown
+        expr: up{job="operations"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: dependency
+          service: operations-exporter
+        annotations:
+          summary: YOLPOL operations metrics collection is unavailable.
+
+      - alert: PrometheusTargetScrapeFailing
+        expr: up{job=~"prometheus|alertmanager|node|cadvisor|postgres|operations|blackbox-web"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: scrape
+        annotations:
+          summary: A required Prometheus target has failed for five minutes.
+
+      - alert: PrometheusAlertmanagerUnavailable
+        expr: prometheus_notifications_alertmanagers_discovered < 1
+        for: 2m
+        labels:
+          severity: critical
+          category: alerting
+          service: alertmanager
+        annotations:
+          summary: Prometheus cannot discover an Alertmanager endpoint.
+
+      - alert: PrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          category: monitoring
+          service: prometheus
+        annotations:
+          summary: Prometheus alert rule evaluation is failing.
+
+      - alert: PrometheusConfigurationReloadFailure
+        expr: prometheus_config_last_reload_successful == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: monitoring
+          service: prometheus
+        annotations:
+          summary: Prometheus rejected its active configuration.
+
+  - name: yolpol-postgresql
+    rules:
+      - alert: YolpolPostgresConnectionPressureWarning
+        expr: sum by (environment, instance) (pg_stat_activity_count{job="postgres"}) / clamp_min(max by (environment, instance) (pg_settings_max_connections{job="postgres"}), 1) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          category: connections
+          service: postgres
+        annotations:
+          summary: PostgreSQL connection is using more than 80 percent of available connections.
+
+      - alert: YolpolPostgresConnectionPressureCritical
+        expr: sum by (environment, instance) (pg_stat_activity_count{job="postgres"}) / clamp_min(max by (environment, instance) (pg_settings_max_connections{job="postgres"}), 1) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          category: connections
+          service: postgres
+        annotations:
+          summary: PostgreSQL is using more than 90 percent of available connections.
+
+  - name: yolpol-host
+    rules:
+      - alert: YolpolHostDiskLowWarning
+        expr: node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|devtmpfs|overlay|squashfs", mountpoint!~"^/(dev|proc|run|sys)($|/)"} / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|devtmpfs|overlay|squashfs", mountpoint!~"^/(dev|proc|run|sys)($|/)"} < 0.15
+        for: 15m
+        labels:
+          severity: warning
+          category: disk
+          service: linux-host
+        annotations:
+          summary: Host filesystem free capacity is below 15 percent.
+
+      - alert: YolpolHostDiskLowCritical
+        expr: node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|devtmpfs|overlay|squashfs", mountpoint!~"^/(dev|proc|run|sys)($|/)"} / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|devtmpfs|overlay|squashfs", mountpoint!~"^/(dev|proc|run|sys)($|/)"} < 0.08
+        for: 5m
+        labels:
+          severity: critical
+          category: disk
+          service: linux-host
+        annotations:
+          summary: Host filesystem free capacity is below 8 percent.
+
+      - alert: YolpolHostFilesystemUnavailable
+        expr: node_filesystem_device_error{job="node"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          category: disk
+          service: linux-host
+        annotations:
+          summary: Node Exporter cannot read a host filesystem.
+
+      - alert: YolpolHostMemoryLowWarning
+        expr: node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          category: memory
+          service: linux-host
+        annotations:
+          summary: Host available memory is below 15 percent.
+
+      - alert: YolpolHostMemoryLowCritical
+        expr: node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 0.08
+        for: 5m
+        labels:
+          severity: critical
+          category: memory
+          service: linux-host
+        annotations:
+          summary: Host available memory is below 8 percent.
+
+      - alert: YolpolHostCpuHighWarning
+        expr: 100 * (1 - avg by (environment, instance) (rate(node_cpu_seconds_total{job="node", mode="idle"}[5m]))) > 85
+        for: 15m
+        labels:
+          severity: warning
+          category: cpu
+          service: linux-host
+        annotations:
+          summary: Host CPU utilization has remained above 85 percent.
+
+      - alert: YolpolHostCpuHighCritical
+        expr: 100 * (1 - avg by (environment, instance) (rate(node_cpu_seconds_total{job="node", mode="idle"}[5m]))) > 95
+        for: 10m
+        labels:
+          severity: critical
+          category: cpu
+          service: linux-host
+        annotations:
+          summary: Host CPU utilization has remained above 95 percent.
+
+      - alert: YolpolHostSwapPressure
+        expr: node_memory_SwapTotal_bytes{job="node"} > 0 and node_memory_SwapFree_bytes{job="node"} / node_memory_SwapTotal_bytes{job="node"} < 0.20
+        for: 10m
+        labels:
+          severity: warning
+          category: memory
+          service: linux-host
+        annotations:
+          summary: Host swap free capacity is below 20 percent.
+
+  - name: yolpol-containers
+    rules:
+      - alert: YolpolEdgeContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="edge"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: edge
+        annotations:
+          summary: The expected Staging edge container is absent.
+
+      - alert: YolpolWebContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="web"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: web
+        annotations:
+          summary: The expected Staging web container is absent.
+
+      - alert: YolpolPostgresContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="postgres"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: postgres
+        annotations:
+          summary: The expected Staging PostgreSQL container is absent.
+
+      - alert: YolpolInquiryNotificationWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="inquiry-notifications"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: inquiry-notifications
+        annotations:
+          summary: The expected Inquiry Notification worker container is absent.
+
+      - alert: YolpolConversationTranslationWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="conversation-translation"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: conversation-translation
+        annotations:
+          summary: The expected Conversation Translation worker container is absent.
+
+      - alert: YolpolAiFallbackWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="conversation-ai-fallback"})
+        for: 5m
+        labels:
+          environment: staging
+          severity: critical
+          category: container
+          service: conversation-ai-fallback
+        annotations:
+          summary: The expected AI Fallback worker container is absent.
+
+  - name: yolpol-queues-and-backups
+    rules:
+      - alert: YolpolQueueStaleWarning
+        expr: yolpol_queue_oldest_eligible_age_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+          category: queue
+          service: operations-exporter
+        annotations:
+          summary: Eligible YOLPOL queue work has been waiting for more than 10 minutes.
+
+      - alert: YolpolQueueStaleCritical
+        expr: yolpol_queue_oldest_eligible_age_seconds > 1800
+        for: 5m
+        labels:
+          severity: critical
+          category: queue
+          service: operations-exporter
+        annotations:
+          summary: Eligible YOLPOL queue work has been waiting for more than 30 minutes.
+
+      - alert: YolpolQueueBacklogLargeWarning
+        expr: yolpol_queue_eligible_jobs > 25
+        for: 15m
+        labels:
+          severity: warning
+          category: queue
+          service: operations-exporter
+        annotations:
+          summary: A YOLPOL processing queue has more than 25 eligible jobs.
+
+      - alert: YolpolQueueBacklogLargeCritical
+        expr: yolpol_queue_eligible_jobs > 100
+        for: 10m
+        labels:
+          severity: critical
+          category: queue
+          service: operations-exporter
+        annotations:
+          summary: A YOLPOL processing queue has more than 100 eligible jobs.
+
+      - alert: YolpolBackupMissing
+        expr: yolpol_backup_monitoring_enabled == 1 and yolpol_backup_valid_pair_exists == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: backup
+          service: backup
+        annotations:
+          summary: Backup freshness monitoring is enabled but no valid encrypted backup pair exists.
+
+      - alert: YolpolBackupIntegrityScanFailed
+        expr: yolpol_backup_monitoring_enabled == 1 and yolpol_backup_integrity_scan_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: backup
+          service: backup
+        annotations:
+          summary: The enabled backup integrity scan cannot read or inspect the backup directory.
+
+      - alert: YolpolBackupStaleWarning
+        expr: yolpol_backup_monitoring_enabled == 1 and yolpol_backup_valid_pair_exists == 1 and yolpol_backup_latest_valid_age_seconds > 28800
+        for: 15m
+        labels:
+          severity: warning
+          category: backup
+          service: backup
+        annotations:
+          summary: The latest valid encrypted backup is more than eight hours old.
+
+      - alert: YolpolBackupStaleCritical
+        expr: yolpol_backup_monitoring_enabled == 1 and yolpol_backup_valid_pair_exists == 1 and yolpol_backup_latest_valid_age_seconds > 43200
+        for: 15m
+        labels:
+          severity: critical
+          category: backup
+          service: backup
+        annotations:
+          summary: The latest valid encrypted backup is more than twelve hours old.

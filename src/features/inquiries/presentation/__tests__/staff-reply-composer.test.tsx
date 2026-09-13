@@ -1,0 +1,134 @@
+import {readFileSync} from "node:fs";
+import {join} from "node:path";
+import {renderToStaticMarkup} from "react-dom/server";
+import {describe, expect, it, vi} from "vitest";
+
+import type {StaffConversationMessageDto} from "@/features/inquiries/application/dto/staff-conversation-message-dto";
+import {StaffReplyComposer, type StaffReplyComposerLabels} from "@/features/inquiries/presentation/components/staff/staff-reply-composer";
+import {resolveStaffMessageAuthor, StaffConversationMessageList} from "@/features/inquiries/presentation/components/staff/staff-conversation-message-list";
+import enMessages from "@/i18n/messages/en.json";
+import faMessages from "@/i18n/messages/fa.json";
+
+vi.mock("@/i18n/navigation", () => ({
+  useRouter: () => ({replace: vi.fn(), refresh: vi.fn()}),
+}));
+
+const message: StaffConversationMessageDto = Object.freeze({
+  id: "staff_web_message-1",
+  senderType: "INTERNAL_USER",
+  channel: "WEBSITE",
+  actorReference: "staff:member-1",
+  body: "A persisted reply",
+  createdAt: "2026-08-26T10:00:00.000Z",
+});
+
+function labels(catalog: typeof enMessages.Staff, customerTyping = enMessages.ConversationTyping.customer): StaffReplyComposerLabels {
+  return {
+    aiAgent: catalog.senders.AI_AGENT,
+    customer: catalog.senders.CUSTOMER,
+    system: catalog.senders.SYSTEM,
+    yolpolTeam: catalog.reply.yolpolTeam,
+    channels: catalog.channels,
+    emptyTitle: catalog.states.emptyConversationTitle,
+    emptyDescription: catalog.states.emptyConversationDescription,
+    messageList: catalog.reply.messageList,
+    replyToCustomer: catalog.reply.replyToCustomer,
+    writeReply: catalog.reply.writeReply,
+    characters: catalog.reply.characters,
+    customerTyping,
+    keyboardHint: catalog.reply.keyboardHint,
+    sendReply: catalog.reply.sendReply,
+    sending: catalog.reply.sending,
+    sent: catalog.reply.sent,
+    errors: {
+      required: catalog.reply.errors.required,
+      too_long: catalog.reply.errors.tooLong,
+      invalid_message: catalog.reply.errors.invalidMessage,
+      session_expired: catalog.reply.errors.sessionExpired,
+      permission_denied: catalog.reply.errors.permissionDenied,
+      conversation_unavailable: catalog.reply.errors.conversationUnavailable,
+      retry_conflict: catalog.reply.errors.retryConflict,
+      message_too_large: catalog.reply.errors.messageTooLarge,
+      unsupported_request: catalog.reply.errors.unsupportedRequest,
+      rate_limited: catalog.reply.errors.rateLimited,
+      service_unavailable: catalog.reply.errors.serviceUnavailable,
+    },
+  };
+}
+
+describe("Staff Reply Composer presentation", () => {
+  it.each(["CUSTOMER", "INTERNAL_USER", "AI_AGENT"] as const)("keeps unscheduled %s translation requestable after returning to AUTO", (senderType) => {
+    const translation = {sourceLocale: senderType === "INTERNAL_USER" ? "fa" as const : "tr" as const,
+      customerTargetLocale: senderType === "CUSTOMER" ? null : "tr" as const,
+      deliveryState: "ACTIVE" as const, version: 1, translations: []};
+    const html = renderToStaticMarkup(<StaffConversationMessageList canReply customerDisplayName="Buyer" inquiryId="inquiry-1"
+      labels={{...labels(enMessages.Staff), translation: enMessages.Staff.translation}} locale="en" teamMemberNames={{}}
+      messages={[{...message, senderType, translation}]} />);
+    expect(html).toContain(senderType === "INTERNAL_USER" ? enMessages.Staff.translation.translateForCustomer : enMessages.Staff.translation.translateForStaff);
+    expect(html).not.toContain(enMessages.Staff.translation.pending);
+    if (senderType === "INTERNAL_USER") expect(html).toContain(enMessages.Staff.translation.blocked);
+    if (senderType === "AI_AGENT") expect(html).toContain(enMessages.Staff.translation.customerLanguageResponse);
+  });
+  it("renders a localized accessible multiline composer with mobile-safe controls", () => {
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={-1} initialMessages={[]} inquiryId="inquiry-1" labels={labels(enMessages.Staff)} locale="en" teamMemberNames={{}} />);
+    expect(html).toContain("Reply to customer");
+    expect(html).toMatch(/<label[^>]*for="[^"]+"[^>]*>Write a reply<\/label>/u);
+    expect(html).toContain("<textarea");
+    expect(html).toContain('name="staff-reply"');
+    expect(html).toContain("required");
+    expect(html).toContain("10,000");
+    expect(html).toContain("Ctrl+Enter");
+    expect(html).toContain('type="submit"');
+    expect(html).toContain("Send reply");
+    expect(html).toContain("min-h-36");
+    expect(html).toContain("min-h-12");
+    expect(html).toContain("w-full");
+    expect(html).toContain("sm:w-auto");
+  });
+
+  it("renders complete Persian RTL-ready content without physical-side spacing", () => {
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="خریدار" initialConversationCursor={-1} initialMessages={[]} inquiryId="inquiry-1" labels={labels(faMessages.Staff, faMessages.ConversationTyping.customer)} locale="fa" teamMemberNames={{}} />);
+    expect(html).toContain(faMessages.Staff.reply.replyToCustomer);
+    expect(html).toContain(faMessages.Staff.reply.sendReply);
+    const source = readFileSync(join(process.cwd(), "src", "features", "inquiries", "presentation", "components", "staff", "staff-reply-composer.tsx"), "utf8");
+    expect(source).not.toMatch(/\b(?:ml|mr|pl|pr)-/u);
+  });
+
+  it("uses resolved Team Member names and safe fallbacks without displaying raw actor references", () => {
+    const catalog = labels(enMessages.Staff);
+    expect(resolveStaffMessageAuthor(message, "Buyer", {"member-1": "Farhad"}, catalog)).toBe("Farhad");
+    expect(resolveStaffMessageAuthor({...message, actorReference: null}, "Buyer", {}, catalog)).toBe("YOLPOL Team");
+    expect(resolveStaffMessageAuthor({...message, actorReference: "staff:inactive-member"}, "Buyer", {}, catalog)).toBe("YOLPOL Team");
+
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={1} initialMessages={[message, {...message, id: "message-2", actorReference: null}]} inquiryId="inquiry-1" labels={catalog} locale="en" teamMemberNames={{"member-1": "Farhad"}} />);
+    expect(html).toContain("Farhad");
+    expect(html).toContain("YOLPOL Team");
+    expect(html).not.toContain("staff:member-1");
+  });
+
+  it("keeps realtime history visible while omitting reply controls for a Viewer", () => {
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply={false} customerDisplayName="Buyer" initialConversationCursor={1} initialMessages={[message]} inquiryId="inquiry-1" labels={labels(enMessages.Staff)} locale="en" teamMemberNames={{"member-1": "Farhad"}} />);
+    expect(html).toContain("Farhad");
+    expect(html).not.toContain("<textarea");
+    expect(html).not.toContain('name="staff-reply"');
+    expect(html).not.toContain('type="submit"');
+  });
+
+  it("keeps credentials and drafts out of browser storage", () => {
+    const directory = join(process.cwd(), "src", "features", "inquiries", "presentation");
+    const source = [
+      join(directory, "components", "staff", "staff-reply-composer.tsx"),
+      join(directory, "clients", "staff-conversation-reply-client.ts"),
+      join(directory, "state", "staff-reply-reducer.ts"),
+    ].map((file) => readFileSync(file, "utf8")).join("\n");
+    expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/u);
+  });
+  it("states truthfully that MANUAL cross-language delivery waits for explicit translation", () => {
+    const catalog = labels(enMessages.Staff);
+    const html = renderToStaticMarkup(<StaffReplyComposer canReply customerDisplayName="Buyer" initialConversationCursor={-1}
+      initialMessages={[]} inquiryId="inquiry-1" labels={{...catalog, translation: enMessages.Staff.translation}} locale="en"
+      teamMemberNames={{}} translationControl={{globalDefaults: {customerToStaffMode: "AUTO", staffToCustomerMode: "AUTO", aiToStaffMode: "ON_DEMAND", version: 0}, override: {customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO", version: 1}, effective: {customerToStaffMode: "AUTO", staffToCustomerMode: "MANUAL", aiToStaffMode: "AUTO"}, source: "OVERRIDE"}} />);
+    expect(html).toContain(enMessages.Staff.translation.authoringManual);
+    expect(html).not.toContain(enMessages.Staff.translation.authoring);
+  });
+});

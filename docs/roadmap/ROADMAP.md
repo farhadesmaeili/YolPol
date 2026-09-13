@@ -1,5 +1,19 @@
 # YolPol Roadmap
 
+## Privacy and future measurement
+
+The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata, and sitemap integration are implemented. No analytics tracker is active. Google Search Console is planned separately for search-performance monitoring; self-hosted Umami is the preferred future traffic analytics option, while GA4 remains deferred. Privacy content and consent requirements must be reviewed before any tracker is activated, and analytics implementation belongs in a separate future task or branch.
+
+## Customer Inquiry presentation
+
+Localized Inquiry submission, Product preselection, consent linkage, server validation, trusted Product resolution, and transactional PostgreSQL persistence are implemented. Distributed abuse controls and durable notification delivery remain deferred.
+
+The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
+
+## Export Logistics foundation
+
+The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
+
 ## 1. Project Foundation
 
 - Multilingual routing and RTL/LTR document support
@@ -9,26 +23,36 @@
 
 ## 2. Product Catalog Domain
 
-- Typed product and category models
-- Locale-separated local product content
-- Repository interfaces and local implementations
-- Business-rule and use-case tests
+- [x] Typed product and category models
+- [x] Locale-separated static content boundary
+- [x] Read-oriented repository interface and static implementation
+- [x] Catalog use cases and business-rule tests
+- [x] Framework-independent product presenter and view models
+- [x] Static dataset integrity and isolated repository results
+- [x] Enter the nine verified Product records through the approved content process
 
 ## 3. Catalog Presentation
 
-- Product listing, category, and detail pages
-- Responsive images and accessible filtering where justified
-- Product and breadcrumb structured data
+- [x] Localized product listing and detail routes
+- [x] Empty, loading, and localized not-found states
+- [x] Product metadata, structured data, and sitemap integration
+- Separate authorized administrative listing policy if required
+- [ ] Responsive filtering and pagination when the verified catalog requires them
+- [x] Publish verified four-locale Product content and tracked images
+- [x] Add localized category landing pages for current published categories
 
 ## 4. Company and Conversion Pages
 
-- About, contact, quotation request, and privacy pages
-- Validated inquiry workflow without acquisition automation
+- [x] Shared multilingual header, navigation, locale switcher, and footer
+- [x] Factual localized About and Contact pages
+- [x] Quotation preparation and localized Privacy Policy pages
+- [x] Framework-independent Customer Inquiry foundation without runtime activation
+- Validated public inquiry workflow after privacy and integration readiness
 
 ## 5. Launch Readiness
 
-- Confirm production domain and company facts
+- [x] Confirm production domain as `https://yolpol.com`
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 
-Databases, authentication, payments, a CMS, an admin dashboard, and customer acquisition automation remain outside the current phase.
+Public Product persistence, authentication, payments, a CMS, an admin dashboard, and customer acquisition automation remain outside the current phase. The inactive Inquiry PostgreSQL foundation does not make public submission or production operations complete.

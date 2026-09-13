@@ -1,0 +1,171 @@
+import type {ConversationMessageUpdate} from "@/features/inquiries/application/ports/conversation-stream-ports";
+import type {ConversationTypingRegistry, ConversationTypingSubscription} from "@/features/inquiries/application/ports/conversation-typing-ports";
+import type {StreamConversationUpdatesResult} from "@/features/inquiries/application/results/stream-conversation-updates-result";
+import type {ResolveConversationByAccessTokenResult} from "@/features/inquiries/application/results/resolve-conversation-by-access-token-result";
+import {originAllowed} from "@/features/inquiries/infrastructure/http/inquiry-request-handler";
+import {readCustomerConversationCookie, type CustomerConversationCookieEnvironment} from "@/features/inquiries/infrastructure/http/customer-conversation-cookie";
+
+type AccessResolver = Readonly<{execute(input: Readonly<{token: string}>): Promise<ResolveConversationByAccessTokenResult>}>;
+type ConversationStreamer = Readonly<{open(input: Readonly<{
+  conversationId: string;
+  inquiryId: string;
+  afterCursor: number;
+  signal: AbortSignal;
+  onUpdate: (update: ConversationMessageUpdate) => void;
+  onUnavailable: () => void;
+}>): StreamConversationUpdatesResult}>;
+type ConversationStreamRouteContext = Readonly<{params: Promise<Readonly<{token: string}>>}>;
+type ConversationStreamHttpOptions = Readonly<{approvedDevelopmentOrigins?: ReadonlySet<string>; heartbeatIntervalMs?: number}>;
+type ErrorCode = "invalid_origin" | "invalid_request" | "service_unavailable" | "unauthorized";
+
+const encoder = new TextEncoder();
+const json = (body: Readonly<Record<string, unknown>>, status: number) => Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
+const failure = (code: ErrorCode, status: number) => json({status: "error", code}, status);
+
+function readAfterCursor(request: Request): number | null {
+  const value = request.headers.get("last-event-id");
+  if (value === null || value === "") return -1;
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(value)) return null;
+  const cursor = Number(value);
+  return Number.isSafeInteger(cursor) && cursor <= 2_147_483_647 ? cursor : null;
+}
+
+function messageFrame(update: ConversationMessageUpdate): Uint8Array {
+  const resumeCursor = update.resumeCursor ?? update.cursor;
+  const id = resumeCursor < 0 ? "" : `id: ${resumeCursor}\n`;
+  return encoder.encode(`${id}event: message\ndata: ${JSON.stringify({...update.message, position: update.cursor})}\n\n`);
+}
+
+function typingFrame(isTyping: boolean): Uint8Array {
+  return encoder.encode(`event: typing\ndata: ${JSON.stringify({participant: "STAFF", isTyping})}\n\n`);
+}
+
+export function createCustomerConversationStreamRequestHandler(
+  getResolver: () => AccessResolver,
+  getStreamer: () => ConversationStreamer,
+  options: ConversationStreamHttpOptions = {},
+  getTypingRegistry?: () => ConversationTypingRegistry,
+) {
+  return async function handle(request: Request, context: ConversationStreamRouteContext): Promise<Response> {
+    if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const afterCursor = readAfterCursor(request);
+    if (afterCursor === null) return failure("invalid_request", 400);
+
+    let token: string;
+    try { ({token} = await context.params); }
+    catch { return failure("invalid_request", 400); }
+
+    let access: ResolveConversationByAccessTokenResult;
+    try { access = await getResolver().execute({token}); }
+    catch { return failure("service_unavailable", 503); }
+    if (access.status === "unauthorized") return failure("unauthorized", 401);
+    if (access.status !== "resolved") return failure("service_unavailable", 503);
+
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let closeSession: (() => void) | null = null;
+    let typingSubscription: ConversationTypingSubscription | null = null;
+    let finished = false;
+    const pending: Uint8Array[] = [];
+    const enqueue = (value: Uint8Array) => {
+      if (finished) return;
+      if (!streamController) { pending.push(value); return; }
+      try { streamController.enqueue(value); }
+      catch {
+        finished = true;
+        if (heartbeat) clearInterval(heartbeat);
+        heartbeat = null;
+        typingSubscription?.close();
+        closeSession?.();
+      }
+    };
+
+    let opened: StreamConversationUpdatesResult;
+    try {
+      opened = getStreamer().open({
+        conversationId: access.conversationId,
+        inquiryId: access.inquiryId,
+        afterCursor,
+        signal: request.signal,
+        onUpdate: (update) => enqueue(messageFrame(update)),
+        onUnavailable: () => enqueue(encoder.encode("event: error\ndata: {\"code\":\"service_unavailable\"}\n\n")),
+      });
+    } catch {
+      return failure("service_unavailable", 503);
+    }
+    if (opened.status !== "opened") return failure(opened.status === "validation_failed" ? "invalid_request" : "service_unavailable", opened.status === "validation_failed" ? 400 : 503);
+
+    const {session} = opened;
+    closeSession = session.close;
+    if (getTypingRegistry) {
+      try {
+        typingSubscription = getTypingRegistry().subscribe({
+          conversationId: access.conversationId,
+          participant: "STAFF",
+          listener: (event) => enqueue(typingFrame(event.isTyping)),
+        });
+      } catch {
+        session.close();
+        return failure("service_unavailable", 503);
+      }
+      if (!typingSubscription) {
+        session.close();
+        return failure("service_unavailable", 503);
+      }
+    }
+    const cleanup = () => {
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = null;
+      typingSubscription?.close();
+      typingSubscription = null;
+      session.close();
+    };
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        enqueue(encoder.encode(": connected\nretry: 3000\n\n"));
+        for (const frame of pending.splice(0)) enqueue(frame);
+        heartbeat = setInterval(() => enqueue(encoder.encode(": keep-alive\n\n")), options.heartbeatIntervalMs ?? 15_000);
+        void session.completed.finally(() => {
+          if (finished) return;
+          finished = true;
+          if (heartbeat) clearInterval(heartbeat);
+          heartbeat = null;
+          typingSubscription?.close();
+          typingSubscription = null;
+          try { controller.close(); } catch { /* Cancellation may already have closed the HTTP stream. */ }
+        });
+      },
+      cancel() {
+        finished = true;
+        cleanup();
+      },
+    });
+
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Connection": "keep-alive",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  };
+}
+
+export function createCustomerResumeStreamRequestHandler(
+  getResolver: () => AccessResolver,
+  getStreamer: () => ConversationStreamer,
+  options: ConversationStreamHttpOptions = {},
+  getTypingRegistry?: () => ConversationTypingRegistry,
+  environment: CustomerConversationCookieEnvironment = process.env,
+) {
+  const handleTokenRequest = createCustomerConversationStreamRequestHandler(getResolver, getStreamer, options, getTypingRegistry);
+  return async function handle(request: Request): Promise<Response> {
+    if (!originAllowed(request, options.approvedDevelopmentOrigins)) return failure("invalid_origin", 403);
+    const token = readCustomerConversationCookie(request, environment);
+    if (!token) return failure("unauthorized", 401);
+    return handleTokenRequest(request, {params: Promise.resolve({token})});
+  };
+}

@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-yolpol}
+      POSTGRES_USER: ${POSTGRES_USER:-yolpol}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-for-local-development}
+    ports:
+      - "${POSTGRES_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  postgres-test:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    profiles: ["integration"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-yolpol_integration}
+      POSTGRES_USER: ${POSTGRES_TEST_USER:-yolpol_test}
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-local-integration-only}
+    ports:
+      - "127.0.0.1:${POSTGRES_TEST_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  postgres_data:

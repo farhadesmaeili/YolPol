@@ -32,6 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+/deploy/staging/runtime.env
+/deploy/staging/secrets/
+/deploy/monitoring/runtime.env
+/deploy/monitoring/secrets/
+/backups/
+**/yolpol-*.dump.age
+**/yolpol-*.manifest.json
+**/yolpol-*.partial.*
 
 # vercel
 .vercel

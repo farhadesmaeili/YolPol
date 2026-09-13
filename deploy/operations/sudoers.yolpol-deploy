@@ -1,0 +1,3 @@
+Defaults!/opt/yolpol/bin/yolpol-deploy env_reset, secure_path=/usr/sbin\:/usr/bin\:/sbin\:/bin
+Defaults!/opt/yolpol/bin/yolpol-deploy use_pty
+yolpol-operator ALL=(root) NOPASSWD:NOSETENV: /opt/yolpol/bin/yolpol-deploy

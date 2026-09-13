@@ -1,0 +1,84 @@
+import {messageBodyMaxLength} from "@/features/inquiries/domain/validation/message-input-validation";
+import type {CustomerChatMessage} from "@/features/inquiries/presentation/view-models/customer-chat-view-model";
+
+export type CustomerChatFailure = "required" | "too_long" | "validation" | "rate_limited" | "network" | "service";
+export type CustomerChatHistoryFailure = "rate_limited" | "network" | "service";
+export type CustomerChatStatus = "idle" | "submitting";
+export type CustomerChatHistoryStatus = "loading" | "loaded" | "failed";
+
+export type CustomerChatState = Readonly<{
+  draft: string;
+  messages: readonly CustomerChatMessage[];
+  status: CustomerChatStatus;
+  historyStatus: CustomerChatHistoryStatus;
+  historyFailure: CustomerChatHistoryFailure | null;
+  failure: CustomerChatFailure | null;
+  sentAnnouncement: boolean;
+}>;
+
+export type CustomerChatAction =
+  | Readonly<{type: "draft_changed"; value: string}>
+  | Readonly<{type: "history_started"}>
+  | Readonly<{type: "history_succeeded"; messages: readonly CustomerChatMessage[]}>
+  | Readonly<{type: "history_failed"; failure: CustomerChatHistoryFailure}>
+  | Readonly<{type: "submission_started"}>
+  | Readonly<{type: "submission_failed"; failure: CustomerChatFailure}>
+  | Readonly<{type: "submission_succeeded"; message: CustomerChatMessage}>
+  | Readonly<{type: "realtime_message_received"; message: CustomerChatMessage}>;
+
+export function createInitialCustomerChatState(initialMessages?: readonly CustomerChatMessage[]): CustomerChatState {
+  return Object.freeze({
+    draft: "",
+    messages: Object.freeze(initialMessages ? [...initialMessages] : []),
+    status: "idle",
+    historyStatus: initialMessages ? "loaded" : "loading",
+    historyFailure: null,
+    failure: null,
+    sentAnnouncement: false,
+  });
+}
+
+export function customerMessageDraftFailure(draft: string): "required" | "too_long" | null {
+  const normalized = draft.trim();
+  if (!normalized) return "required";
+  if (normalized.length > messageBodyMaxLength) return "too_long";
+  return null;
+}
+
+export function customerChatReducer(state: CustomerChatState, action: CustomerChatAction): CustomerChatState {
+  switch (action.type) {
+    case "draft_changed":
+      return Object.freeze({...state, draft: action.value, failure: null, sentAnnouncement: false});
+    case "history_started":
+      return Object.freeze({...state, historyStatus: "loading", historyFailure: null});
+    case "history_succeeded": {
+      const historyIds = new Set(action.messages.map(({id}) => id));
+      const messages = [...action.messages, ...state.messages.filter(({id}) => !historyIds.has(id))];
+      messages.sort((left, right) => (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER));
+      return Object.freeze({...state, messages: Object.freeze(messages), historyStatus: "loaded", historyFailure: null});
+    }
+    case "history_failed":
+      return Object.freeze({...state, historyStatus: "failed", historyFailure: action.failure});
+    case "submission_started":
+      return Object.freeze({...state, status: "submitting", failure: null, sentAnnouncement: false});
+    case "submission_failed":
+      return Object.freeze({...state, status: "idle", failure: action.failure, sentAnnouncement: false});
+    case "submission_succeeded":
+      return Object.freeze({
+        draft: "",
+        messages: state.messages.some(({id}) => id === action.message.id) ? state.messages : Object.freeze([...state.messages, Object.freeze(action.message)]),
+        status: "idle",
+        historyStatus: state.historyStatus,
+        historyFailure: state.historyFailure,
+        failure: null,
+        sentAnnouncement: true,
+      });
+    case "realtime_message_received": {
+      const existing = state.messages.find(({id}) => id === action.message.id);
+      if (existing && (action.message.position === undefined || existing.position === action.message.position)) return state;
+      const messages = existing ? state.messages.map((message) => message.id === action.message.id ? action.message : message) : [...state.messages, action.message];
+      if (action.message.position !== undefined) messages.sort((left, right) => (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER));
+      return Object.freeze({...state, messages: Object.freeze(messages)});
+    }
+  }
+}
