@@ -14,6 +14,11 @@ const policy = readFileSync(policyPath, "utf8");
 const sudoers = readFileSync(resolve(repositoryRoot, "deploy/operations/sudoers.yolpol-deploy"), "utf8");
 const operationsReadme = readFileSync(resolve(repositoryRoot, "deploy/operations/README.md"), "utf8");
 
+function wrapperComposeInvocations(subcommand: "run" | "up"): string[] {
+  const invocationPattern = new RegExp(`\\bstaging_compose\\b.*\\b${subcommand}\\b`, "u");
+  return wrapper.split(/\r?\n/u).map((line) => line.trim()).filter((line) => invocationPattern.test(line));
+}
+
 function stageBlock(stage: string): string {
   const lines = dockerfile.split(/\r?\n/u);
   const start = lines.findIndex((line) => line.endsWith(` AS ${stage}`));
@@ -253,14 +258,35 @@ describe("Production deployment hardening", () => {
 
   it("exposes only fixed service operations and no monitoring activation", () => {
     expect(wrapper).toContain("/usr/bin/flock -x 9");
-    expect(wrapper).toContain("--no-build");
     expect(wrapper).not.toContain("deploy-monitoring");
     expect(wrapper).not.toMatch(/docker (?:exec|run)|compose .*\b(?:restore|backup-retention)\b|systemctl/u);
     expect(wrapper).not.toContain("secret rotation");
-    expect(wrapper).toContain("--no-deps --no-build --interactive=false --no-TTY backup-verify verify");
     expect(wrapper).toContain("run_sensitive staging_compose");
     expect(policy).toContain("validate_staging_compose_model");
     expect(policy).toContain("validate_monitoring_compose_model");
+  });
+
+  it("uses valid fixed Compose run commands for migrations and backups", () => {
+    const invocations = wrapperComposeInvocations("run");
+
+    expect(invocations).toEqual([
+      "run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate",
+      "run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create",
+      'run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"',
+    ]);
+    expect(invocations.every((invocation) => !invocation.includes("--no-build"))).toBe(true);
+  });
+
+  it("keeps no-build protection on every fixed Compose up command", () => {
+    const invocations = wrapperComposeInvocations("up");
+
+    expect(invocations).toEqual([
+      "staging_compose up -d --no-build --no-deps postgres",
+      "staging_compose up -d --no-build --no-deps web",
+      "staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback",
+      "staging_compose up -d --no-build --no-deps edge",
+    ]);
+    expect(invocations.every((invocation) => invocation.includes("--no-build"))).toBe(true);
   });
 
   it("keeps sudo limited to the exact root-owned wrapper", () => {

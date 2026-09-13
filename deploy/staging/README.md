@@ -27,7 +27,7 @@ The authoritative VPS ownership, restricted-wrapper, sudoers, lock, audit, and i
     backups/                  encrypted artifacts and adjacent manifests only
 ```
 
-Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which always adds `--no-build`; it must never use `latest` or rebuild a release on the server. The promoted Compose definition is image-only and contains no `build` metadata. Local validation may omit the image variables only after explicitly building the fixed `:local` image names.
+Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which adds `--no-build` to Compose `up` operations; it must never use `latest` or rebuild a release on the server. One-off Compose `run` operations omit that unsupported flag and remain image-only because the promoted Compose definition contains no `build` metadata. Local validation may omit the image variables only after explicitly building the fixed `:local` image names.
 
 The `secrets` directory is `root:root` mode `700` and is not operator-readable. Database env files are `root:root` mode `400` because root-run Compose consumes them. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; files mounted into first-party containers are therefore owned by the dedicated container-only UID/GID `10001:10001` with mode `400` inside the root-only parent. Do not create a host login with that identity or weaken file permissions. Verify this exact non-root read path on the target host before activation.
 
@@ -56,11 +56,11 @@ docker build --target worker-runtime --tag yolpol-worker:local ../..
 docker build --target migration-runtime --tag yolpol-migration:local ../..
 docker build --target operations-runtime --tag yolpol-backup-restore:local ../..
 docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d postgres
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-create
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-verify verify <backup-id>
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-deep-verify deep-verify <backup-id>
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-create
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-verify verify <backup-id>
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-deep-verify deep-verify <backup-id>
 # Copy the encrypted artifact and manifest off-server, verify the copied pair, and confirm remote durability.
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration run --rm --no-build migrate
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration run --rm migrate
 docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d web inquiry-notifications conversation-translation conversation-ai-fallback
 docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d edge
 ```

@@ -29,7 +29,7 @@ The wrapper and standard-library Python policy helper:
 | `health` | Check the five fixed Staging services and the code-owned web readiness request. |
 | `pull-approved-images` | Pull only the images in the two validated resolved models. |
 | `deploy-database` | Start/update only Staging PostgreSQL, with `--no-build --no-deps`. |
-| `migrate` | Run only the fixed migration service, non-interactively and with `--no-build --no-deps`. |
+| `migrate` | Run only the fixed image-only migration service, non-interactively and with `--no-deps`. |
 | `deploy-app` | Start/update only the Staging web service. |
 | `deploy-workers` | Start/update only the three named Staging workers. |
 | `deploy-edge` | Start/update only the Staging Caddy service. |

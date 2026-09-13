@@ -71,7 +71,7 @@ Manifest generation additionally takes `--git-sha`, `--repository`, `--images-di
 
 ## Promotion and migration gate
 
-Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Root copies the five immutable references and full Git SHA from one checksum-verified manifest into the environment's root-owned runtime settings. The promoted Staging and Monitoring Compose definitions are image-only and require neither a source checkout nor a Dockerfile below `/opt/yolpol`. On the VPS, `yolpol-operator` invokes only the restricted `/opt/yolpol/bin/yolpol-deploy` command surface; the wrapper fixes Compose paths, sanitizes the environment, verifies digest-only references, and uses `--no-build`. Production must never rebuild source or substitute a same-named tag.
+Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Root copies the five immutable references and full Git SHA from one checksum-verified manifest into the environment's root-owned runtime settings. The promoted Staging and Monitoring Compose definitions are image-only and require neither a source checkout nor a Dockerfile below `/opt/yolpol`. On the VPS, `yolpol-operator` invokes only the restricted `/opt/yolpol/bin/yolpol-deploy` command surface; the wrapper fixes Compose paths, sanitizes the environment, verifies digest-only references, and uses `--no-build` for Compose `up` operations. One-off Compose `run` operations omit that unsupported flag and still cannot rebuild because the deployment definitions contain no build contexts. Production must never rebuild source or substitute a same-named tag.
 
 When a release includes migrations, preserve this explicit gate:
 
