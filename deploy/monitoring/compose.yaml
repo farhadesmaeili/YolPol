@@ -213,10 +213,6 @@ services:
   operations-exporter:
     <<: *service-security
     image: "${YOLPOL_OPERATIONS_METRICS_IMAGE:-yolpol-operations-metrics:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: monitoring-runtime
     restart: unless-stopped
     environment:
       YOLPOL_DEPLOYMENT_ENVIRONMENT: staging

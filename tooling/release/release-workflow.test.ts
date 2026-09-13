@@ -41,4 +41,9 @@ describe("release publication workflow", () => {
     expect(monitoringCompose).not.toContain(":latest");
     expect(workflow).toContain("@${{ steps.digest.outputs.value }}");
   });
+
+  it("keeps promoted Compose definitions image-only", () => {
+    expect(stagingCompose).not.toMatch(/^\s+build:/mu);
+    expect(monitoringCompose).not.toMatch(/^\s+build:/mu);
+  });
 });

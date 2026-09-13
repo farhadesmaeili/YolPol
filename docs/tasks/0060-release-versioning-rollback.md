@@ -15,8 +15,8 @@ The implementation and complete operator contract are documented in `deploy/rele
 - `.github/workflows/release.yml` validates the tag/package/main ancestry and existing release checks, publishes/reuses five Linux/amd64 SHA identities with minimum job permissions, prevents conflicting SemVer aliases, generates/checksums/validates a manifest, and safely creates or completes a GitHub Release. It never deploys.
 - `tooling/release` owns strict version, migration fingerprint, manifest, checksum, and pure rollback planning behavior plus focused tests and the JSON schema.
 - The Dockerfile accepts safe OCI source/revision/version build arguments without passing runtime secrets or adding unstable timestamps.
-- Staging and Monitoring Compose keep local `build` behavior and safe `:local` image defaults while accepting explicit manifest-derived `YOLPOL_*_IMAGE` digest refs for future `--no-build` deployment.
-- `package.json` exposes cohesive local validation/generation/planning commands. The application version remains `0.1.0`; no application or Drizzle migration changes are made.
+- Staging and Monitoring Compose are image-only, retain deterministic `:local` image-name defaults for explicitly built local targets, and accept manifest-derived `YOLPOL_*_IMAGE` digest refs for `--no-build` deployment.
+- `package.json` exposes cohesive local validation/generation/planning commands. At the time this foundation was introduced, the application remained `0.1.0`; no application or Drizzle migration changes were made by that task.
 
 ## Safety model
 

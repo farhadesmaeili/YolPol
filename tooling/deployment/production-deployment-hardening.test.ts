@@ -1,7 +1,7 @@
 import {spawnSync} from "node:child_process";
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join, resolve} from "node:path";
+import {dirname, join, resolve} from "node:path";
 
 import {describe, expect, it} from "vitest";
 
@@ -43,6 +43,11 @@ function runPython(...args: readonly string[]) {
 function requireObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected an object.");
   return value as Record<string, unknown>;
+}
+
+function promoteRepositoryFile(source: string, destination: string): void {
+  mkdirSync(dirname(destination), {recursive: true});
+  copyFileSync(resolve(repositoryRoot, source), destination);
 }
 
 function runResolvedPolicy(mode: "staging" | "monitoring", model: unknown) {
@@ -118,24 +123,39 @@ describe("Production deployment hardening", () => {
     expect(result.stderr).toContain("OK");
   });
 
-  dockerIt("validates resolved Compose JSON and rejects model-level privilege attempts", () => {
+  dockerIt("validates promoted Compose JSON from target-host project directories and rejects model-level privilege attempts", () => {
     const temporaryDirectory = mkdtempSync(join(tmpdir(), "yolpol-deployment-policy-"));
     try {
+      const stagingProjectDirectory = join(temporaryDirectory, "opt", "yolpol", "staging");
+      const monitoringProjectDirectory = join(temporaryDirectory, "opt", "yolpol", "monitoring");
+      for (const [source, destination] of [
+        ["deploy/staging/compose.yaml", join(stagingProjectDirectory, "compose.yaml")],
+        ["deploy/staging/Caddyfile", join(stagingProjectDirectory, "Caddyfile")],
+        ["deploy/staging/runtime.env.example", join(stagingProjectDirectory, "runtime.env")],
+        ["deploy/monitoring/compose.yaml", join(monitoringProjectDirectory, "compose.yaml")],
+        ["deploy/monitoring/runtime.env.example", join(monitoringProjectDirectory, "runtime.env")],
+        ["deploy/monitoring/prometheus/prometheus.yml", join(monitoringProjectDirectory, "prometheus", "prometheus.yml")],
+        ["deploy/monitoring/alertmanager/alertmanager.local.yml", join(monitoringProjectDirectory, "alertmanager", "alertmanager.local.yml")],
+        ["deploy/monitoring/blackbox/blackbox.yml", join(monitoringProjectDirectory, "blackbox", "blackbox.yml")],
+      ]) promoteRepositoryFile(source, destination);
+
       const databaseUrl = "postgresql://yolpol:synthetic-password@postgres:5432/yolpol";
-      const postgresEnvironment = join(temporaryDirectory, "postgres.env");
-      const appEnvironment = join(temporaryDirectory, "app-database.env");
-      const migrationEnvironment = join(temporaryDirectory, "migration-database.env");
-      const backupEnvironment = join(temporaryDirectory, "backup-database.env");
-      const restoreEnvironment = join(temporaryDirectory, "restore-database.env");
+      const stagingSecretsDirectory = join(stagingProjectDirectory, "secrets");
+      mkdirSync(stagingSecretsDirectory, {recursive: true});
+      const postgresEnvironment = join(stagingSecretsDirectory, "postgres.env");
+      const appEnvironment = join(stagingSecretsDirectory, "app-database.env");
+      const migrationEnvironment = join(stagingSecretsDirectory, "migration-database.env");
+      const backupEnvironment = join(stagingSecretsDirectory, "backup-database.env");
+      const restoreEnvironment = join(stagingSecretsDirectory, "restore-database.env");
       writeFileSync(postgresEnvironment, "POSTGRES_DB=yolpol\nPOSTGRES_USER=yolpol\nPOSTGRES_PASSWORD=synthetic-password\n", {encoding: "utf8", mode: 0o600});
       for (const path of [appEnvironment, migrationEnvironment, backupEnvironment, restoreEnvironment]) {
         writeFileSync(path, `DATABASE_URL=${databaseUrl}\n`, {encoding: "utf8", mode: 0o600});
       }
       const staging = spawnSync("docker", [
         "compose", "-p", "yolpol-staging",
-        "--project-directory", resolve(repositoryRoot, "deploy/staging"),
-        "--env-file", resolve(repositoryRoot, "deploy/staging/runtime.env.example"),
-        "-f", resolve(repositoryRoot, "deploy/staging/compose.yaml"),
+        "--project-directory", stagingProjectDirectory,
+        "--env-file", join(stagingProjectDirectory, "runtime.env"),
+        "-f", join(stagingProjectDirectory, "compose.yaml"),
         "--profile", "migration", "--profile", "backup", "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
@@ -155,6 +175,16 @@ describe("Production deployment hardening", () => {
       const stagingModel: unknown = JSON.parse(staging.stdout);
       const stagingPolicy = runResolvedPolicy("staging", stagingModel);
       expect(stagingPolicy.status, stagingPolicy.stderr).toBe(0);
+
+      const unexpectedBuild = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(unexpectedBuild.services).web).build = {
+        context: "/opt",
+        dockerfile: "Dockerfile",
+        target: "runtime",
+      };
+      const unexpectedBuildPolicy = runResolvedPolicy("staging", unexpectedBuild);
+      expect(unexpectedBuildPolicy.status).toBe(1);
+      expect(unexpectedBuildPolicy.stderr).toContain("unexpected Compose build");
 
       const privilegedStaging = structuredClone(requireObject(stagingModel));
       const stagingServices = requireObject(privilegedStaging.services);
@@ -190,9 +220,9 @@ describe("Production deployment hardening", () => {
 
       const monitoring = spawnSync("docker", [
         "compose", "-p", "yolpol-monitoring",
-        "--project-directory", resolve(repositoryRoot, "deploy/monitoring"),
-        "--env-file", resolve(repositoryRoot, "deploy/monitoring/runtime.env.example"),
-        "-f", resolve(repositoryRoot, "deploy/monitoring/compose.yaml"),
+        "--project-directory", monitoringProjectDirectory,
+        "--env-file", join(monitoringProjectDirectory, "runtime.env"),
+        "-f", join(monitoringProjectDirectory, "compose.yaml"),
         "config", "--format", "json",
       ], {cwd: repositoryRoot, encoding: "utf8", maxBuffer: 8_000_000, timeout: 20_000});
       expect(monitoring.status, monitoring.stderr).toBe(0);

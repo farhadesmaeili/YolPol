@@ -35,7 +35,8 @@ describe("Monitoring and alerting deployment contract", () => {
     }
     expect(compose).not.toMatch(/image:.*:latest/iu);
     expect(dockerfile).toContain("FROM base AS monitoring-runtime");
-    expect(serviceBlock("operations-exporter")).toContain("target: monitoring-runtime");
+    expect(serviceBlock("operations-exporter")).toContain('${YOLPOL_OPERATIONS_METRICS_IMAGE:-yolpol-operations-metrics:local}');
+    expect(compose).not.toMatch(/^\s+build:/mu);
   });
 
   it("publishes only loopback administration UIs and no exporter port", () => {

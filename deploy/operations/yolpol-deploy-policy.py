@@ -551,15 +551,8 @@ def validate_profiles(service: dict[str, Any], expected: set[str]) -> None:
     require(string_set(service.get("profiles"), "Compose profiles") == expected, "Compose profile")
 
 
-def validate_build(service: dict[str, Any], target: str | None) -> None:
-    build = service.get("build")
-    if target is None:
-        require(build is None, "unexpected Compose build")
-        return
-    require(isinstance(build, dict), "Compose build")
-    require(build.get("context") == "/opt/yolpol", "Compose build context")
-    require(build.get("dockerfile") == "Dockerfile", "Compose Dockerfile")
-    require(build.get("target") == target, "Compose build target")
+def validate_no_build(service: dict[str, Any]) -> None:
+    require("build" not in service, "unexpected Compose build")
 
 
 def validate_staging_compose_model(
@@ -626,17 +619,6 @@ def validate_staging_compose_model(
         "conversation-translation": {("groq_api_key", "/run/secrets/groq_api_key")},
         "conversation-ai-fallback": {("groq_api_key", "/run/secrets/groq_api_key")},
         "backup-deep-verify": {("backup_age_identity", "/run/secrets/backup_age_identity")},
-    }
-    build_targets = {
-        "web": "runtime",
-        "inquiry-notifications": "worker-runtime",
-        "conversation-translation": "worker-runtime",
-        "conversation-ai-fallback": "worker-runtime",
-        "migrate": "migration-runtime",
-        "backup-create": "operations-runtime",
-        "backup-verify": "operations-runtime",
-        "backup-deep-verify": "operations-runtime",
-        "backup-retention": "operations-runtime",
     }
     application_environment = {
         "NODE_ENV": "production",
@@ -713,7 +695,7 @@ def validate_staging_compose_model(
         require(service.get("image") == images[name], "Staging service image")
         validate_command(service, commands[name])
         validate_profiles(service, {"migration"} if name == "migrate" else ({"backup"} if name.startswith("backup-") else set()))
-        validate_build(service, build_targets.get(name))
+        validate_no_build(service)
         require(string_set(service.get("networks"), "Staging service networks") == networks[name], "Staging service network")
         require(normalized_mounts(service) == mounts.get(name, set()), "Staging service mount")
         require(normalized_secrets(service) == secrets.get(name, set()), "Staging service secret")
@@ -879,7 +861,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         require(service.get("image") == images[name], "Monitoring service image")
         validate_command(service, commands[name])
         validate_profiles(service, set())
-        validate_build(service, "monitoring-runtime" if name == "operations-exporter" else None)
+        validate_no_build(service)
         require(string_set(service.get("networks"), "Monitoring service networks") == expected_networks[name], "Monitoring service network")
         require(normalized_mounts(service) == expected_mounts.get(name, set()), "Monitoring service mount")
         require(normalized_secrets(service) == expected_secrets.get(name, set()), "Monitoring service secret")

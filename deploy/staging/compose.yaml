@@ -15,10 +15,6 @@ x-application-environment: &application-environment
 
 x-backup-operation: &backup-operation
   image: "${YOLPOL_BACKUP_RESTORE_IMAGE:-yolpol-backup-restore:local}"
-  build:
-    context: ../..
-    dockerfile: Dockerfile
-    target: operations-runtime
   restart: "no"
   read_only: true
   tmpfs:
@@ -61,10 +57,6 @@ services:
 
   web:
     image: "${YOLPOL_WEB_IMAGE:-yolpol-web:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: runtime
     restart: "on-failure:5"
     env_file:
       - "${YOLPOL_STAGING_DATABASE_ENV_FILE:?Set YOLPOL_STAGING_DATABASE_ENV_FILE}"
@@ -117,10 +109,6 @@ services:
 
   inquiry-notifications:
     image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: worker-runtime
     command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/inquiry-notifications.ts"]
     restart: "on-failure:5"
     env_file:
@@ -145,10 +133,6 @@ services:
 
   conversation-translation:
     image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: worker-runtime
     command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-translation.ts"]
     restart: "on-failure:5"
     env_file:
@@ -174,10 +158,6 @@ services:
 
   conversation-ai-fallback:
     image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: worker-runtime
     command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-ai-fallback.ts"]
     restart: "on-failure:5"
     env_file:
@@ -204,10 +184,6 @@ services:
   migrate:
     profiles: ["migration"]
     image: "${YOLPOL_MIGRATION_IMAGE:-yolpol-migration:local}"
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: migration-runtime
     restart: "no"
     env_file:
       - "${YOLPOL_STAGING_MIGRATION_ENV_FILE:?Set YOLPOL_STAGING_MIGRATION_ENV_FILE}"

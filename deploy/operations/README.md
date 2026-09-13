@@ -91,6 +91,8 @@ Every first-party runtime uses non-login UID/GID `10001:10001`. Confirm both num
 
 `incoming/` is the only operator-writable path. The wrapper never reads it. Root promotion must copy reviewed bytes into a root-controlled temporary path, set final ownership/modes, and atomically place them below the trusted tree. All listed paths and the fixed system executable chain are checked with shell type predicates, `readlink -f`, `stat`, and `getfacl`; symlinks, writable ancestors, named ACL entries, ACL masks, and default ACLs fail closed. Because no checked ancestor is operator-writable, validation-to-execution races are outside the attacker model.
 
+Promote the repository-managed Staging and Monitoring files into exactly the paths shown above and run Compose with project directories `/opt/yolpol/staging` and `/opt/yolpol/monitoring`. Both promoted Compose definitions are image-only: `/opt/yolpol` needs no source checkout or Dockerfile, and any resolved service `build` metadata fails policy validation. Relative configuration binds remain confined to their fixed project directory while first-party images come only from the authenticated release manifest.
+
 ## Audit and resource controls
 
 Create both logs and state files before enabling sudo. Every valid invocation must append a `started` record before work and a final success/failure record; rejected sudo invocations append `denied`. Records contain only UTC timestamp, sanitized sudo actor, fixed action, validated-or-unknown revision, validated backup ID or `none`, result, and exit code. `sync -f` makes each append durable. A failed audit preflight prevents the operation.
