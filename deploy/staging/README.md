@@ -4,9 +4,9 @@ This directory is the repository-managed deployment definition for the future `h
 
 Use Compose project `yolpol-staging`; the top-level `name` already enforces it. Do not add `container_name` or reuse these volumes, networks, database credentials, or Caddy state for Production.
 
-## Host files
+## Host files and privilege boundary
 
-The intended server layout is:
+The authoritative VPS ownership, restricted-wrapper, sudoers, lock, audit, and incoming-artifact contract is in `deploy/operations/README.md`. The Staging portion remains:
 
 ```text
 /opt/yolpol/
@@ -14,7 +14,7 @@ The intended server layout is:
     compose.yaml              repository-managed copy
     Caddyfile                 repository-managed copy
     runtime.env               generated non-secret deployment settings
-    secrets/                  generated secret material
+    secrets/                  root-controlled generated secret material
       postgres.env
       app-database.env
       migration-database.env
@@ -27,9 +27,9 @@ The intended server layout is:
     backups/                  encrypted artifacts and adjacent manifests only
 ```
 
-Create `runtime.env` from `runtime.env.example`, copy its full Git revision and five immutable image references from one checksum-verified release manifest, replace its paths, and keep it outside Git. The Staging project uses the web, worker, migration, and backup/restore refs; Monitoring consumes the fifth Operations Metrics ref. SemVer tags are readable aliases only. Future deployment must use `repository@sha256:digest` values and `docker compose --no-build`; it must never use `latest` or rebuild a release on the server. Local validation can omit the image variables and retain the Compose `build` definitions plus explicit `:local` defaults.
+Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Future deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which always adds `--no-build`; it must never use `latest` or rebuild a release on the server. Local validation can omit the image variables and retain the Compose `build` definitions plus explicit `:local` defaults.
 
-The `secrets` directory should be accessible only to the deployment operator (for example mode `700`). Secret files and database env files should be mode `600`, or equivalently restricted. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; on Linux, the deployment service identity must own the credential files as host UID/GID 1001, or a restrictive ACL/group mapping must grant container UID 1001 read access. Verify this exact non-root read path on the target host before activation.
+The `secrets` directory is `root:root` mode `700` and is not operator-readable. Database env files are `root:root` mode `400` because root-run Compose consumes them. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; files mounted into first-party containers are therefore owned by the dedicated container-only UID/GID `10001:10001` with mode `400` inside the root-only parent. Do not create a host login with that identity or weaken file permissions. Verify this exact non-root read path on the target host before activation.
 
 `postgres.env` contains only the PostgreSQL image initialization variables `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The application, migration, backup, and explicit restore-target database environment files each contain only a complete `DATABASE_URL`. Do not place any of those values in `runtime.env`, Compose YAML, shell history, or Git. `restore-database.env` must identify a separately provisioned empty recovery database, never the currently active Staging database.
 
@@ -39,16 +39,16 @@ This foundation does not create a role bootstrap mechanism. Initially the migrat
 
 The root Dockerfile has four runtime targets:
 
-- `runtime`: unchanged Next.js standalone web artifact, Node 22 Bookworm slim, UID/GID 1001, `node server.js`.
-- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 1001.
-- `migration-runtime`: production Drizzle/pg dependencies, committed SQL/journal, and the migration runner; runs as UID/GID 1001.
-- `operations-runtime`: the pinned PostgreSQL 17.6 Alpine runtime plus `age`, `jq`, and the backup/restore entrypoint; runs as UID/GID 1001 and contains no application source or private identity.
+- `runtime`: unchanged Next.js standalone web artifact, Node 22 Bookworm slim, UID/GID 10001, `node server.js`.
+- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 10001.
+- `migration-runtime`: production Drizzle/pg dependencies, committed SQL/journal, and the migration runner; runs as UID/GID 10001.
+- `operations-runtime`: the pinned PostgreSQL 17.6 Alpine runtime plus `age`, `jq`, and the backup/restore entrypoint; runs as UID/GID 10001 and contains no application source or private identity.
 
 Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, and restore services are also profile-gated one-shot tools. None starts during a normal `up`.
 
 ## Local build and future release order
 
-Run commands from this directory, using the host-only settings file:
+The direct Compose commands below are for local validation or interactive root recovery. On the real VPS, `yolpol-operator` uses only `/opt/yolpol/bin/yolpol-deploy`; it never runs Docker or Compose directly. Run local/root commands from this directory, using the host-only settings file:
 
 ```sh
 docker compose --env-file /opt/yolpol/staging/runtime.env build web inquiry-notifications migrate
@@ -95,7 +95,7 @@ There are three distinct validation levels:
 2. `backup-deep-verify deep-verify <backup-id>` additionally decrypts to a pipe and runs `pg_restore --list`; it needs the read-only identity file but writes no plaintext archive.
 3. A full recovery exercise restores into a separate empty disposable database and performs the post-restore schema checks. A successful `pg_dump` alone is not proof of recovery.
 
-The backup directory is a narrow bind mount. On Linux create `/opt/yolpol/staging/backups` for host UID/GID 1001 with mode `700` (or an equivalently restrictive ACL) and keep completed files operator-only, normally mode `600`. Do not use `777`. Encrypted backups remain sensitive operational assets.
+The backup directory is a narrow bind mount. On Linux create `/opt/yolpol/staging/backups` for the container-only UID/GID `10001:10001` with mode `700`, beneath the root-owned non-operator-writable Staging parent; completed files remain mode `600`. Operators access backup creation and identity-free verification only through the restricted wrapper. Do not use `777`. Encrypted backups remain sensitive operational assets.
 
 `YOLPOL_STAGING_BACKUP_AGE_RECIPIENT` is public configuration. `backup-age-identity` is secret recovery material and is mounted read-only only into deep-verification and restore services. A Production recovery identity must be held securely outside the application server; it must never exist only beside the database and local backups. The image, repository, manifest, and shell history must never contain the private identity.
 
@@ -170,4 +170,4 @@ Do not run `down -v`, `docker volume prune`, or any broad cleanup. Report and le
 
 ## Future first-server sequence
 
-The future manual deployment is: provision and harden Linux/SSH/firewall/operator access; install Docker Engine and Compose; create `/opt/yolpol/staging`; copy repository-managed files; create restricted non-secret and secret files; prepare the dedicated Staging database identity; build/load immutable images; start PostgreSQL; run the explicit migration; start web/workers; verify live and ready; validate then activate Caddy; point Staging DNS; obtain TLS; and perform manual acceptance. None of the host hardening, DNS, TLS, server access, GitHub environments/secrets, or external credential setup is performed by this feature.
+The future manual deployment is: provision and harden Linux/SSH/firewall/operator access; install Docker Engine and Compose; install the root-owned restricted wrapper and narrow sudoers rule; create the documented `/opt/yolpol` ownership hierarchy; copy reviewed repository-managed files; create restricted non-secret and secret files; prepare the dedicated Staging database identity; pull approved immutable images; start PostgreSQL; run the explicit migration; start web/workers; verify live and ready; validate then activate Caddy; point Staging DNS; obtain TLS; and perform manual acceptance. None of the host hardening, DNS, TLS, server access, GitHub environments/secrets, or external credential setup is performed by this feature.

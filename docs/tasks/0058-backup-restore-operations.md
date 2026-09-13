@@ -1,5 +1,7 @@
 # Backup & Restore Operations
 
+> Superseded host-identity note: Task 0061 and `deploy/operations/README.md` replace the UID/GID `1001:1001` and operator-accessible backup guidance below with the root-owned restricted-wrapper contract and container-only `10001:10001` identity. The remaining historical implementation evidence is retained.
+
 ## Goal and scope
 
 This feature adds a provider-neutral PostgreSQL logical-backup and recovery foundation for future Staging and Production operations. It does not access or deploy a server, read real credentials, upload an artifact, schedule a job, alter Production, touch Development data, delete a Docker volume, implement WAL/PITR, or add an application migration.

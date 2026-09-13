@@ -1,5 +1,7 @@
 # Staging Compose Deployment Foundation
 
+> Superseded host-identity note: Task 0061 and `deploy/operations/README.md` replace the UID/GID `1001:1001` and operator-owned secret/backup guidance below with the root-owned restricted-wrapper contract and container-only `10001:10001` identity. The remaining historical implementation evidence is retained.
+
 ## Goal and scope
 
 This feature defines the reproducible single-host Docker Compose topology and operating contract for the future YOLPOL Staging environment at `https://staging.yolpol.com`. It adds no real deployment, DNS, Cloudflare, certificate, GitHub environment/secret, Production Compose, backup job, monitoring stack, registry publication, release automation, rollback mechanism, provider call, or application database migration.

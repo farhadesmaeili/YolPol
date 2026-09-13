@@ -14,6 +14,8 @@
     "test:backup-restore:disposable": "node tooling/backup-restore/run-disposable-validation.mjs",
     "test:monitoring": "vitest run tooling/monitoring",
     "test:monitoring:disposable": "node tooling/monitoring/run-disposable-validation.mjs",
+    "test:deployment": "vitest run tooling/deployment",
+    "test:deployment:disposable": "node tooling/deployment/run-disposable-validation.mjs",
     "test:release": "vitest run tooling/release",
     "test:integration": "node tooling/testing/run-inquiry-postgres-integration.mjs",
     "db:generate": "drizzle-kit generate",

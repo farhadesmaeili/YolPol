@@ -54,15 +54,15 @@ FROM base AS worker-runtime
 
 ENV NODE_ENV=production
 
-RUN groupadd --gid 1001 nodejs \
-    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin nextjs
+RUN groupadd --gid 10001 yolpol \
+    && useradd --uid 10001 --gid yolpol --home-dir /app --no-create-home --shell /usr/sbin/nologin yolpol
 
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY tooling/workers ./tooling/workers
 COPY src ./src
 
-USER 1001:1001
+USER 10001:10001
 
 CMD ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/inquiry-notifications.ts"]
 
@@ -70,15 +70,15 @@ FROM base AS migration-runtime
 
 ENV NODE_ENV=production
 
-RUN groupadd --gid 1001 nodejs \
-    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin nextjs
+RUN groupadd --gid 10001 yolpol \
+    && useradd --uid 10001 --gid yolpol --home-dir /app --no-create-home --shell /usr/sbin/nologin yolpol
 
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY drizzle ./drizzle
 COPY tooling/migrations ./tooling/migrations
 
-USER 1001:1001
+USER 10001:10001
 
 CMD ["node", "tooling/migrations/run-migrations.mjs"]
 
@@ -86,12 +86,12 @@ FROM base AS monitoring-runtime
 
 ENV NODE_ENV=production
 
-RUN groupadd --gid 1001 nodejs \
-    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin monitoring
+RUN groupadd --gid 10001 yolpol \
+    && useradd --uid 10001 --gid yolpol --home-dir /app --no-create-home --shell /usr/sbin/nologin yolpol
 
 COPY --from=monitoring-build /tmp/operations-metrics.cjs ./operations-metrics.cjs
 
-USER 1001:1001
+USER 10001:10001
 
 EXPOSE 9464
 
@@ -112,8 +112,8 @@ LABEL org.opencontainers.image.source=$YOLPOL_SOURCE_URL \
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 RUN apk add --no-cache age jq krb5-libs libedit libldap libpq lz4-libs zstd-libs \
-    && addgroup -g 1001 yolpol \
-    && adduser -D -H -u 1001 -G yolpol -s /sbin/nologin yolpol
+    && addgroup -g 10001 yolpol \
+    && adduser -D -H -u 10001 -G yolpol -s /sbin/nologin yolpol
 
 COPY --from=postgresql-operations-client /usr/local/bin/pg_dump /usr/local/bin/pg_restore /usr/local/bin/psql /usr/local/bin/
 COPY --from=postgresql-operations-client /usr/local/lib/libpq.so.5.17 /usr/local/lib/libpq.so.5.17
@@ -123,7 +123,7 @@ RUN ln -s libpq.so.5.17 /usr/local/lib/libpq.so.5
 
 COPY --chmod=0555 tooling/backup-restore/backup-restore.sh /usr/local/bin/yolpol-backup-restore
 
-USER 1001:1001
+USER 10001:10001
 
 ENTRYPOINT ["/usr/local/bin/yolpol-backup-restore"]
 CMD ["help"]
@@ -140,17 +140,17 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-RUN groupadd --gid 1001 nodejs \
-    && useradd --uid 1001 --gid nodejs --home-dir /app --no-create-home --shell /usr/sbin/nologin nextjs
+RUN groupadd --gid 10001 yolpol \
+    && useradd --uid 10001 --gid yolpol --home-dir /app --no-create-home --shell /usr/sbin/nologin yolpol
 
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 
 RUN mkdir -p .next/cache \
-    && chown nextjs:nodejs .next/cache
+    && chown yolpol:yolpol .next/cache
 
-USER 1001:1001
+USER 10001:10001
 
 EXPOSE 3000
 

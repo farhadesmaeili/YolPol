@@ -58,10 +58,17 @@ describe("Monitoring and alerting deployment contract", () => {
   });
 
   it("confines host and Docker visibility to the standard collectors", () => {
-    expect(serviceBlock("node-exporter")).toContain("/proc:/host/proc:ro");
-    expect(serviceBlock("node-exporter")).not.toContain("docker.sock");
-    expect(serviceBlock("cadvisor")).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
-    expect(serviceBlock("cadvisor")).not.toContain("privileged:");
+    const nodeExporter = serviceBlock("node-exporter");
+    expect(nodeExporter).toContain("source: /proc");
+    expect(nodeExporter).toContain("target: /host/proc");
+    expect(nodeExporter.match(/create_host_path: false/gu)).toHaveLength(3);
+    expect(nodeExporter).not.toContain("docker.sock");
+
+    const cadvisor = serviceBlock("cadvisor");
+    expect(cadvisor).toContain("source: /var/run/docker.sock");
+    expect(cadvisor).toContain("target: /var/run/docker.sock");
+    expect(cadvisor.match(/create_host_path: false/gu)).toHaveLength(4);
+    expect(cadvisor).not.toContain("privileged:");
     expect(serviceBlock("blackbox-exporter")).toContain('user: "65534:65534"');
     expect(serviceBlock("operations-exporter")).not.toContain("docker.sock");
   });
