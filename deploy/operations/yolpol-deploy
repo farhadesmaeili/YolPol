@@ -58,6 +58,8 @@ usage() {
     '  deploy-app' \
     '  deploy-workers' \
     '  deploy-edge' \
+    '  staff-provision' \
+    '  staff-bootstrap-super-admin' \
     '  backup-create' \
     '  backup-verify <backup-id>' >&2
 }
@@ -96,7 +98,7 @@ if [ "$#" -ge 1 ]; then
     validate|status|health)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
-    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|backup-create)
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|backup-create)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
     backup-verify)
@@ -274,7 +276,7 @@ monitoring_compose() {
 validate_staging_contract() {
   require_staging_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-staging
-  if ! resolved_compose=$(staging_compose --profile migration --profile backup config --format json 2>/dev/null); then
+  if ! resolved_compose=$(staging_compose --profile migration --profile backup --profile staff-operations config --format json 2>/dev/null); then
     fail 'Staging Compose resolution failed'
   fi
   printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-staging-compose
@@ -325,6 +327,11 @@ run_sensitive() {
   /usr/bin/sync -f "$OPERATION_LOG" || true
   fail 'operation failed; root must inspect the protected operation log'
   return "$exit_code"
+}
+
+run_interactive() {
+  [ -t 0 ] && [ -t 1 ] && [ -t 2 ] || fail 'interactive terminal required'
+  "$@"
 }
 
 RESULT=failure
@@ -403,6 +410,14 @@ run_mutating_action() {
     backup-verify)
       validate_staging_contract
       run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
+      ;;
+    staff-provision)
+      validate_staging_contract
+      run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision
+      ;;
+    staff-bootstrap-super-admin)
+      validate_staging_contract
+      run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin
       ;;
   esac
 }

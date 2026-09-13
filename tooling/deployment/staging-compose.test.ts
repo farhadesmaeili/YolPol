@@ -16,6 +16,14 @@ function serviceBlock(service: string): string {
   return lines.slice(start, end < 0 ? undefined : end).join("\n");
 }
 
+function extensionBlock(extension: string): string {
+  const lines = compose.split(/\r?\n/u);
+  const start = lines.findIndex((line) => line.startsWith(`${extension}:`));
+  if (start < 0) throw new Error(`Missing ${extension} extension.`);
+  const end = lines.findIndex((line, index) => index > start && /^[a-z][a-z0-9-]*:/u.test(line));
+  return lines.slice(start, end < 0 ? undefined : end).join("\n");
+}
+
 describe("Staging Compose deployment contract", () => {
   it("provides dedicated image runtimes without embedding a build contract", () => {
     const targets = [...dockerfile.matchAll(/^FROM .+ AS ([a-z-]+)$/gmu)].map((match) => match[1]);
@@ -24,12 +32,14 @@ describe("Staging Compose deployment contract", () => {
     expect(targets).toContain("operations-runtime");
     expect(targets).toContain("operations-test");
     expect(targets.at(-1)).toBe("runtime");
+    expect(dockerfile).toContain("COPY tooling/staff-provisioning/index.ts tooling/staff-provisioning/bootstrap-super-admin.ts tooling/staff-provisioning/node-terminal.ts ./tooling/staff-provisioning/");
     expect(compose).not.toMatch(/^\s+build:/mu);
   });
 
   it("accepts explicit release image references with deterministic local image-name defaults", () => {
     expect(serviceBlock("web")).toContain('${YOLPOL_WEB_IMAGE:-yolpol-web:local}');
     expect(serviceBlock("inquiry-notifications")).toContain('${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}');
+    expect(extensionBlock("x-staff-operation")).toContain('${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}');
     expect(serviceBlock("migrate")).toContain('${YOLPOL_MIGRATION_IMAGE:-yolpol-migration:local}');
     expect(compose).toContain('${YOLPOL_BACKUP_RESTORE_IMAGE:-yolpol-backup-restore:local}');
     expect(compose).not.toContain(":latest");
@@ -43,6 +53,8 @@ describe("Staging Compose deployment contract", () => {
       "inquiry-notifications",
       "conversation-translation",
       "conversation-ai-fallback",
+      "staff-provision",
+      "staff-bootstrap-super-admin",
       "migrate",
       "backup-create",
       "backup-verify",
@@ -60,6 +72,23 @@ describe("Staging Compose deployment contract", () => {
     }
     expect(serviceBlock("restore")).toContain('profiles: ["restore"]');
     expect(serviceBlock("restore")).toContain('restart: "no"');
+    const staffOperation = extensionBlock("x-staff-operation");
+    for (const service of ["staff-provision", "staff-bootstrap-super-admin"]) {
+      expect(serviceBlock(service)).toContain("<<: *staff-operation");
+    }
+    expect(staffOperation).toContain('profiles: ["staff-operations"]');
+    expect(staffOperation).toContain('restart: "no"');
+    expect(staffOperation).toContain("stdin_open: true");
+    expect(staffOperation).toContain("tty: true");
+    expect(staffOperation).toContain("user: \"10001:10001\"");
+    expect(staffOperation).toContain("read_only: true");
+    expect(staffOperation).toContain("YOLPOL_STAGING_DATABASE_ENV_FILE");
+    expect(staffOperation).toContain("networks:\n    - backend");
+    expect(staffOperation).not.toContain("provider_egress");
+    expect(staffOperation).not.toContain("secrets:");
+    expect(staffOperation).not.toContain("ports:");
+    expect(serviceBlock("staff-provision")).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"]');
+    expect(serviceBlock("staff-bootstrap-super-admin")).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"]');
     expect(serviceBlock("backup-verify")).toContain("network_mode: none");
     expect(serviceBlock("backup-deep-verify")).toContain("network_mode: none");
     expect(compose).not.toContain("container_name:");

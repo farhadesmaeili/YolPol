@@ -60,6 +60,7 @@ RUN groupadd --gid 10001 yolpol \
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY tooling/workers ./tooling/workers
+COPY tooling/staff-provisioning/index.ts tooling/staff-provisioning/bootstrap-super-admin.ts tooling/staff-provisioning/node-terminal.ts ./tooling/staff-provisioning/
 COPY src ./src
 
 USER 10001:10001

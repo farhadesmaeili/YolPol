@@ -18,7 +18,8 @@ The wrapper and standard-library Python policy helper:
 - reject privilege, device, capability, host-network, unexpected host-PID, namespace, inherited-volume, configuration, and unexpected service-key additions;
 - validate every trusted leaf and ancestor for type, symlink absence, numeric owner/group, mode, and absence of extended/default ACLs;
 - serialize mutating operations with a root-only `flock` file and write started/final audit records durably;
-- keep migration and backup program output in a rotated root-only operation log so credentials or provider errors cannot reach the operator terminal.
+- keep migration and backup program output in a rotated root-only operation log so credentials or provider errors cannot reach the operator terminal;
+- require a real input/output/error TTY for the two argument-free Staff operations, whose existing CLIs keep password input hidden.
 
 ## Operator command surface
 
@@ -33,10 +34,14 @@ The wrapper and standard-library Python policy helper:
 | `deploy-app` | Start/update only the Staging web service. |
 | `deploy-workers` | Start/update only the three named Staging workers. |
 | `deploy-edge` | Start/update only the Staging Caddy service. |
+| `staff-provision` | Interactively run only the existing ADMIN/SALES provisioning CLI in the fixed Staff operation service. |
+| `staff-bootstrap-super-admin` | Interactively run only the existing first-Super-Admin bootstrap CLI in its fixed Staff operation service. |
 | `backup-create` | Run the fixed encrypted backup service after a 5 GiB free-space floor and 15-minute success throttle. |
 | `backup-verify <backup-id>` | Run identity-free verification for one strict ASCII Staging backup identifier. |
 
 There is deliberately no operator `deploy-monitoring` command. Restore, deep verification with the recovery identity, backup retention/deletion, arbitrary logs, shell/exec, systemctl, firewall, secret rotation, Docker administration, and database administration remain unavailable.
+
+The Staff commands accept no additional arguments. They use Compose's normal interactive mode and deliberately omit `--interactive=false`, `--no-TTY`, and `--no-build`; the wrapper first proves all three standard streams are terminals. The service command, worker image digest, UID/GID, application database environment file, backend-only network, and resource limits are fixed and policy-validated. Prompts must remain visible, so Staff CLI output is not redirected into the operation log; the normal metadata-only started/final audit records still apply. The password is read by the existing hidden-input implementation and is never placed in arguments, environment, Compose configuration, Git, or wrapper logs.
 
 ## Runtime and release authority
 
@@ -99,7 +104,7 @@ Create both logs and state files before enabling sudo. Every valid invocation mu
 
 Install `logrotate.yolpol-deploy` as `/etc/logrotate.d/yolpol-deploy`, `root:root 0644`. It rotates both root-only logs weekly or at 10 MiB, retains 13 compressed generations, and creates replacements as `0600 root:root`. The operation log may contain sensitive subprocess diagnostics and is never exposed through the wrapper.
 
-Backup creation additionally requires at least 5 GiB available in the fixed backup filesystem and at least 900 seconds since the last successful wrapper-created backup. Compose memory, CPU, PID, read-only-root, tmpfs, and capability controls remain validated. Scheduling, remote durability, and destructive retention are separate root decisions.
+Backup creation additionally requires at least 5 GiB available in the fixed backup filesystem and at least 900 seconds since the last successful wrapper-created backup. Compose memory, CPU, PID, read-only-root, tmpfs, and capability controls remain validated. Staff operation containers additionally have a fixed non-root user, read-only root filesystem, private tmpfs, no public port, no provider-egress network, and no provider secret. Scheduling, remote durability, and destructive retention are separate root decisions.
 
 ## Monitoring and local access
 

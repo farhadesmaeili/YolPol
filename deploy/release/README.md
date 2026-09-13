@@ -19,14 +19,14 @@ The owner segment is normalized to lowercase. The release inventory is:
 | Role | Docker target | GHCR repository |
 | --- | --- | --- |
 | Web | `runtime` | `ghcr.io/<owner>/yolpol-web` |
-| Shared workers | `worker-runtime` | `ghcr.io/<owner>/yolpol-worker` |
+| Shared workers and Staff provisioning tools | `worker-runtime` | `ghcr.io/<owner>/yolpol-worker` |
 | Explicit migrations | `migration-runtime` | `ghcr.io/<owner>/yolpol-migration` |
 | Backup/restore operations | `operations-runtime` | `ghcr.io/<owner>/yolpol-backup-restore` |
 | Operations Metrics exporter | `monitoring-runtime` | `ghcr.io/<owner>/yolpol-operations-metrics` |
 
 `operations-test` is local validation only. Caddy, PostgreSQL, Prometheus, Alertmanager, Node Exporter, cAdvisor, PostgreSQL Exporter, and Blackbox Exporter remain upstream digest-pinned dependencies and are not republished.
 
-The initial release platform is `linux/amd64`. Every build receives safe OCI source, full Git revision, and package version labels. Runtime secrets are not build arguments. The pinned base images, frozen pnpm lockfile, Next.js standalone artifact, non-root runtime users, and `.dockerignore` secret exclusions remain authoritative.
+The initial release platform is `linux/amd64`. Every build receives safe OCI source, full Git revision, and package version labels. Runtime secrets are not build arguments. The worker artifact packages only the existing Staff provisioning entrypoint files in addition to its existing source/runtime dependency set; it does not add a sixth image role. The pinned base images, frozen pnpm lockfile, Next.js standalone artifact, non-root runtime users, and `.dockerignore` secret exclusions remain authoritative.
 
 ## Identity, aliases, and safe reruns
 
