@@ -380,7 +380,7 @@ run_mutating_action() {
       ;;
     migrate)
       validate_staging_contract
-      run_sensitive staging_compose --profile migration run --rm --no-deps --no-build --interactive=false --no-TTY migrate
+      run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate
       ;;
     deploy-app)
       validate_staging_contract
@@ -397,12 +397,12 @@ run_mutating_action() {
     backup-create)
       validate_staging_contract
       check_backup_capacity
-      run_sensitive staging_compose --profile backup run --rm --no-deps --no-build --interactive=false --no-TTY backup-create
+      run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create
       /usr/bin/touch "$LAST_BACKUP_FILE"
       ;;
     backup-verify)
       validate_staging_contract
-      run_sensitive staging_compose --profile backup run --rm --no-deps --no-build --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
+      run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
       ;;
   esac
 }
