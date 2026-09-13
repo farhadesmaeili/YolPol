@@ -6,6 +6,34 @@ import {resolve} from "node:path";
 
 export const integrationService = "postgres-test";
 export const cleanupArguments = ["compose", "--profile", "integration", "rm", "-sf", integrationService];
+export const integrationDatabaseDefaults = Object.freeze({
+  port: "55432",
+  database: "yolpol_integration",
+  user: "yolpol_test",
+  password: "local-integration-only",
+});
+
+function environmentValue(environment, name, fallback) {
+  return environment[name] || fallback;
+}
+
+function encodeConnectionComponent(value) {
+  return encodeURIComponent(value).replace(/[!'()*]/gu, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+export function integrationDatabaseUrl(environment = process.env) {
+  const port = environmentValue(environment, "POSTGRES_TEST_PORT", integrationDatabaseDefaults.port);
+  if (!/^[0-9]{1,5}$/u.test(port) || Number(port) < 1 || Number(port) > 65_535) {
+    throw new Error("POSTGRES_TEST_PORT must be an integer from 1 through 65535.");
+  }
+
+  const database = environmentValue(environment, "POSTGRES_TEST_DB", integrationDatabaseDefaults.database);
+  const user = environmentValue(environment, "POSTGRES_TEST_USER", integrationDatabaseDefaults.user);
+  const password = environmentValue(environment, "POSTGRES_TEST_PASSWORD", integrationDatabaseDefaults.password);
+  return `postgresql://${encodeConnectionComponent(user)}:${encodeConnectionComponent(password)}@127.0.0.1:${port}/${encodeConnectionComponent(database)}`;
+}
 
 export class LifecycleLockedError extends Error {
   constructor(lockPath) {
