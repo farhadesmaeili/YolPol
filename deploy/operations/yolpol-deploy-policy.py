@@ -120,6 +120,8 @@ STAGING_SERVICES = {
     "inquiry-notifications",
     "conversation-translation",
     "conversation-ai-fallback",
+    "staff-provision",
+    "staff-bootstrap-super-admin",
     "migrate",
     "backup-create",
     "backup-verify",
@@ -159,7 +161,9 @@ ALLOWED_SERVICE_KEYS = {
     "secrets",
     "security_opt",
     "stop_grace_period",
+    "stdin_open",
     "tmpfs",
+    "tty",
     "user",
     "volumes",
 }
@@ -560,7 +564,7 @@ def validate_staging_compose_model(
     runtime: dict[str, str],
     secret_environments: dict[str, dict[str, str]],
 ) -> None:
-    exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-application-environment", "x-backup-operation", "x-json-logging"}, "Staging Compose model")
+    exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-application-environment", "x-backup-operation", "x-json-logging", "x-staff-operation"}, "Staging Compose model")
     require(model.get("name") == "yolpol-staging", "Staging project name")
     services = service_map(model, STAGING_SERVICES)
     images = {
@@ -569,6 +573,8 @@ def validate_staging_compose_model(
         "inquiry-notifications": runtime["YOLPOL_WORKER_IMAGE"],
         "conversation-translation": runtime["YOLPOL_WORKER_IMAGE"],
         "conversation-ai-fallback": runtime["YOLPOL_WORKER_IMAGE"],
+        "staff-provision": runtime["YOLPOL_WORKER_IMAGE"],
+        "staff-bootstrap-super-admin": runtime["YOLPOL_WORKER_IMAGE"],
         "migrate": runtime["YOLPOL_MIGRATION_IMAGE"],
         "backup-create": runtime["YOLPOL_BACKUP_RESTORE_IMAGE"],
         "backup-verify": runtime["YOLPOL_BACKUP_RESTORE_IMAGE"],
@@ -582,6 +588,8 @@ def validate_staging_compose_model(
         "inquiry-notifications": ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/inquiry-notifications.ts"],
         "conversation-translation": ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-translation.ts"],
         "conversation-ai-fallback": ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-ai-fallback.ts"],
+        "staff-provision": ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"],
+        "staff-bootstrap-super-admin": ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"],
         "migrate": None,
         "backup-create": ["create"],
         "backup-verify": ["help"],
@@ -595,6 +603,8 @@ def validate_staging_compose_model(
         "inquiry-notifications": {"backend", "provider_egress"},
         "conversation-translation": {"backend", "provider_egress"},
         "conversation-ai-fallback": {"backend", "provider_egress"},
+        "staff-provision": {"backend"},
+        "staff-bootstrap-super-admin": {"backend"},
         "migrate": {"backend"},
         "backup-create": {"backend"},
         "backup-verify": set(),
@@ -658,6 +668,8 @@ def validate_staging_compose_model(
             "GROQ_API_KEY_FILE": "/run/secrets/groq_api_key",
             "YOLPOL_AI_AUTOMATION_EMERGENCY_DISABLED": "false",
         },
+        "staff-provision": {"DATABASE_URL": database_url},
+        "staff-bootstrap-super-admin": {"DATABASE_URL": database_url},
         "migrate": secret_environments["migration-database.env"],
         "backup-create": {
             **secret_environments["backup-database.env"],
@@ -684,6 +696,8 @@ def validate_staging_compose_model(
         "inquiry-notifications": ("402653184", 0.25, 150, "on-failure:5"),
         "conversation-translation": ("402653184", 0.25, 150, "on-failure:5"),
         "conversation-ai-fallback": ("402653184", 0.25, 150, "on-failure:5"),
+        "staff-provision": ("536870912", 0.50, 100, "no"),
+        "staff-bootstrap-super-admin": ("536870912", 0.50, 100, "no"),
         "migrate": ("536870912", 0.50, 100, "no"),
         "backup-create": ("536870912", 0.50, 100, "no"),
         "backup-verify": ("536870912", 0.50, 100, "no"),
@@ -694,18 +708,29 @@ def validate_staging_compose_model(
         validate_generic_service_security(name, service)
         require(service.get("image") == images[name], "Staging service image")
         validate_command(service, commands[name])
-        validate_profiles(service, {"migration"} if name == "migrate" else ({"backup"} if name.startswith("backup-") else set()))
+        is_staff_operation = name in {"staff-provision", "staff-bootstrap-super-admin"}
+        expected_profiles = (
+            {"migration"} if name == "migrate"
+            else {"backup"} if name.startswith("backup-")
+            else {"staff-operations"} if is_staff_operation
+            else set()
+        )
+        validate_profiles(service, expected_profiles)
         validate_no_build(service)
         require(string_set(service.get("networks"), "Staging service networks") == networks[name], "Staging service network")
         require(normalized_mounts(service) == mounts.get(name, set()), "Staging service mount")
         require(normalized_secrets(service) == secrets.get(name, set()), "Staging service secret")
         validate_environment(service, environments[name])
         is_backup = name.startswith("backup-")
+        is_read_only_operation = is_backup or is_staff_operation
         validate_service_hardening(
             service,
-            read_only=is_backup,
-            tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=64m"} if is_backup else set(),
+            read_only=is_read_only_operation,
+            user="10001:10001" if is_staff_operation else None,
+            tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=64m"} if is_read_only_operation else set(),
         )
+        require(service.get("stdin_open") is (True if is_staff_operation else None), "Compose interactive stdin")
+        require(service.get("tty") is (True if is_staff_operation else None), "Compose interactive TTY")
         memory_bytes, cpus, pids, restart = resources[name]
         validate_resources(service, memory_bytes=memory_bytes, cpus=cpus, pids=pids, restart=restart)
         if name != "edge":

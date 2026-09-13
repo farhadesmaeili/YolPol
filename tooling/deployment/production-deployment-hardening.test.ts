@@ -161,7 +161,7 @@ describe("Production deployment hardening", () => {
         "--project-directory", stagingProjectDirectory,
         "--env-file", join(stagingProjectDirectory, "runtime.env"),
         "-f", join(stagingProjectDirectory, "compose.yaml"),
-        "--profile", "migration", "--profile", "backup", "config", "--format", "json",
+        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
         encoding: "utf8",
@@ -223,6 +223,25 @@ describe("Production deployment hardening", () => {
       requireObject(requireObject(profileInjection.services).web).profiles = ["attacker"];
       expect(runResolvedPolicy("staging", profileInjection).status).toBe(1);
 
+      const staffCommandInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(staffCommandInjection.services)["staff-provision"]).command = ["sh"];
+      expect(runResolvedPolicy("staging", staffCommandInjection).status).toBe(1);
+
+      const staffImageInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(staffImageInjection.services)["staff-provision"]).image = "ghcr.io/attacker/root-shell@sha256:" + "a".repeat(64);
+      expect(runResolvedPolicy("staging", staffImageInjection).status).toBe(1);
+
+      const staffEgressInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(staffEgressInjection.services)["staff-provision"]).networks = {
+        backend: null,
+        provider_egress: null,
+      };
+      expect(runResolvedPolicy("staging", staffEgressInjection).status).toBe(1);
+
+      const staffTtyRemoval = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(staffTtyRemoval.services)["staff-provision"]).tty = false;
+      expect(runResolvedPolicy("staging", staffTtyRemoval).status).toBe(1);
+
       const monitoring = spawnSync("docker", [
         "compose", "-p", "yolpol-monitoring",
         "--project-directory", monitoringProjectDirectory,
@@ -266,15 +285,33 @@ describe("Production deployment hardening", () => {
     expect(policy).toContain("validate_monitoring_compose_model");
   });
 
-  it("uses valid fixed Compose run commands for migrations and backups", () => {
+  it("uses valid fixed Compose run commands for migrations, backups, and Staff operations", () => {
     const invocations = wrapperComposeInvocations("run");
 
     expect(invocations).toEqual([
       "run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate",
       "run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create",
       'run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"',
+      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision",
+      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin",
     ]);
     expect(invocations.every((invocation) => !invocation.includes("--no-build"))).toBe(true);
+  });
+
+  it("preserves a real TTY only for the two fixed argument-free Staff operations", () => {
+    for (const action of ["staff-provision", "staff-bootstrap-super-admin"]) {
+      const accepted = runShell(shellPath(wrapperPath), action, "--help");
+      expect(accepted.status).toBe(64);
+      expect(accepted.stderr).toContain("unexpected arguments");
+    }
+
+    expect(wrapper).toContain('[ -t 0 ] && [ -t 1 ] && [ -t 2 ] || fail \'interactive terminal required\'');
+    const staffInvocations = wrapperComposeInvocations("run").filter((invocation) => invocation.includes("staff-"));
+    expect(staffInvocations).toEqual([
+      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision",
+      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin",
+    ]);
+    expect(staffInvocations.join(" ")).not.toMatch(/--interactive=false|--no-TTY|--no-build/u);
   });
 
   it("keeps no-build protection on every fixed Compose up command", () => {
