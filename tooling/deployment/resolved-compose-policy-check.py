@@ -17,7 +17,7 @@ SPEC.loader.exec_module(policy)
 
 
 def normalize_host_paths(model: dict[str, object], mode: str) -> None:
-    """Normalize only host-dependent paths emitted by Compose on Windows."""
+    """Normalize host-dependent test paths to the canonical promoted layout."""
     services = model["services"]
     assert isinstance(services, dict)
     bind_sources = {
@@ -38,9 +38,6 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
     }[mode]
     for service_name, raw_service in services.items():
         assert isinstance(service_name, str) and isinstance(raw_service, dict)
-        build = raw_service.get("build")
-        if isinstance(build, dict):
-            build["context"] = "/opt/yolpol"
         volumes = raw_service.get("volumes", [])
         assert isinstance(volumes, list)
         for volume in volumes:
