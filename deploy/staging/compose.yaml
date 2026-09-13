@@ -28,6 +28,32 @@ x-backup-operation: &backup-operation
   pids_limit: 100
   logging: *json-logging
 
+x-staff-operation: &staff-operation
+  image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
+  profiles: ["staff-operations"]
+  restart: "no"
+  stdin_open: true
+  tty: true
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  env_file:
+    - "${YOLPOL_STAGING_DATABASE_ENV_FILE:?Set YOLPOL_STAGING_DATABASE_ENV_FILE}"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - backend
+  mem_limit: "${YOLPOL_STAGING_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_STAGING_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
 services:
   edge:
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
@@ -180,6 +206,14 @@ services:
     cpus: "${YOLPOL_STAGING_WORKER_CPU_LIMIT:-0.25}"
     pids_limit: 150
     logging: *json-logging
+
+  staff-provision:
+    <<: *staff-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"]
+
+  staff-bootstrap-super-admin:
+    <<: *staff-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"]
 
   migrate:
     profiles: ["migration"]

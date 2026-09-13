@@ -40,11 +40,13 @@ This foundation does not create a role bootstrap mechanism. Initially the migrat
 The root Dockerfile has four runtime targets:
 
 - `runtime`: unchanged Next.js standalone web artifact, Node 22 Bookworm slim, UID/GID 10001, `node server.js`.
-- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 10001.
+- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, the three existing Staff provisioning CLI files, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 10001.
 - `migration-runtime`: production Drizzle/pg dependencies, committed SQL/journal, and the migration runner; runs as UID/GID 10001.
 - `operations-runtime`: the pinned PostgreSQL 17.6 Alpine runtime plus `age`, `jq`, and the backup/restore entrypoint; runs as UID/GID 10001 and contains no application source or private identity.
 
-Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, and restore services are also profile-gated one-shot tools. None starts during a normal `up`.
+Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, restore, and both Staff provisioning services are also profile-gated one-shot tools. None starts during a normal `up`.
+
+The two Staff services reuse the immutable worker image and only the existing `tooling/staff-provisioning` entrypoints. They run as UID/GID 10001 with a read-only root filesystem, private tmpfs, dropped capabilities, bounded resources/PIDs/logging, the internal `backend` network only, and no ports, provider-egress network, provider credentials, or mounts. Their sole secret-bearing input is the existing root-only `app-database.env`, resolved by Compose as `DATABASE_URL` inside the one-shot container without printing it.
 
 ## Local build and future release order
 
@@ -65,6 +67,15 @@ docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d web i
 docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d edge
 ```
 
+On Staging, operators invoke the interactive Staff flows only through the restricted wrapper:
+
+```sh
+sudo /opt/yolpol/bin/yolpol-deploy staff-provision
+sudo /opt/yolpol/bin/yolpol-deploy staff-bootstrap-super-admin
+```
+
+Both commands reject every extra argument and fail unless stdin, stdout, and stderr are real terminals. Compose interactive input and TTY allocation remain enabled so the existing hidden password reader can operate. The first command continues to create only ADMIN/SALES accounts; the second remains the separate, existing first-Super-Admin promotion flow.
+
 The four explicit `docker build` commands are local validation only and use the repository root (`../..`) as their build context. They are deliberately separate from the deployment Compose contract. On the server, do not copy the source tree or Dockerfile; verify the release manifest checksum, populate its digest refs, and use `docker compose --env-file /opt/yolpol/staging/runtime.env --no-build pull`. The full release, promotion, pre-migration backup, and rollback procedures live in `deploy/release/README.md`.
 
 The migration runner uses the committed Drizzle migrations and holds a PostgreSQL advisory lock for the entire operation. A second migration waits rather than racing. Migration failure exits non-zero; no application service mutates the schema. Readiness remains responsible for rejecting a database older than `0022_global_translation_settings`. Production must treat the backup, verification, off-server durability confirmation, migration, and readiness checks as one explicit release gate; backup is never hidden inside application or migration startup.
@@ -74,7 +85,7 @@ Start Caddy only after the host, firewall, DNS, and Staging acceptance prerequis
 ## Network, ports, and persistence
 
 - `edge`: non-internal Caddy-to-web network; web can also make the outbound Telegram response needed by onboarding.
-- `backend`: internal-only PostgreSQL network used by web, workers, and migration. PostgreSQL has no published port.
+- `backend`: internal-only PostgreSQL network used by web, workers, migration, and Staff provisioning operations. PostgreSQL has no published port.
 - `provider_egress`: non-internal worker egress for Telegram/Groq. It does not contain PostgreSQL or Caddy.
 - Only Caddy publishes host ports 80 and 443 (TCP, plus UDP 443 for HTTP/3). Web 3000 and PostgreSQL 5432 remain private.
 - `postgres_data`, `caddy_data`, and `caddy_config` are Compose-project-scoped persistent volumes. They are not shared with Development or Production.
