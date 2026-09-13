@@ -1,5 +1,7 @@
 import {describe, expect, it} from "vitest";
 
+import packageMetadata from "../../../../../package.json";
+
 import {
   EnvironmentApplicationReadinessProbe,
   readBuildIdentity,
@@ -17,11 +19,11 @@ describe("health application configuration", () => {
       YOLPOL_LOG_LEVEL: "info",
       YOLPOL_GIT_REVISION: "ABCDEF012345",
     });
-    expect(probe.check()).toEqual({version: "0.1.0", revision: "abcdef012345"});
+    expect(probe.check()).toEqual({version: packageMetadata.version, revision: "abcdef012345"});
   });
 
   it("uses package metadata without requiring a revision in Development or CI", () => {
-    expect(readBuildIdentity({NODE_ENV: "test"})).toEqual({version: "0.1.0"});
+    expect(readBuildIdentity({NODE_ENV: "test"})).toEqual({version: packageMetadata.version});
   });
 
   it("rejects unsafe revision and log-level values", () => {
