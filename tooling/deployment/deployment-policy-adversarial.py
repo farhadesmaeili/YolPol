@@ -206,6 +206,15 @@ class ResolvedComposePolicyTests(unittest.TestCase):
         with self.assertRaises(policy.PolicyError):
             policy.parse_compose_json(" " * 4_000_001)
 
+    def test_rejects_any_compose_build_metadata(self) -> None:
+        for build in (
+            None,
+            {"context": "/opt", "dockerfile": "Dockerfile", "target": "runtime"},
+            {"context": "/opt/yolpol", "dockerfile": "Dockerfile", "target": "runtime"},
+        ):
+            with self.subTest(build=build), self.assertRaisesRegex(policy.PolicyError, "unexpected Compose build"):
+                policy.validate_no_build({"build": build})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

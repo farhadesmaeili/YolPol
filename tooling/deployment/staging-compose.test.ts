@@ -17,19 +17,17 @@ function serviceBlock(service: string): string {
 }
 
 describe("Staging Compose deployment contract", () => {
-  it("keeps the web image as the default Docker target and provides dedicated runtimes", () => {
+  it("provides dedicated image runtimes without embedding a build contract", () => {
     const targets = [...dockerfile.matchAll(/^FROM .+ AS ([a-z-]+)$/gmu)].map((match) => match[1]);
     expect(targets).toContain("worker-runtime");
     expect(targets).toContain("migration-runtime");
     expect(targets).toContain("operations-runtime");
     expect(targets).toContain("operations-test");
     expect(targets.at(-1)).toBe("runtime");
-    expect(serviceBlock("web")).toContain("target: runtime");
-    expect(serviceBlock("inquiry-notifications")).toContain("target: worker-runtime");
-    expect(serviceBlock("migrate")).toContain("target: migration-runtime");
+    expect(compose).not.toMatch(/^\s+build:/mu);
   });
 
-  it("accepts explicit release image references while retaining local build defaults", () => {
+  it("accepts explicit release image references with deterministic local image-name defaults", () => {
     expect(serviceBlock("web")).toContain('${YOLPOL_WEB_IMAGE:-yolpol-web:local}');
     expect(serviceBlock("inquiry-notifications")).toContain('${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}');
     expect(serviceBlock("migrate")).toContain('${YOLPOL_MIGRATION_IMAGE:-yolpol-migration:local}');

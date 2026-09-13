@@ -27,7 +27,7 @@ The authoritative VPS ownership, restricted-wrapper, sudoers, lock, audit, and i
     backups/                  encrypted artifacts and adjacent manifests only
 ```
 
-Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Future deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which always adds `--no-build`; it must never use `latest` or rebuild a release on the server. Local validation can omit the image variables and retain the Compose `build` definitions plus explicit `:local` defaults.
+Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which always adds `--no-build`; it must never use `latest` or rebuild a release on the server. The promoted Compose definition is image-only and contains no `build` metadata. Local validation may omit the image variables only after explicitly building the fixed `:local` image names.
 
 The `secrets` directory is `root:root` mode `700` and is not operator-readable. Database env files are `root:root` mode `400` because root-run Compose consumes them. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; files mounted into first-party containers are therefore owned by the dedicated container-only UID/GID `10001:10001` with mode `400` inside the root-only parent. Do not create a host login with that identity or weaken file permissions. Verify this exact non-root read path on the target host before activation.
 
@@ -51,18 +51,21 @@ Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-t
 The direct Compose commands below are for local validation or interactive root recovery. On the real VPS, `yolpol-operator` uses only `/opt/yolpol/bin/yolpol-deploy`; it never runs Docker or Compose directly. Run local/root commands from this directory, using the host-only settings file:
 
 ```sh
-docker compose --env-file /opt/yolpol/staging/runtime.env build web inquiry-notifications migrate
-docker compose --env-file /opt/yolpol/staging/runtime.env up -d postgres
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-create
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-verify verify <backup-id>
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm backup-deep-verify deep-verify <backup-id>
+docker build --target runtime --tag yolpol-web:local ../..
+docker build --target worker-runtime --tag yolpol-worker:local ../..
+docker build --target migration-runtime --tag yolpol-migration:local ../..
+docker build --target operations-runtime --tag yolpol-backup-restore:local ../..
+docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d postgres
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-create
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-verify verify <backup-id>
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run --rm --no-build backup-deep-verify deep-verify <backup-id>
 # Copy the encrypted artifact and manifest off-server, verify the copied pair, and confirm remote durability.
-docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration run --rm migrate
-docker compose --env-file /opt/yolpol/staging/runtime.env up -d web inquiry-notifications conversation-translation conversation-ai-fallback
-docker compose --env-file /opt/yolpol/staging/runtime.env up -d edge
+docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration run --rm --no-build migrate
+docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d web inquiry-notifications conversation-translation conversation-ai-fallback
+docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d edge
 ```
 
-The first line is local validation only. On the future server, verify the release manifest checksum, populate the digest refs, and replace it with `docker compose --env-file /opt/yolpol/staging/runtime.env --no-build pull`. Add `--no-build` to release `run` and `up` commands so promotion consumes the published artifacts without rebuilding. The full release, promotion, pre-migration backup, and rollback procedures live in `deploy/release/README.md`.
+The four explicit `docker build` commands are local validation only and use the repository root (`../..`) as their build context. They are deliberately separate from the deployment Compose contract. On the server, do not copy the source tree or Dockerfile; verify the release manifest checksum, populate its digest refs, and use `docker compose --env-file /opt/yolpol/staging/runtime.env --no-build pull`. The full release, promotion, pre-migration backup, and rollback procedures live in `deploy/release/README.md`.
 
 The migration runner uses the committed Drizzle migrations and holds a PostgreSQL advisory lock for the entire operation. A second migration waits rather than racing. Migration failure exits non-zero; no application service mutates the schema. Readiness remains responsible for rejecting a database older than `0022_global_translation_settings`. Production must treat the backup, verification, off-server durability confirmation, migration, and readiness checks as one explicit release gate; backup is never hidden inside application or migration startup.
 
