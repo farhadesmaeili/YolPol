@@ -9,9 +9,12 @@ import {PostgresConversationMessageRepository} from "@/features/inquiries/infras
 import {PostgresTelegramDeliveryRepository} from "@/features/inquiries/infrastructure/persistence/postgres/repositories/postgres-telegram-delivery-repository";
 import {getTelegramStaffOnboarding} from "@/composition/telegram-staff-onboarding/telegram-staff-onboarding";
 import {TelegramStaffConnectionCommandHandler} from "@/features/telegram-staff-onboarding/infrastructure/communication/telegram/telegram-staff-connection-command-handler";
+import {getNotificationDestinationOperations} from "@/composition/notification-destinations/notification-destinations";
+import {TelegramGroupConnectionCommandHandler} from "@/features/notification-destinations/infrastructure/communication/telegram/telegram-group-connection-command-handler";
+import {TelegramStartCommandRouter} from "@/features/notification-destinations/infrastructure/communication/telegram/telegram-start-command-router";
 
 let gateway: ReceiveTelegramReply | undefined;
-let startGateway: TelegramStaffConnectionCommandHandler | undefined;
+let startGateway: TelegramStartCommandRouter | undefined;
 
 export function getTelegramReplyGateway(): ReceiveTelegramReply {
   if (gateway) return gateway;
@@ -25,16 +28,19 @@ export function getTelegramReplyGateway(): ReceiveTelegramReply {
   return gateway;
 }
 
-export function getTelegramStartGateway(): TelegramStaffConnectionCommandHandler {
+export function getTelegramStartGateway(): TelegramStartCommandRouter {
   if (startGateway) return startGateway;
   const adapter = new TelegramCommunicationAdapter(readTelegramOutboundConfig().botToken);
-  startGateway = new TelegramStaffConnectionCommandHandler(
+  const transport = {async send({chatId, text}: Readonly<{chatId: string; text: string}>) {
+    const result = await adapter.sendMessage({recipientExternalId: chatId, message: {text}});
+    if (result.status !== "delivered") throw new Error("Telegram onboarding response was not confirmed delivered.");
+  }};
+  const staffHandler = new TelegramStaffConnectionCommandHandler(
     getTelegramStaffOnboarding().consumeConnectionRequest,
-    {async send({chatId, text}) {
-      const result = await adapter.sendMessage({recipientExternalId: chatId, message: {text}});
-      if (result.status !== "delivered") throw new Error("Telegram onboarding response was not confirmed delivered.");
-    }},
+    transport,
   );
+  const groupHandler = new TelegramGroupConnectionCommandHandler(getNotificationDestinationOperations().consumeGroupRequest, transport);
+  startGateway = new TelegramStartCommandRouter(staffHandler, groupHandler);
   return startGateway;
 }
 

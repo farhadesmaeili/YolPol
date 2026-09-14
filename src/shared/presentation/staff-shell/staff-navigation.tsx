@@ -2,7 +2,7 @@
 
 import {Link, usePathname} from "@/i18n/navigation";
 
-type StaffNavigationItem = Readonly<{href: "/staff" | "/staff/inquiries" | "/staff/translation-settings" | "/staff/ai-operations" | "/staff/ai-providers" | "/staff/team"; label: string}>;
+type StaffNavigationItem = Readonly<{href: "/staff" | "/staff/inquiries" | "/staff/translation-settings" | "/staff/ai-operations" | "/staff/ai-providers" | "/staff/team" | "/staff/notification-destinations"; label: string}>;
 
 export function StaffNavigation({items, label}: Readonly<{items: readonly StaffNavigationItem[]; label: string}>) {
   const pathname = usePathname();

@@ -41,7 +41,7 @@ The machine-readable manifest contains only:
 - PostgreSQL major/server/client versions
 - custom dump format and `age-x25519` encryption scheme
 - encrypted artifact filename, byte size, and SHA-256
-- latest Drizzle migration timestamp plus the required `0022_global_translation_settings` marker and timestamp `1788832991886`
+- latest Drizzle migration timestamp plus the required `0023_telegram_notification_destinations` marker and timestamp `1789391490099`
 
 It does not contain a database URL, host, username, password, secret/identity path or content, provider credential, customer content/count, or pricing. Verification rejects malformed JSON, unsupported versions, unsafe IDs, wrong pairing, missing/non-regular/symlinked files, directory escape, size mismatch, and checksum mismatch.
 

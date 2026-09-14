@@ -8,8 +8,8 @@ import {Pool, type QueryResult} from "pg";
 
 export const operationsMetricsPort = 9464;
 export const operationsMetricsPath = "/metrics";
-export const requiredMigration = "0022_global_translation_settings";
-export const requiredMigrationTimestamp = 1788832991886;
+export const requiredMigration = "0023_telegram_notification_destinations";
+export const requiredMigrationTimestamp = 1789391490099;
 const maximumManifestBytes = 64 * 1024;
 const defaultBackupScanIntervalMilliseconds = 300_000;
 const queueNames = ["inquiry_notification", "conversation_translation", "ai_fallback"] as const;

@@ -3,6 +3,7 @@ export type TelegramStartCommand = Readonly<{
   telegramUserId: string | null;
   chatId: string | null;
   chatType: string | null;
+  chatTitle?: string | null;
   languageCode: string | null;
   connectionToken: string | null;
   malformed: boolean;

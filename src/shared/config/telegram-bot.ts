@@ -1,5 +1,6 @@
 const telegramBotUsernamePattern = /^[A-Za-z][A-Za-z0-9_]{1,28}[Bb][Oo][Tt]$/u;
 const telegramConnectionTokenPattern = /^ypt_[A-Za-z0-9_-]{43}$/u;
+const telegramGroupConnectionTokenPattern = /^ypg_[A-Za-z0-9_-]{43}$/u;
 
 export class InvalidPublicTelegramBotConfigurationError extends Error {
   readonly name = "InvalidPublicTelegramBotConfigurationError";
@@ -23,5 +24,15 @@ export function buildTelegramStartDeepLink(username: string, connectionToken: st
   }
   const url = new URL(`https://t.me/${validatedUsername}`);
   url.searchParams.set("start", connectionToken);
+  return url.toString();
+}
+
+export function buildTelegramStartGroupDeepLink(username: string, connectionToken: string): string {
+  const validatedUsername = parsePublicTelegramBotUsername(username);
+  if (!telegramGroupConnectionTokenPattern.test(connectionToken)) {
+    throw new InvalidPublicTelegramBotConfigurationError("Telegram group connection token is invalid.");
+  }
+  const url = new URL(`https://t.me/${validatedUsername}`);
+  url.searchParams.set("startgroup", connectionToken);
   return url.toString();
 }

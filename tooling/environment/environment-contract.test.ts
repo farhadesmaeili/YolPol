@@ -15,6 +15,7 @@ const rateLimitSources = [
   "src/features/staff-authentication/infrastructure/http/staff-login-rate-limiter.ts",
   "src/features/ai-operations/infrastructure/http/ai-operations-rate-limiter.ts",
   "src/features/ai-provider-registry/infrastructure/http/ai-provider-registry-rate-limiter.ts",
+  "src/features/notification-destinations/infrastructure/http/notification-destination-rate-limiter.ts",
 ] as const;
 
 function consumedRateLimitVariables(): string[] {
