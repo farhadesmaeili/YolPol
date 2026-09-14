@@ -70,6 +70,7 @@ STAGING_FIXED_VALUES = {
     "YOLPOL_STAGING_LOG_MAX_SIZE": "10m",
     "YOLPOL_STAGING_LOG_MAX_FILES": "3",
     "YOLPOL_STAGING_WORKER_STOP_GRACE_PERIOD": "90s",
+    "YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": "https://staging.yolpol.com",
 }
 
 MONITORING_FIXED_VALUES = {
@@ -122,6 +123,8 @@ STAGING_SERVICES = {
     "conversation-ai-fallback",
     "staff-provision",
     "staff-bootstrap-super-admin",
+    "telegram-webhook-set",
+    "telegram-webhook-info",
     "migrate",
     "backup-create",
     "backup-verify",
@@ -564,7 +567,7 @@ def validate_staging_compose_model(
     runtime: dict[str, str],
     secret_environments: dict[str, dict[str, str]],
 ) -> None:
-    exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-application-environment", "x-backup-operation", "x-json-logging", "x-staff-operation"}, "Staging Compose model")
+    exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-application-environment", "x-backup-operation", "x-json-logging", "x-staff-operation", "x-telegram-operation"}, "Staging Compose model")
     require(model.get("name") == "yolpol-staging", "Staging project name")
     services = service_map(model, STAGING_SERVICES)
     images = {
@@ -575,6 +578,8 @@ def validate_staging_compose_model(
         "conversation-ai-fallback": runtime["YOLPOL_WORKER_IMAGE"],
         "staff-provision": runtime["YOLPOL_WORKER_IMAGE"],
         "staff-bootstrap-super-admin": runtime["YOLPOL_WORKER_IMAGE"],
+        "telegram-webhook-set": runtime["YOLPOL_WORKER_IMAGE"],
+        "telegram-webhook-info": runtime["YOLPOL_WORKER_IMAGE"],
         "migrate": runtime["YOLPOL_MIGRATION_IMAGE"],
         "backup-create": runtime["YOLPOL_BACKUP_RESTORE_IMAGE"],
         "backup-verify": runtime["YOLPOL_BACKUP_RESTORE_IMAGE"],
@@ -590,6 +595,8 @@ def validate_staging_compose_model(
         "conversation-ai-fallback": ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-ai-fallback.ts"],
         "staff-provision": ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"],
         "staff-bootstrap-super-admin": ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"],
+        "telegram-webhook-set": ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/set-telegram-webhook.ts"],
+        "telegram-webhook-info": ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/get-telegram-webhook-info.ts"],
         "migrate": None,
         "backup-create": ["create"],
         "backup-verify": ["help"],
@@ -605,6 +612,8 @@ def validate_staging_compose_model(
         "conversation-ai-fallback": {"backend", "provider_egress"},
         "staff-provision": {"backend"},
         "staff-bootstrap-super-admin": {"backend"},
+        "telegram-webhook-set": {"provider_egress"},
+        "telegram-webhook-info": {"provider_egress"},
         "migrate": {"backend"},
         "backup-create": {"backend"},
         "backup-verify": set(),
@@ -628,6 +637,8 @@ def validate_staging_compose_model(
         "inquiry-notifications": {("telegram_bot_token", "/run/secrets/telegram_bot_token")},
         "conversation-translation": {("groq_api_key", "/run/secrets/groq_api_key")},
         "conversation-ai-fallback": {("groq_api_key", "/run/secrets/groq_api_key")},
+        "telegram-webhook-set": {("telegram_bot_token", "/run/secrets/telegram_bot_token"), ("telegram_webhook_secret", "/run/secrets/telegram_webhook_secret")},
+        "telegram-webhook-info": {("telegram_bot_token", "/run/secrets/telegram_bot_token")},
         "backup-deep-verify": {("backup_age_identity", "/run/secrets/backup_age_identity")},
     }
     application_environment = {
@@ -670,6 +681,15 @@ def validate_staging_compose_model(
         },
         "staff-provision": {"DATABASE_URL": database_url},
         "staff-bootstrap-super-admin": {"DATABASE_URL": database_url},
+        "telegram-webhook-set": {
+            "TELEGRAM_BOT_TOKEN_FILE": "/run/secrets/telegram_bot_token",
+            "TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": runtime["YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN"],
+            "TELEGRAM_WEBHOOK_SECRET_FILE": "/run/secrets/telegram_webhook_secret",
+        },
+        "telegram-webhook-info": {
+            "TELEGRAM_BOT_TOKEN_FILE": "/run/secrets/telegram_bot_token",
+            "TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": runtime["YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN"],
+        },
         "migrate": secret_environments["migration-database.env"],
         "backup-create": {
             **secret_environments["backup-database.env"],
@@ -698,6 +718,8 @@ def validate_staging_compose_model(
         "conversation-ai-fallback": ("402653184", 0.25, 150, "on-failure:5"),
         "staff-provision": ("536870912", 0.50, 100, "no"),
         "staff-bootstrap-super-admin": ("536870912", 0.50, 100, "no"),
+        "telegram-webhook-set": ("536870912", 0.50, 100, "no"),
+        "telegram-webhook-info": ("536870912", 0.50, 100, "no"),
         "migrate": ("536870912", 0.50, 100, "no"),
         "backup-create": ("536870912", 0.50, 100, "no"),
         "backup-verify": ("536870912", 0.50, 100, "no"),
@@ -709,10 +731,12 @@ def validate_staging_compose_model(
         require(service.get("image") == images[name], "Staging service image")
         validate_command(service, commands[name])
         is_staff_operation = name in {"staff-provision", "staff-bootstrap-super-admin"}
+        is_telegram_operation = name in {"telegram-webhook-set", "telegram-webhook-info"}
         expected_profiles = (
             {"migration"} if name == "migrate"
             else {"backup"} if name.startswith("backup-")
             else {"staff-operations"} if is_staff_operation
+            else {"telegram-operations"} if is_telegram_operation
             else set()
         )
         validate_profiles(service, expected_profiles)
@@ -722,11 +746,11 @@ def validate_staging_compose_model(
         require(normalized_secrets(service) == secrets.get(name, set()), "Staging service secret")
         validate_environment(service, environments[name])
         is_backup = name.startswith("backup-")
-        is_read_only_operation = is_backup or is_staff_operation
+        is_read_only_operation = is_backup or is_staff_operation or is_telegram_operation
         validate_service_hardening(
             service,
             read_only=is_read_only_operation,
-            user="10001:10001" if is_staff_operation else None,
+            user="10001:10001" if is_staff_operation or is_telegram_operation else None,
             tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=64m"} if is_read_only_operation else set(),
         )
         require(service.get("stdin_open") is (True if is_staff_operation else None), "Compose interactive stdin")

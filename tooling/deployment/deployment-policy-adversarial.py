@@ -132,6 +132,7 @@ class ReleaseManifestTests(unittest.TestCase):
             ("YOLPOL_GIT_REVISION", "a" * 39),
             ("YOLPOL_WEB_IMAGE", "ghcr.io/attacker/root-shell@sha256:" + "a" * 64),
             ("YOLPOL_WEB_IMAGE", "ghcr.io/farhadesmaeili/yolpol-web:latest"),
+            ("YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN", "https://attacker.example"),
         ):
             attacked = {**staging, key: malicious}
             with self.subTest(key=key, malicious=malicious), self.assertRaises(policy.PolicyError):

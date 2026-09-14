@@ -161,7 +161,7 @@ describe("Production deployment hardening", () => {
         "--project-directory", stagingProjectDirectory,
         "--env-file", join(stagingProjectDirectory, "runtime.env"),
         "-f", join(stagingProjectDirectory, "compose.yaml"),
-        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "config", "--format", "json",
+        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations", "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
         encoding: "utf8",
@@ -242,6 +242,39 @@ describe("Production deployment hardening", () => {
       requireObject(requireObject(staffTtyRemoval.services)["staff-provision"]).tty = false;
       expect(runResolvedPolicy("staging", staffTtyRemoval).status).toBe(1);
 
+      const telegramCommandInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(telegramCommandInjection.services)["telegram-webhook-info"]).command = ["sh"];
+      expect(runResolvedPolicy("staging", telegramCommandInjection).status).toBe(1);
+
+      const telegramDatabaseInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(telegramDatabaseInjection.services)["telegram-webhook-info"]).environment = {
+        TELEGRAM_BOT_TOKEN_FILE: "/run/secrets/telegram_bot_token",
+        TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "https://staging.yolpol.com",
+        DATABASE_URL: databaseUrl,
+      };
+      expect(runResolvedPolicy("staging", telegramDatabaseInjection).status).toBe(1);
+
+      const telegramGroqSecretInjection = structuredClone(requireObject(stagingModel));
+      const telegramInfo = requireObject(requireObject(telegramGroqSecretInjection.services)["telegram-webhook-info"]);
+      const telegramInfoSecrets = telegramInfo.secrets;
+      if (!Array.isArray(telegramInfoSecrets)) throw new Error("Expected Telegram info secrets.");
+      telegramInfoSecrets.push({source: "groq_api_key", target: "/run/secrets/groq_api_key"});
+      expect(runResolvedPolicy("staging", telegramGroqSecretInjection).status).toBe(1);
+
+      const telegramWebhookSecretInjection = structuredClone(requireObject(stagingModel));
+      const telegramInfoWithWebhookSecret = requireObject(requireObject(telegramWebhookSecretInjection.services)["telegram-webhook-info"]);
+      const infoSecrets = telegramInfoWithWebhookSecret.secrets;
+      if (!Array.isArray(infoSecrets)) throw new Error("Expected Telegram info secrets.");
+      infoSecrets.push({source: "telegram_webhook_secret", target: "/run/secrets/telegram_webhook_secret"});
+      expect(runResolvedPolicy("staging", telegramWebhookSecretInjection).status).toBe(1);
+
+      const telegramBackendInjection = structuredClone(requireObject(stagingModel));
+      requireObject(requireObject(telegramBackendInjection.services)["telegram-webhook-set"]).networks = {
+        backend: null,
+        provider_egress: null,
+      };
+      expect(runResolvedPolicy("staging", telegramBackendInjection).status).toBe(1);
+
       const monitoring = spawnSync("docker", [
         "compose", "-p", "yolpol-monitoring",
         "--project-directory", monitoringProjectDirectory,
@@ -285,7 +318,7 @@ describe("Production deployment hardening", () => {
     expect(policy).toContain("validate_monitoring_compose_model");
   });
 
-  it("uses valid fixed Compose run commands for migrations, backups, and Staff operations", () => {
+  it("uses valid fixed Compose run commands for migrations, backups, Staff, and Telegram operations", () => {
     const invocations = wrapperComposeInvocations("run");
 
     expect(invocations).toEqual([
@@ -294,8 +327,25 @@ describe("Production deployment hardening", () => {
       'run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"',
       "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision",
       "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin",
+      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set",
+      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info",
     ]);
     expect(invocations.every((invocation) => !invocation.includes("--no-build"))).toBe(true);
+  });
+
+  it("exposes only fixed argument-free Telegram webhook operations", () => {
+    for (const action of ["telegram-webhook-set", "telegram-webhook-info"]) {
+      const rejected = runShell(shellPath(wrapperPath), action, "--help");
+      expect(rejected.status).toBe(64);
+      expect(rejected.stderr).toContain("unexpected arguments");
+    }
+
+    const telegramInvocations = wrapperComposeInvocations("run").filter((invocation) => invocation.includes("telegram-webhook-"));
+    expect(telegramInvocations).toEqual([
+      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set",
+      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info",
+    ]);
+    expect(telegramInvocations.join(" ")).not.toMatch(/--no-build|\$@|\beval\b/u);
   });
 
   it("preserves a real TTY only for the two fixed argument-free Staff operations", () => {

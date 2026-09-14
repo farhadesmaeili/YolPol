@@ -7,6 +7,7 @@ const repositoryRoot = resolve(import.meta.dirname, "../..");
 const compose = readFileSync(resolve(repositoryRoot, "deploy/staging/compose.yaml"), "utf8");
 const dockerfile = readFileSync(resolve(repositoryRoot, "Dockerfile"), "utf8");
 const caddyfile = readFileSync(resolve(repositoryRoot, "deploy/staging/Caddyfile"), "utf8");
+const runtimeEnvironment = readFileSync(resolve(repositoryRoot, "deploy/staging/runtime.env.example"), "utf8");
 
 function serviceBlock(service: string): string {
   const lines = compose.split(/\r?\n/u);
@@ -33,6 +34,8 @@ describe("Staging Compose deployment contract", () => {
     expect(targets).toContain("operations-test");
     expect(targets.at(-1)).toBe("runtime");
     expect(dockerfile).toContain("COPY tooling/staff-provisioning/index.ts tooling/staff-provisioning/bootstrap-super-admin.ts tooling/staff-provisioning/node-terminal.ts ./tooling/staff-provisioning/");
+    expect(dockerfile).toContain("COPY tooling/telegram/get-telegram-webhook-info.ts tooling/telegram/set-telegram-webhook.ts tooling/telegram/telegram-webhook-client.ts tooling/telegram/telegram-webhook-commands.ts tooling/telegram/telegram-webhook-config.ts ./tooling/telegram/");
+    expect(dockerfile).not.toContain("tooling/telegram/telegram-webhook-tooling.test.ts");
     expect(compose).not.toMatch(/^\s+build:/mu);
   });
 
@@ -55,6 +58,8 @@ describe("Staging Compose deployment contract", () => {
       "conversation-ai-fallback",
       "staff-provision",
       "staff-bootstrap-super-admin",
+      "telegram-webhook-set",
+      "telegram-webhook-info",
       "migrate",
       "backup-create",
       "backup-verify",
@@ -89,6 +94,34 @@ describe("Staging Compose deployment contract", () => {
     expect(staffOperation).not.toContain("ports:");
     expect(serviceBlock("staff-provision")).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"]');
     expect(serviceBlock("staff-bootstrap-super-admin")).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"]');
+    const telegramOperation = extensionBlock("x-telegram-operation");
+    expect(telegramOperation).toContain('profiles: ["telegram-operations"]');
+    expect(telegramOperation).toContain('restart: "no"');
+    expect(telegramOperation).toContain('user: "10001:10001"');
+    expect(telegramOperation).toContain("read_only: true");
+    expect(telegramOperation).toContain("cap_drop:\n    - ALL");
+    expect(telegramOperation).toContain("no-new-privileges:true");
+    expect(telegramOperation).toContain("networks:\n    - provider_egress");
+    expect(telegramOperation).toContain("tmpfs:\n    - /tmp:rw,noexec,nosuid,nodev,size=64m");
+    expect(telegramOperation).not.toContain("env_file:");
+    expect(telegramOperation).not.toContain("ports:");
+    expect(telegramOperation).not.toContain("volumes:");
+    expect(telegramOperation).not.toContain("stdin_open:");
+    expect(telegramOperation).not.toContain("tty:");
+    const webhookSet = serviceBlock("telegram-webhook-set");
+    const webhookInfo = serviceBlock("telegram-webhook-info");
+    expect(webhookSet).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/set-telegram-webhook.ts"]');
+    expect(webhookInfo).toContain('command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/get-telegram-webhook-info.ts"]');
+    expect(webhookSet).toContain("TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret");
+    expect(webhookInfo).not.toContain("TELEGRAM_WEBHOOK_SECRET");
+    for (const block of [webhookSet, webhookInfo]) {
+      expect(block).toContain("TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token");
+      expect(block).toContain('TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "${YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN:?Set YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN}"');
+      expect(block).not.toContain("DATABASE_URL");
+      expect(block).not.toContain("GROQ_API_KEY");
+      expect(block).not.toContain("NEXT_PUBLIC_");
+    }
+    expect(runtimeEnvironment).toContain("YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN=https://staging.yolpol.com");
     expect(serviceBlock("backup-verify")).toContain("network_mode: none");
     expect(serviceBlock("backup-deep-verify")).toContain("network_mode: none");
     expect(compose).not.toContain("container_name:");
@@ -110,6 +143,8 @@ describe("Staging Compose deployment contract", () => {
     expect(serviceBlock("inquiry-notifications")).not.toContain("GROQ_API_KEY_FILE");
     expect(serviceBlock("conversation-translation")).toContain("GROQ_API_KEY_FILE: /run/secrets/groq_api_key");
     expect(serviceBlock("conversation-ai-fallback")).toContain("GROQ_API_KEY_FILE: /run/secrets/groq_api_key");
+    expect(serviceBlock("telegram-webhook-set")).not.toMatch(/(?:TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET):/u);
+    expect(serviceBlock("telegram-webhook-info")).not.toMatch(/(?:TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET):/u);
     expect(serviceBlock("backup-deep-verify")).toContain("YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity");
     expect(serviceBlock("restore")).toContain("YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity");
     expect(compose).not.toMatch(/(?:TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET|GROQ_API_KEY):/u);
