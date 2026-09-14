@@ -40,13 +40,15 @@ This foundation does not create a role bootstrap mechanism. Initially the migrat
 The root Dockerfile has four runtime targets:
 
 - `runtime`: unchanged Next.js standalone web artifact, Node 22 Bookworm slim, UID/GID 10001, `node server.js`.
-- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, the three existing Staff provisioning CLI files, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 10001.
+- `worker-runtime`: production dependencies plus `tsx`, worker entrypoints, the three existing Staff provisioning CLI files, the five production Telegram webhook tooling files, `tsconfig.json`, and their application source; direct Node commands run as UID/GID 10001.
 - `migration-runtime`: production Drizzle/pg dependencies, committed SQL/journal, and the migration runner; runs as UID/GID 10001.
 - `operations-runtime`: the pinned PostgreSQL 17.6 Alpine runtime plus `age`, `jq`, and the backup/restore entrypoint; runs as UID/GID 10001 and contains no application source or private identity.
 
-Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, restore, and both Staff provisioning services are also profile-gated one-shot tools. None starts during a normal `up`.
+Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, restore, both Staff provisioning services, and both Telegram webhook operations are also profile-gated one-shot tools. None starts during a normal `up`.
 
 The two Staff services reuse the immutable worker image and only the existing `tooling/staff-provisioning` entrypoints. They run as UID/GID 10001 with a read-only root filesystem, private tmpfs, dropped capabilities, bounded resources/PIDs/logging, the internal `backend` network only, and no ports, provider-egress network, provider credentials, or mounts. Their sole secret-bearing input is the existing root-only `app-database.env`, resolved by Compose as `DATABASE_URL` inside the one-shot container without printing it.
+
+The two Telegram services reuse that same immutable worker image and only the repository's existing webhook tooling. They run as UID/GID 10001 with a read-only root filesystem, a bounded `64m` private tmpfs required by the `tsx` loader, dropped capabilities, bounded resources/PIDs/logging, no host mounts, no ports, no database environment, and only the outbound `provider_egress` network. `telegram-webhook-info` receives only the bot-token secret; `telegram-webhook-set` additionally receives the webhook-secret file required for `secret_token`. Both receive the policy-fixed server-only `TELEGRAM_WEBHOOK_PUBLIC_ORIGIN`; neither receives Groq configuration or any `NEXT_PUBLIC_*` value.
 
 ## Local build and future release order
 
@@ -75,6 +77,15 @@ sudo /opt/yolpol/bin/yolpol-deploy staff-bootstrap-super-admin
 ```
 
 Both commands reject every extra argument and fail unless stdin, stdout, and stderr are real terminals. Compose interactive input and TTY allocation remain enabled so the existing hidden password reader can operate. The first command continues to create only ADMIN/SALES accounts; the second remains the separate, existing first-Super-Admin promotion flow.
+
+Operators manage the Staging webhook only through the two noninteractive restricted-wrapper actions:
+
+```sh
+sudo /opt/yolpol/bin/yolpol-deploy telegram-webhook-set
+sudo /opt/yolpol/bin/yolpol-deploy telegram-webhook-info
+```
+
+The expected public origin is `https://staging.yolpol.com`, and the expected registered URL is `https://staging.yolpol.com/api/webhooks/telegram`. `telegram-webhook-set` mutates Telegram provider state while preserving pending updates; `telegram-webhook-info` is read-only. Never paste the bot token, webhook secret, or another credential into terminal arguments, logs, documentation, or `runtime.env`. Staff identity connection requests/links and the `TEAM_GROUP` notification-recipient configuration are separate concepts; registering the webhook does not configure a team recipient.
 
 The four explicit `docker build` commands are local validation only and use the repository root (`../..`) as their build context. They are deliberately separate from the deployment Compose contract. On the server, do not copy the source tree or Dockerfile; verify the release manifest checksum, populate its digest refs, and use `docker compose --env-file /opt/yolpol/staging/runtime.env --no-build pull`. The full release, promotion, pre-migration backup, and rollback procedures live in `deploy/release/README.md`.
 
@@ -155,10 +166,12 @@ All application services use `NODE_ENV=production`, `YOLPOL_DEPLOYMENT_ENVIRONME
 - Web: database URL, Staging Telegram bot token, Staging webhook secret, and public-safe Staging bot username.
 - Inquiry worker: database URL and Staging Telegram bot token.
 - Translation and AI workers: database URL and Staging Groq key. Credential resolution remains lazy, so an empty/disabled queue does not call the provider.
+- Telegram webhook info: policy-fixed Staging webhook public origin and the Staging bot-token file only.
+- Telegram webhook set: the same origin and bot-token file plus the Staging webhook-secret file.
 - Migration: migration database URL only.
 - PostgreSQL: dedicated Staging database initialization values only.
 
-Staging must use a distinct Telegram bot because Telegram permits one webhook URL per bot. Never register or reuse the Production bot for Staging. Local validation uses synthetic values and does not invoke Telegram or Groq.
+Staging must use a distinct Telegram bot because Telegram permits one webhook URL per bot. Never register or reuse the Production bot for Staging. The server-only `YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN` runtime input is a closed-schema value that the deployment policy requires to equal `https://staging.yolpol.com`; Compose maps it to the tooling's provider-neutral `TELEGRAM_WEBHOOK_PUBLIC_ORIGIN`. Local validation uses synthetic credentials and does not invoke Telegram or Groq.
 
 ## Operations
 
