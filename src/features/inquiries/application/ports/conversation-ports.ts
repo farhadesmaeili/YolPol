@@ -1,4 +1,5 @@
 import type {MessageTranslationView} from "@/features/conversation-translation/domain/types/translation";
+import type {CustomerMessageNotification} from "@/features/inquiries/application/dto/customer-message-notification";
 import type {Message} from "@/features/inquiries/domain/entities/message";
 import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-routing/domain/types/conversation-ai-routing-types";
 
@@ -44,7 +45,7 @@ export interface ConversationReferenceReader {
 }
 
 export interface InquiryNotificationConversationReader extends ConversationReferenceReader {
-  findCustomerWebsiteMessage(input: Readonly<{inquiryId: string; conversationId: string; messageId: string}>): Promise<Message | null>;
+  findCustomerWebsiteMessageNotification(input: Readonly<{inquiryId: string; conversationId: string; messageId: string}>): Promise<CustomerMessageNotification | null>;
 }
 
 export interface ConversationMessageIdGenerator { generate(): string; }

@@ -184,6 +184,39 @@ describe("PostgresInquiryRepository", () => {
       channel: "WEBSITE",
       body: "Please confirm the sailing date.",
     }]);
+    await expect(messageRepository.findCustomerWebsiteMessageNotification({
+      inquiryId: inquiry.id.value,
+      conversationId: conversation.id.value,
+      messageId: "customer-message-accepted-1",
+    })).resolves.toMatchObject({
+      message: {body: "Please confirm the sailing date.", senderType: "CUSTOMER", channel: "WEBSITE"},
+      staffTranslation: {status: "PENDING"},
+    });
+
+    await pool.query(`update conversation_message_translations
+      set status='RUNNING',updated_at=$2,version=version+1
+      where message_id=$1 and target_locale='fa'`, ["customer-message-accepted-1", new Date("2026-08-27T09:00:01.000Z")]);
+    await expect(messageRepository.findCustomerWebsiteMessageNotification({
+      inquiryId: inquiry.id.value,
+      conversationId: conversation.id.value,
+      messageId: "customer-message-accepted-1",
+    })).resolves.toMatchObject({staffTranslation: {status: "RUNNING"}});
+
+    await pool.query(`update conversation_message_translations
+      set status='SUCCEEDED',body=$2,updated_at=$3,version=version+1
+      where message_id=$1 and target_locale='fa'`, [
+      "customer-message-accepted-1",
+      "لطفاً تاریخ حرکت کشتی را تأیید کنید.",
+      new Date("2026-08-27T09:00:02.000Z"),
+    ]);
+    await expect(messageRepository.findCustomerWebsiteMessageNotification({
+      inquiryId: inquiry.id.value,
+      conversationId: conversation.id.value,
+      messageId: "customer-message-accepted-1",
+    })).resolves.toMatchObject({
+      message: {body: "Please confirm the sailing date."},
+      staffTranslation: {status: "SUCCEEDED", body: "لطفاً تاریخ حرکت کشتی را تأیید کنید."},
+    });
 
     const events = await pool.query<{
       id: string;
@@ -226,6 +259,39 @@ describe("PostgresInquiryRepository", () => {
         occurredAt: new Date("2026-08-27T09:00:00.000Z"),
       },
       attempts: 1,
+    });
+  });
+
+  it("does not schedule or project a redundant Persian-to-Persian Staff translation", async () => {
+    const inquiry = new InquiryTestBuilder().with({
+      id: "customer-message-persian",
+      source: {locale: "fa", path: "/fa/products/test-bottle"},
+    }).buildNew();
+    const conversation = Conversation.start({
+      id: "customer-message-persian-conversation",
+      inquiryId: inquiry.id.value,
+      channel: "WEBSITE",
+      createdAt: inquiry.createdAt,
+    });
+    await repository.save(inquiry, undefined, conversation);
+    const message = Message.create({
+      id: "customer-message-persian-1",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "آیا بطری شیشه‌ای ۷۰۰ میلی‌لیتری دارید؟",
+      createdAt: new Date("2026-08-27T09:10:00.000Z"),
+    });
+
+    await expect(messageRepository.appendCustomerWebsiteForInquiry(inquiry.id.value, message)).resolves.toBe("created");
+    expect((await pool.query("select id from conversation_message_translations where message_id=$1", [message.id.value])).rowCount).toBe(0);
+    expect((await pool.query("select id from conversation_translation_jobs where message_id=$1", [message.id.value])).rowCount).toBe(0);
+    await expect(messageRepository.findCustomerWebsiteMessageNotification({
+      inquiryId: inquiry.id.value,
+      conversationId: conversation.id.value,
+      messageId: message.id.value,
+    })).resolves.toMatchObject({
+      message: {body: message.body},
+      staffTranslation: {status: "FALLBACK", reason: "NOT_REQUIRED"},
     });
   });
 

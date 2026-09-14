@@ -1,4 +1,5 @@
 import type {NotificationMessage} from "@/features/inquiries/application/dto/notification-message";
+import type {RenderableStaffTranslationNotificationState, StaffTranslationNotificationState} from "@/features/inquiries/application/dto/customer-message-notification";
 import type {TelegramDeliveryRepository, TelegramMessageTransport} from "@/features/inquiries/application/ports/communication-ports";
 import type {InquiryNotificationConversationReader} from "@/features/inquiries/application/ports/conversation-ports";
 import type {Clock, InquiryOutbox, InquiryRepository, PendingInquiryEvent} from "@/features/inquiries/application/ports/inquiry-ports";
@@ -17,11 +18,17 @@ export type ProcessInquiryNotificationsResult = Readonly<{
 
 type NotificationFormatter = Readonly<{
   formatInquiryCreated(inquiry: Inquiry): NotificationMessage;
-  formatCustomerConversationMessageCreated(inquiry: Inquiry, conversationId: string, message: Message): NotificationMessage;
+  formatCustomerConversationMessageCreated(inquiry: Inquiry, conversationId: string, message: Message, staffTranslation: RenderableStaffTranslationNotificationState): NotificationMessage;
 }>;
 type DeliveryCounts = Readonly<{delivered: number; permanentFailures: number; unknown: number}>;
 const noRecipientsRetryMilliseconds = 5 * 60_000;
 const telegramDeliveryClaimLimit = 100;
+// This exceeds three full 60-second translation recovery leases while keeping an operational notification bounded.
+export const customerMessageTranslationMaximumWaitMilliseconds = 15 * 60_000;
+
+function isWaitingForStaffTranslation(state: StaffTranslationNotificationState): state is Extract<StaffTranslationNotificationState, {status: "PENDING" | "RUNNING"}> {
+  return state.status === "PENDING" || state.status === "RUNNING";
+}
 
 function retryDelayMilliseconds(attempts: number): number {
   return Math.min(60 * 60_000, 30_000 * (2 ** Math.min(Math.max(0, attempts - 1), 7)));
@@ -84,13 +91,26 @@ export class ProcessInquiryNotifications {
       message = conversationId ? this.formatter.formatInquiryCreated(inquiry) : null;
     } else {
       conversationId = event.conversationId;
-      const customerMessage = await this.conversations.findCustomerWebsiteMessage({
+      const customerMessage = await this.conversations.findCustomerWebsiteMessageNotification({
         inquiryId: event.inquiryId,
         conversationId: event.conversationId,
         messageId: event.messageId,
       });
+      const translationWaitDeadline = new Date(event.occurredAt.getTime() + customerMessageTranslationMaximumWaitMilliseconds);
+      if (customerMessage && isWaitingForStaffTranslation(customerMessage.staffTranslation) && now < translationWaitDeadline) {
+        const backedOffRetryAt = new Date(now.getTime() + retryDelayMilliseconds(attempts));
+        await this.outbox.scheduleRetry(event.eventId, backedOffRetryAt < translationWaitDeadline ? backedOffRetryAt : translationWaitDeadline);
+        return {processed: false, counts: {delivered: 0, permanentFailures: 0, unknown: 0}};
+      }
       message = customerMessage
-        ? this.formatter.formatCustomerConversationMessageCreated(inquiry, event.conversationId, customerMessage)
+        ? this.formatter.formatCustomerConversationMessageCreated(
+          inquiry,
+          event.conversationId,
+          customerMessage.message,
+          isWaitingForStaffTranslation(customerMessage.staffTranslation)
+            ? {status: "FALLBACK", reason: "TIMED_OUT"}
+            : customerMessage.staffTranslation,
+        )
         : null;
     }
     if (!conversationId || !message) {
