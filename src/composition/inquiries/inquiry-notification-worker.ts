@@ -53,10 +53,11 @@ export function createInquiryNotificationWorker(
     telegram,
     {
       formatInquiryCreated: (inquiry) => formatInquiryCreatedNotification(inquiry, staffInquiryUrl(inquiry.id.value)),
-      formatCustomerConversationMessageCreated: (inquiry, conversationId, message) => formatCustomerConversationMessageCreatedNotification(
+      formatCustomerConversationMessageCreated: (inquiry, conversationId, message, staffTranslation) => formatCustomerConversationMessageCreatedNotification(
         inquiry,
         conversationId,
         message,
+        staffTranslation,
         staffInquiryUrl(inquiry.id.value),
       ),
     },

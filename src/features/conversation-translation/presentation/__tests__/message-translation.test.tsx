@@ -38,6 +38,15 @@ describe("Staff translation presentation", () => {
       expect(parseMessageTranslation(value)).toEqual(value);
     }
   });
+  it("shows a Persian Customer message once without a redundant Staff translation", () => {
+    const original = "آیا بطری شیشه‌ای ۷۰۰ میلی‌لیتری دارید؟";
+    const markup = renderToStaticMarkup(<StaffConversationMessageList locale="fa" customerDisplayName="مشتری" teamMemberNames={{}}
+      labels={{translation: fa.Staff.translation, aiAgent: "هوش مصنوعی", customer: "مشتری", system: "سیستم", yolpolTeam: "تیم یول‌پل", emptyDescription: "خالی", emptyTitle: "خالی", messageList: "پیام‌ها", channels: fa.Staff.channels}}
+      messages={[{id: "message-fa", senderType: "CUSTOMER", channel: "WEBSITE", actorReference: null, body: original, createdAt: "2026-09-05T00:00:00Z",
+        translation: {sourceLocale: "fa", customerTargetLocale: null, translations: []}}]} />);
+    expect(markup.match(new RegExp(original, "gu"))).toHaveLength(1);
+    expect(markup).not.toContain(fa.Staff.translation.translation);
+  });
   it("uses LTR for Turkish, makes readiness precise and rejects provider metadata", () => {
     const value = {sourceLocale: "fa" as const, customerTargetLocale: "tr" as const, translations: [{targetLocale: "tr" as const, status: "SUCCEEDED" as const, body: "Merhaba"}]};
     const markup = renderToStaticMarkup(<MessageTranslation value={value} labels={en.Staff.translation} />);

@@ -16,6 +16,8 @@ import type {CustomerMessageAiFallbackJobPlan} from "@/features/conversation-ai-
 import {conversationAiJobIdFromMessageId} from "@/features/conversation-ai-routing/domain/services/conversation-ai-identities";
 import {conversationAiControls, conversationAiResponseJobs, conversationAiRoutingPostgresSchema} from "@/features/conversation-ai-routing/infrastructure/persistence/postgres/schema/conversation-ai-routing-schema";
 import {aiOperationPolicy, aiOperationsPostgresSchema} from "@/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema";
+import type {StaffTranslationNotificationState} from "@/features/inquiries/application/dto/customer-message-notification";
+import {staffWorkingLocale} from "@/shared/config/conversation-translation";
 
 const schema = {...inquiryPostgresSchema, ...conversationAiRoutingPostgresSchema, ...aiOperationsPostgresSchema};
 type InquiryDatabase = NodePgDatabase<typeof schema>;
@@ -155,7 +157,7 @@ export class PostgresConversationMessageRepository implements ConversationMessag
     }
   }
 
-  async findCustomerWebsiteMessage(input: Readonly<{inquiryId: string; conversationId: string; messageId: string}>): Promise<Message | null> {
+  async findCustomerWebsiteMessageNotification(input: Readonly<{inquiryId: string; conversationId: string; messageId: string}>) {
     try {
       const [row] = await this.database.select({
         id: conversationMessages.id,
@@ -173,7 +175,22 @@ export class PostgresConversationMessageRepository implements ConversationMessag
           eq(conversationMessages.senderType, "CUSTOMER"),
           eq(conversationMessages.channel, "WEBSITE"),
         )).limit(1);
-      return row ? Message.create({...row, senderType: "CUSTOMER", channel: "WEBSITE"}) : null;
+      if (!row) return null;
+      const message = Message.create({...row, senderType: "CUSTOMER", channel: "WEBSITE"});
+      const translations = await readMessageTranslations(this.database, input.conversationId, [input.messageId]);
+      const translation = translations.get(input.messageId)?.translations.find(({targetLocale}) => targetLocale === staffWorkingLocale);
+      let staffTranslation: StaffTranslationNotificationState;
+      if (!translation) {
+        staffTranslation = {status: "FALLBACK", reason: "NOT_REQUIRED"};
+      } else if (translation.status === "PENDING" || translation.status === "RUNNING") {
+        staffTranslation = {status: translation.status};
+      } else if (translation.status === "SUCCEEDED") {
+        if (translation.body === null) throw new InquiryPersistenceError();
+        staffTranslation = {status: "SUCCEEDED", body: translation.body};
+      } else {
+        staffTranslation = {status: "FALLBACK", reason: translation.status};
+      }
+      return Object.freeze({message, staffTranslation: Object.freeze(staffTranslation)});
     } catch {
       throw new InquiryPersistenceError();
     }
