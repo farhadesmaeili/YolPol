@@ -60,6 +60,8 @@ usage() {
     '  deploy-edge' \
     '  staff-provision' \
     '  staff-bootstrap-super-admin' \
+    '  telegram-webhook-set' \
+    '  telegram-webhook-info' \
     '  backup-create' \
     '  backup-verify <backup-id>' >&2
 }
@@ -95,10 +97,10 @@ if [ "$#" -ge 1 ]; then
   candidate_action=$1
   shift
   case "$candidate_action" in
-    validate|status|health)
+    validate|status|health|telegram-webhook-info)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
-    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|backup-create)
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
     backup-verify)
@@ -276,7 +278,7 @@ monitoring_compose() {
 validate_staging_contract() {
   require_staging_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-staging
-  if ! resolved_compose=$(staging_compose --profile migration --profile backup --profile staff-operations config --format json 2>/dev/null); then
+  if ! resolved_compose=$(staging_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
     fail 'Staging Compose resolution failed'
   fi
   printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-staging-compose
@@ -419,6 +421,10 @@ run_mutating_action() {
       validate_staging_contract
       run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin
       ;;
+    telegram-webhook-set)
+      validate_staging_contract
+      staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set
+      ;;
   esac
 }
 
@@ -452,6 +458,10 @@ else
     validate) validate_staging_contract; validate_monitoring_contract ;;
     status) show_status ;;
     health) check_health ;;
+    telegram-webhook-info)
+      validate_staging_contract
+      staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info
+      ;;
   esac
 fi
 

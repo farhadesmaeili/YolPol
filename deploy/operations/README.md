@@ -36,6 +36,8 @@ The wrapper and standard-library Python policy helper:
 | `deploy-edge` | Start/update only the Staging Caddy service. |
 | `staff-provision` | Interactively run only the existing ADMIN/SALES provisioning CLI in the fixed Staff operation service. |
 | `staff-bootstrap-super-admin` | Interactively run only the existing first-Super-Admin bootstrap CLI in its fixed Staff operation service. |
+| `telegram-webhook-set` | Noninteractively register the exact Staging Telegram webhook while preserving pending updates; mutates Telegram provider state. |
+| `telegram-webhook-info` | Noninteractively read the current Telegram webhook status through the existing secret-safe tooling. |
 | `backup-create` | Run the fixed encrypted backup service after a 5 GiB free-space floor and 15-minute success throttle. |
 | `backup-verify <backup-id>` | Run identity-free verification for one strict ASCII Staging backup identifier. |
 
@@ -43,9 +45,11 @@ There is deliberately no operator `deploy-monitoring` command. Restore, deep ver
 
 The Staff commands accept no additional arguments. They use Compose's normal interactive mode and deliberately omit `--interactive=false`, `--no-TTY`, and `--no-build`; the wrapper first proves all three standard streams are terminals. The service command, worker image digest, UID/GID, application database environment file, backend-only network, and resource limits are fixed and policy-validated. Prompts must remain visible, so Staff CLI output is not redirected into the operation log; the normal metadata-only started/final audit records still apply. The password is read by the existing hidden-input implementation and is never placed in arguments, environment, Compose configuration, Git, or wrapper logs.
 
+The Telegram actions also accept no additional arguments and use fixed noninteractive Compose `run --rm --no-deps` commands. They deliberately omit `--no-build`, which is unsupported for `run`; the validated promoted Compose model remains image-only. The set action is serialized by the deployment lock and mutates Telegram provider state. The info action is read-only. Their existing TypeScript entrypoints emit only a validated public webhook URL, status/count metadata, redacted provider-error text, or a generic failure. Never place Telegram credentials in command arguments, runtime.env, logs, or documentation.
+
 ## Runtime and release authority
 
-`deploy/staging/runtime.env.example` and `deploy/monitoring/runtime.env.example` enumerate the complete runtime schemas. The Staging schema contains one full 40-character lowercase Git SHA; four fixed YOLPOL repository digest references; fixed host paths, ports, resource/logging limits, retention values, and deployment settings; one public age recipient; and one public Telegram username. Monitoring contains the fifth fixed repository digest reference plus fixed loopback ports, config/secret paths, external network names, resource/logging limits, and disabled-by-default backup monitoring. No additional key is supported.
+`deploy/staging/runtime.env.example` and `deploy/monitoring/runtime.env.example` enumerate the complete runtime schemas. The Staging schema contains one full 40-character lowercase Git SHA; four fixed YOLPOL repository digest references; fixed host paths, ports, resource/logging limits, retention values, and deployment settings; one public age recipient; one public Telegram username; and the server-only Staging Telegram webhook public origin. Policy requires that origin to equal `https://staging.yolpol.com`; Compose exposes it to the one-shot tooling only as `TELEGRAM_WEBHOOK_PUBLIC_ORIGIN`, never as a `NEXT_PUBLIC_*` value. Monitoring contains the fifth fixed repository digest reference plus fixed loopback ports, config/secret paths, external network names, resource/logging limits, and disabled-by-default backup monitoring. No additional key is supported.
 
 The active authority is exactly:
 
@@ -104,7 +108,7 @@ Create both logs and state files before enabling sudo. Every valid invocation mu
 
 Install `logrotate.yolpol-deploy` as `/etc/logrotate.d/yolpol-deploy`, `root:root 0644`. It rotates both root-only logs weekly or at 10 MiB, retains 13 compressed generations, and creates replacements as `0600 root:root`. The operation log may contain sensitive subprocess diagnostics and is never exposed through the wrapper.
 
-Backup creation additionally requires at least 5 GiB available in the fixed backup filesystem and at least 900 seconds since the last successful wrapper-created backup. Compose memory, CPU, PID, read-only-root, tmpfs, and capability controls remain validated. Staff operation containers additionally have a fixed non-root user, read-only root filesystem, private tmpfs, no public port, no provider-egress network, and no provider secret. Scheduling, remote durability, and destructive retention are separate root decisions.
+Backup creation additionally requires at least 5 GiB available in the fixed backup filesystem and at least 900 seconds since the last successful wrapper-created backup. Compose memory, CPU, PID, read-only-root, tmpfs, and capability controls remain validated. Staff operation containers additionally have a fixed non-root user, read-only root filesystem, private tmpfs, no public port, no provider-egress network, and no provider secret. Telegram operation containers use the same non-root/read-only/capability controls and a bounded private tmpfs required by `tsx`, receive no database or Groq configuration, publish no port, mount no host path, and attach only to provider egress. Scheduling, remote durability, and destructive retention are separate root decisions.
 
 ## Monitoring and local access
 

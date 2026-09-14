@@ -54,6 +54,25 @@ x-staff-operation: &staff-operation
   pids_limit: 100
   logging: *json-logging
 
+x-telegram-operation: &telegram-operation
+  image: "${YOLPOL_WORKER_IMAGE:-yolpol-worker:local}"
+  profiles: ["telegram-operations"]
+  restart: "no"
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - provider_egress
+  mem_limit: "${YOLPOL_STAGING_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_STAGING_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
 services:
   edge:
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
@@ -214,6 +233,26 @@ services:
   staff-bootstrap-super-admin:
     <<: *staff-operation
     command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"]
+
+  telegram-webhook-set:
+    <<: *telegram-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/set-telegram-webhook.ts"]
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "${YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN:?Set YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN}"
+      TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret
+    secrets:
+      - telegram_bot_token
+      - telegram_webhook_secret
+
+  telegram-webhook-info:
+    <<: *telegram-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/get-telegram-webhook-info.ts"]
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "${YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN:?Set YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN}"
+    secrets:
+      - telegram_bot_token
 
   migrate:
     profiles: ["migration"]

@@ -61,6 +61,7 @@ COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY tooling/workers ./tooling/workers
 COPY tooling/staff-provisioning/index.ts tooling/staff-provisioning/bootstrap-super-admin.ts tooling/staff-provisioning/node-terminal.ts ./tooling/staff-provisioning/
+COPY tooling/telegram/get-telegram-webhook-info.ts tooling/telegram/set-telegram-webhook.ts tooling/telegram/telegram-webhook-client.ts tooling/telegram/telegram-webhook-commands.ts tooling/telegram/telegram-webhook-config.ts ./tooling/telegram/
 COPY src ./src
 
 USER 10001:10001
