@@ -47,6 +47,21 @@ export class PostgresTelegramDeliveryRepository implements TelegramDeliveryRepos
           where ${communicationRecipients.channel} = 'TELEGRAM'
             and ${communicationRecipients.authorized} = true
             and ${communicationRecipients.notificationsEnabled} = true
+            and (
+              ${communicationRecipients.kind} = 'TEAM_GROUP'
+              or (
+                ${communicationRecipients.kind} = 'TEAM_MEMBER'
+                and exists (
+                  select 1
+                  from telegram_staff_links link
+                  join inquiry_team_members member on member.id = link.team_member_id and member.active = true
+                  join staff_accounts account on account.team_member_id = member.id and account.active = true
+                  where link.team_member_id = ${communicationRecipients.teamMemberId}
+                    and link.private_chat_id::text = ${communicationRecipients.externalId}
+                    and link.disconnected_at is null
+                )
+              )
+            )
           on conflict (outbox_event_id, recipient_id) do nothing
         `);
         const [created] = await transaction.select({count: sql<number>`count(*)::int`})

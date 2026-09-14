@@ -28,7 +28,7 @@ let messageRepository: PostgresConversationMessageRepository;
 const now = new Date("2026-08-26T10:00:00.000Z");
 
 async function cleanTables() {
-  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, global_translation_setting_events, global_translation_settings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
+  await pool.query("truncate table conversation_channel_deliveries, conversation_channel_inbound_messages, conversation_channel_bindings, global_translation_setting_events, global_translation_settings, conversation_translation_control_events, conversation_translation_controls, conversation_translation_events, conversation_translation_jobs, conversation_message_translations, conversation_message_languages, conversation_ai_control_events, conversation_ai_controls, conversation_ai_response_jobs, communication_recipient_events, telegram_group_connection_requests, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, conversation_access, conversation_messages, inquiry_assignments, inquiry_workflow_events, conversations, inquiry_outbox, inquiry_items, inquiry_team_members, inquiries");
 }
 
 async function seedInquiry(id: string) {
@@ -40,16 +40,18 @@ async function seedInquiry(id: string) {
 }
 
 async function seedRecipients() {
-  await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-a','Member A',true,$1,$1),('member-b','Member B',true,$1,$1)", [now]);
+  await pool.query("insert into inquiry_team_members (id,display_name,active,created_at,updated_at) values ('member-a','Member A',true,$1,$1),('member-b','Member B',true,$1,$1),('member-disabled','Disabled',true,$1,$1),('member-unauthorized','Unauthorized',true,$1,$1),('member-email','Email member',true,$1,$1)", [now]);
+  await pool.query("insert into staff_accounts (id,team_member_id,normalized_email,password_hash,role,active,created_at,updated_at) values ('account-a','member-a','member-a@example.test','stored-hash','SALES',true,$1,$1),('account-b','member-b','member-b@example.test','stored-hash','VIEWER',true,$1,$1)", [now]);
+  await pool.query("insert into telegram_staff_links (id,team_member_id,telegram_user_id,private_chat_id,first_linked_at,connected_at,updated_at) values ('link-a','member-a',101,101,$1,$1,$1),('link-b','member-b',102,102,$1,$1,$1)", [now]);
   await pool.query(`
     insert into communication_recipients (id,channel,kind,external_id,display_name,team_member_id,authorized,notifications_enabled,created_at,updated_at)
     values
       ('telegram-group','TELEGRAM','TEAM_GROUP','-100900','Operations group',null,true,true,$1,$1),
       ('telegram-member-a','TELEGRAM','TEAM_MEMBER','101','Member A','member-a',true,true,$1,$1),
       ('telegram-member-b','TELEGRAM','TEAM_MEMBER','102','Member B','member-b',true,true,$1,$1),
-      ('telegram-disabled','TELEGRAM','TEAM_MEMBER','103','Disabled',null,true,false,$1,$1),
-      ('telegram-unauthorized','TELEGRAM','TEAM_MEMBER','104','Unauthorized',null,false,true,$1,$1),
-      ('email-member','EMAIL','TEAM_MEMBER','member@example.test','Email member',null,true,true,$1,$1)
+      ('telegram-disabled','TELEGRAM','TEAM_MEMBER','103','Disabled','member-disabled',true,false,$1,$1),
+      ('telegram-unauthorized','TELEGRAM','TEAM_MEMBER','104','Unauthorized','member-unauthorized',false,false,$1,$1),
+      ('email-member','EMAIL','TEAM_MEMBER','member@example.test','Email member','member-email',true,true,$1,$1)
   `, [now]);
 }
 
@@ -77,7 +79,7 @@ describe("PostgresTelegramDeliveryRepository", () => {
 
     await expect(deliveryRepository.snapshotRecipients({outboxEventId: event.eventId, conversationId: conversation.id.value, now})).resolves.toBe(3);
     await pool.query("update communication_recipients set external_id='-100999',authorized=false,notifications_enabled=false,updated_at=$1 where id='telegram-group'", [new Date(now.getTime() + 1_000)]);
-    await pool.query("insert into communication_recipients (id,channel,kind,external_id,display_name,authorized,notifications_enabled,created_at,updated_at) values ('telegram-late','TELEGRAM','TEAM_MEMBER','105','Late member',true,true,$1,$1)", [now]);
+    await pool.query("insert into communication_recipients (id,channel,kind,external_id,display_name,authorized,notifications_enabled,created_at,updated_at) values ('telegram-late','TELEGRAM','TEAM_GROUP','-100105','Late group',true,true,$1,$1)", [now]);
     await expect(deliveryRepository.snapshotRecipients({outboxEventId: event.eventId, conversationId: conversation.id.value, now})).resolves.toBe(3);
     const future = await seedInquiry("telegram-future-snapshot");
     await expect(deliveryRepository.snapshotRecipients({outboxEventId: future.event.eventId, conversationId: future.conversation.id.value, now})).resolves.toBe(3);
@@ -112,9 +114,6 @@ describe("PostgresTelegramDeliveryRepository", () => {
     expect(retry[0]).toMatchObject({recipientId: "telegram-member-b", recipientExternalId: "102", attempts: 2});
     await deliveryRepository.markDelivered({delivery: retry[0]!, telegramChatId: 102, telegramMessageId: 7003, deliveredAt: retryAt});
     await expect(deliveryRepository.summarizeEvent(event.eventId)).resolves.toMatchObject({automaticWorkRemaining: 0, delivered: 3});
-
-    await pool.query("insert into staff_accounts (id,team_member_id,normalized_email,password_hash,role,active,created_at,updated_at) values ('account-a','member-a','member-a@example.test','stored-hash','SALES',true,$1,$1),('account-b','member-b','member-b@example.test','stored-hash','SALES',true,$1,$1)", [now]);
-    await pool.query("insert into telegram_staff_links (id,team_member_id,telegram_user_id,private_chat_id,first_linked_at,connected_at,updated_at) values ('link-a','member-a',101,101,$1,$1,$1)", [now]);
 
     const receive = new ReceiveTelegramReply(
       new ResolveTelegramStaffActor(new PostgresTelegramStaffOnboardingRepository(pool), new StaffAuthorizationPolicy()),

@@ -1,3 +1,4 @@
+import {randomUUID} from "node:crypto";
 import type {Pool, PoolClient} from "pg";
 
 import type {TelegramStaffIdentity, TelegramStaffOnboardingRepository} from "@/features/telegram-staff-onboarding/application/ports/telegram-staff-onboarding-ports";
@@ -224,7 +225,7 @@ export class PostgresTelegramStaffOnboardingRepository implements TelegramStaffO
         await rollback(client);
         return "unavailable" as const;
       }
-      const status = await this.disconnectAndRevoke(client, owner.teamMemberId, owner.staffAccountId);
+      const status = await this.disconnectAndRevoke(client, owner, owner);
       await client.query("commit");
       return status;
     } catch {
@@ -244,7 +245,7 @@ export class PostgresTelegramStaffOnboardingRepository implements TelegramStaffO
         await rollback(client);
         return "unavailable" as const;
       }
-      const status = await this.disconnectAndRevoke(client, target.teamMemberId, target.staffAccountId);
+      const status = await this.disconnectAndRevoke(client, target, actor);
       await client.query("commit");
       return status;
     } catch {
@@ -253,17 +254,35 @@ export class PostgresTelegramStaffOnboardingRepository implements TelegramStaffO
     } finally { client.release(); }
   }
 
-  private async disconnectAndRevoke(client: PoolClient, teamMemberId: string, staffAccountId: string): Promise<"disconnected" | "unavailable"> {
+  private async disconnectAndRevoke(client: PoolClient, target: TelegramStaffIdentity, actor: TelegramStaffIdentity): Promise<"disconnected" | "unavailable"> {
     const databaseNow = (await client.query<{now: Date}>("select clock_timestamp() as now")).rows[0]?.now;
     if (!databaseNow) throw new Error("Database clock unavailable.");
     const link = await client.query<{id: string}>(`
       select id from telegram_staff_links where team_member_id = $1 and disconnected_at is null for update
-    `, [teamMemberId]);
+    `, [target.teamMemberId]);
     await client.query(`
       update telegram_connection_requests set revoked_at = $2
       where staff_account_id = $1 and consumed_at is null and revoked_at is null
-    `, [staffAccountId, databaseNow]);
+    `, [target.staffAccountId, databaseNow]);
     if (!link.rows[0]) return "unavailable";
+    const recipients = await client.query<{id: string; displayName: string; authorized: boolean; notificationsEnabled: boolean}>(`
+      select id,display_name as "displayName",authorized,notifications_enabled as "notificationsEnabled"
+      from communication_recipients
+      where channel='TELEGRAM' and kind='TEAM_MEMBER' and team_member_id=$1 and authorized=true
+      for update
+    `, [target.teamMemberId]);
+    for (const recipient of recipients.rows) {
+      await client.query(`
+        update communication_recipients set authorized=false,notifications_enabled=false,updated_at=$2 where id=$1
+      `, [recipient.id, databaseNow]);
+      await client.query(`
+        insert into communication_recipient_events (
+          id,recipient_id,event_type,destination_kind,display_name,actor_reference,actor_display_name,
+          previous_authorized,previous_notifications_enabled,new_authorized,new_notifications_enabled,occurred_at
+        ) values ($1,$2,'TEAM_MEMBER_LINK_DISCONNECTED','TEAM_MEMBER',$3,$4,$5,$6,$7,false,false,$8)
+      `, [`notification_event_${randomUUID().replaceAll("-", "")}`, recipient.id, recipient.displayName,
+        `staff:${actor.teamMemberId}`, actor.displayName, recipient.authorized, recipient.notificationsEnabled, databaseNow]);
+    }
     await client.query("update telegram_staff_links set disconnected_at = $2, updated_at = $2 where id = $1", [link.rows[0].id, databaseNow]);
     return "disconnected";
   }

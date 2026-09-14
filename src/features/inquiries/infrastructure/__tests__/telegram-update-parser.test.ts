@@ -61,7 +61,7 @@ describe("parseTelegramUpdate", () => {
     const input = {...update(), message: {...update().message, from: {id: 456, is_bot: false, language_code: "fa-IR"}, chat: {id: chatType === "private" ? 456 : -100123, type: chatType}, text}};
     expect(classifyTelegramUpdate(input)).toEqual({status: "staff_connection_start", command: {
       externalUpdateId: "987654", telegramUserId: "456", chatId: chatType === "private" ? "456" : "-100123",
-      chatType, languageCode: "fa-IR", connectionToken, malformed, senderEligible: true,
+      chatType, chatTitle: null, languageCode: "fa-IR", connectionToken, malformed, senderEligible: true,
     }});
   });
 

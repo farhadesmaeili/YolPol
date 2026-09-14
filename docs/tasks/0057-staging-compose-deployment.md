@@ -35,7 +35,7 @@ The final/default Docker target remains `runtime`, preserving the existing Node 
 
 The migration job receives only `DATABASE_URL`, applies committed migrations, and exits 0/1. It holds one PostgreSQL advisory lock on a single-connection pool for the whole runtime migration. Concurrent invocations therefore serialize without a lock table or schema change; PostgreSQL releases the lock if the session dies.
 
-The release order is PostgreSQL health, explicit migration, application services, readiness verification, then edge activation. `migrate` has the `migration` profile and `restart: no`; normal `docker compose up` does not start it. Web/workers do not depend on successful migration execution and never mutate schema. `/api/health/ready` continues to require journal state through `0022_global_translation_settings`; liveness remains database-independent.
+The release order is PostgreSQL health, explicit migration, application services, readiness verification, then edge activation. `migrate` has the `migration` profile and `restart: no`; normal `docker compose up` does not start it. Web/workers do not depend on successful migration execution and never mutate schema. `/api/health/ready` continues to require journal state through `0023_telegram_notification_destinations`; liveness remains database-independent.
 
 No new SQL migration is introduced. The initial Compose contract uses one dedicated Staging owner role for both runtime and migration unless operators provision a deliberate privilege split separately. This is documented honestly as not least privilege; Compose does not simulate a role split with brittle initialization scripts.
 

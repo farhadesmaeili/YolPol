@@ -69,7 +69,7 @@ describe("Global Translation Settings migration", () => {
     const previous = JSON.parse(readFileSync("drizzle/meta/0021_snapshot.json", "utf8"));
     const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
     expect(snapshot.prevId).toBe(previous.id);
-    expect(journal.entries.at(-1)).toMatchObject({idx: 22, tag: "0022_global_translation_settings"});
+    expect(journal.entries[22]).toMatchObject({idx: 22, tag: "0022_global_translation_settings"});
     const dialect = new PgDialect();
     for (const table of [globalTranslationSettings, globalTranslationSettingEvents, conversationTranslationControlEvents]) {
       const config = getTableConfig(table);

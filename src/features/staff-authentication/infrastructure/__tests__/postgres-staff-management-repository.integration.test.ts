@@ -18,7 +18,7 @@ let pool: Pool;
 let repository: PostgresStaffManagementRepository;
 
 async function cleanTables() {
-  await pool.query("truncate table telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
+  await pool.query("truncate table communication_recipient_events, telegram_group_connection_requests, telegram_connection_requests, telegram_staff_links, staff_sessions, staff_invitations, staff_accounts, telegram_inquiry_deliveries, communication_recipients, inquiry_assignments, inquiry_team_members");
 }
 
 async function seedAccount(id: string, role: "SUPER_ADMIN" | "ADMIN" | "SALES" | "VIEWER", active = true) {

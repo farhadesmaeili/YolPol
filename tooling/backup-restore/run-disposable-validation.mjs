@@ -179,7 +179,7 @@ try {
     "exec", destination, "psql", "-X", "-A", "-t", "-U", validationUser, "-d", validationDatabase,
     "-v", "ON_ERROR_STOP=1", "-c", "select max(created_at) from drizzle.__drizzle_migrations;",
   ], {label: "restored migration-state verification"});
-  if (Number(migrationTimestamp) < 1788832991886) throw new Error("Restored migration state is below the required marker.");
+  if (Number(migrationTimestamp) < 1789391490099) throw new Error("Restored migration state is below the required marker.");
 
   await run([
     "run", "--rm", "--network", network,
