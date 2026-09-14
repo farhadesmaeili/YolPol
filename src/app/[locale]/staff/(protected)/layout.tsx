@@ -41,6 +41,7 @@ export default async function ProtectedStaffLayout({children, params}: Protected
         inquiries: t("navigation.inquiries"),
         translationSettings: t("navigation.translationSettings"),
         team: t("navigation.team"),
+        notificationDestinations: t("navigation.notificationDestinations"),
         navigation: t("navigation.label"),
         changeLanguage: t("navigation.changeLanguage"),
         skipToContent: t("navigation.skipToContent"),

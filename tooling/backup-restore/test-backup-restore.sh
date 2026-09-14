@@ -40,9 +40,9 @@ create_pair() {
       encryption:{scheme:"age-x25519"},
       artifact:{filename:$filename,sizeBytes:$size,sha256:$checksum},
       schema:{
-        latestMigrationTimestamp:1788832991886,
-        requiredMigration:"0022_global_translation_settings",
-        requiredMigrationTimestamp:1788832991886
+        latestMigrationTimestamp:1789391490099,
+        requiredMigration:"0023_telegram_notification_destinations",
+        requiredMigrationTimestamp:1789391490099
       }
     }' > "$directory/$backup_id.manifest.json"
 }

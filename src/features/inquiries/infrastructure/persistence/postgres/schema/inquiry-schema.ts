@@ -110,7 +110,7 @@ export const communicationRecipients = pgTable("communication_recipients", {
   displayName: varchar("display_name", {length: 120}).notNull(),
   teamMemberId: varchar("team_member_id", {length: 128}).references(() => inquiryTeamMembers.id, {onDelete: "restrict"}),
   authorized: boolean("authorized").notNull().default(false),
-  notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
+  notificationsEnabled: boolean("notifications_enabled").notNull().default(false),
   createdAt: timestamp("created_at", {withTimezone: true, mode: "date"}).notNull(),
   updatedAt: timestamp("updated_at", {withTimezone: true, mode: "date"}).notNull(),
 }, (table) => [
@@ -118,11 +118,13 @@ export const communicationRecipients = pgTable("communication_recipients", {
   check("communication_recipients_id_format_check", sql`${table.id} ~ '^[A-Za-z0-9_-]{1,128}$'`),
   check("communication_recipients_channel_check", sql`${table.channel} in ('TELEGRAM','EMAIL','WHATSAPP')`),
   check("communication_recipients_kind_check", sql`${table.kind} in ('TEAM_GROUP','TEAM_MEMBER')`),
-  check("communication_recipients_team_member_kind_check", sql`${table.kind} = 'TEAM_MEMBER' or ${table.teamMemberId} is null`),
+  check("communication_recipients_team_member_kind_check", sql`(${table.kind} = 'TEAM_MEMBER' and ${table.teamMemberId} is not null) or (${table.kind} = 'TEAM_GROUP' and ${table.teamMemberId} is null)`),
+  check("communication_recipients_enabled_authorized_check", sql`${table.authorized} or not ${table.notificationsEnabled}`),
   check("communication_recipients_external_id_length_check", sql`char_length(${table.externalId}) between 1 and 160`),
   check("communication_recipients_display_name_length_check", sql`char_length(${table.displayName}) between 1 and 120`),
   check("communication_recipients_timestamps_check", sql`${table.updatedAt} >= ${table.createdAt}`),
   index("communication_recipients_notifications_idx").on(table.channel, table.authorized, table.notificationsEnabled),
+  uniqueIndex("communication_recipients_team_member_uidx").on(table.channel, table.teamMemberId).where(sql`${table.kind} = 'TEAM_MEMBER'`),
 ]);
 
 export const inquiryTeamMembers = pgTable("inquiry_team_members", {

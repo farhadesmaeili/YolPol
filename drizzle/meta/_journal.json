@@ -162,6 +162,13 @@
       "when": 1788832991886,
       "tag": "0022_global_translation_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789391490099,
+      "tag": "0023_telegram_notification_destinations",
+      "breakpoints": true
     }
   ]
 }

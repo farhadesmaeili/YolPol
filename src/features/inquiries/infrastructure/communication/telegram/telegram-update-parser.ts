@@ -34,6 +34,7 @@ function parseStartCommand(input: UnknownRecord, updateId: number): TelegramStar
     telegramUserId: senderId === null ? null : String(senderId),
     chatId: chatId === null ? null : String(chatId),
     chatType: typeof chat?.type === "string" ? chat.type : null,
+    chatTitle: typeof chat?.title === "string" && chat.title.length <= 120 ? chat.title.trim() : null,
     languageCode,
     connectionToken: match?.[1] ?? null,
     malformed: match === null,

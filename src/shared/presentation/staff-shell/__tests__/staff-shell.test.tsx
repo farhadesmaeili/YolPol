@@ -48,6 +48,7 @@ const labels: StaffShellLabels = {
   signedInAs: "Signed in as",
   skipToContent: "Skip to content",
   team: "Team",
+  notificationDestinations: "Notification Destinations",
 };
 
 const capabilities = {

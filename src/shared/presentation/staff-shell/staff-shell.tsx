@@ -27,6 +27,7 @@ export type StaffShellLabels = Readonly<{
   signedInAs: string;
   skipToContent: string;
   team: string;
+  notificationDestinations: string;
 }>;
 
 export function StaffShell({children, labels, locale, principal, capabilities}: Readonly<{
@@ -43,6 +44,7 @@ export function StaffShell({children, labels, locale, principal, capabilities}: 
     ...(capabilities.mayViewAiOperations ? [{href: "/staff/ai-operations" as const, label: labels.aiOperations}] : []),
     ...(capabilities.mayViewAiProviderRegistry ? [{href: "/staff/ai-providers" as const, label: labels.aiProviders}] : []),
     ...(capabilities.mayManageTeam ? [{href: "/staff/team" as const, label: labels.team}] : []),
+    ...(capabilities.mayManageTeam ? [{href: "/staff/notification-destinations" as const, label: labels.notificationDestinations}] : []),
   ];
 
   return (

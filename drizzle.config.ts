@@ -14,6 +14,7 @@ export default defineConfig({
     "./src/features/inquiries/infrastructure/persistence/postgres/schema/inquiry-schema.ts",
     "./src/features/staff-authentication/infrastructure/persistence/postgres/schema/staff-authentication-schema.ts",
     "./src/features/telegram-staff-onboarding/infrastructure/persistence/postgres/schema/telegram-staff-onboarding-schema.ts",
+    "./src/features/notification-destinations/infrastructure/persistence/postgres/schema/notification-destination-schema.ts",
     "./src/features/ai-operations/infrastructure/persistence/postgres/schema/ai-operations-schema.ts",
     "./src/features/ai-provider-registry/infrastructure/persistence/postgres/schema/ai-provider-registry-schema.ts",
     "./src/features/ai-provider-gateway/infrastructure/persistence/postgres/schema/ai-provider-gateway-schema.ts",
