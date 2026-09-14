@@ -74,6 +74,7 @@ describe("Telegram inquiry notification formatter", () => {
       new InquiryTestBuilder().buildNew(),
       "conversation-confidentiality",
       customerMessage,
+      {status: "SUCCEEDED", body: "برنامه تحویل را تأیید کنید."},
       staffUrl,
     ).text)).toEqual([]);
   });
@@ -87,13 +88,20 @@ describe("Telegram inquiry notification formatter", () => {
       body: "Please confirm the updated delivery date.",
       createdAt: new Date("2026-08-27T08:00:00.000Z"),
     });
-    const text = formatCustomerConversationMessageCreatedNotification(inquiry, "conversation-1", message, staffUrl).text;
+    const text = formatCustomerConversationMessageCreatedNotification(
+      inquiry,
+      "conversation-1",
+      message,
+      {status: "SUCCEEDED", body: "لطفاً تاریخ تحویل به‌روز را تأیید کنید."},
+      staffUrl,
+    ).text;
 
     expect(text).toContain("NEW CUSTOMER MESSAGE");
     expect(text).not.toContain("New YOLPOL inquiry");
     expect(text).toContain("Inquiry reference: inq-notification");
     expect(text).toContain("Conversation reference: conversation-1");
     expect(text).toContain("Message:\n  Please confirm the updated delivery date.");
+    expect(text).toContain("Staff translation:\n  لطفاً تاریخ تحویل به‌روز را تأیید کنید.");
     expect(text).toContain(`Staff panel: ${staffUrl}`);
     expect(text).not.toMatch(/parse_mode|<[^>]+>|\*\*/u);
   });
@@ -108,12 +116,66 @@ describe("Telegram inquiry notification formatter", () => {
       createdAt: new Date("2026-08-27T08:00:00.000Z"),
     });
     const url = "https://yolpol.com/en/staff/inquiries/customer-message-long";
-    const text = formatCustomerConversationMessageCreatedNotification(inquiry, "conversation-long", message, url).text;
+    const text = formatCustomerConversationMessageCreatedNotification(
+      inquiry,
+      "conversation-long",
+      message,
+      {status: "SUCCEEDED", body: `ترجمه ${"ژ".repeat(5_000)}`},
+      url,
+    ).text;
 
     expect(text.length).toBeLessThanOrEqual(telegramNotificationTextLimit);
     expect(text).toContain("NEW CUSTOMER MESSAGE");
-    expect(text).toContain("[content shortened for Telegram]");
+    expect(text).toContain("Message:\n  🚚");
+    expect(text).toContain("Staff translation:\n  ترجمه ژ");
+    expect(text).toContain("[content shortened]");
     expect(text).toContain(`Staff panel: ${url}`);
     expect(text).not.toMatch(/[\uD800-\uDBFF]$/u);
+  });
+
+  it.each([
+    [{status: "FALLBACK", reason: "FAILED"} as const, "Staff translation: unavailable; original message shown."],
+    [{status: "FALLBACK", reason: "CANCELLED"} as const, "Staff translation: unavailable; original message shown."],
+    [{status: "FALLBACK", reason: "TIMED_OUT"} as const, "Staff translation: unavailable; original message shown."],
+  ])("renders an explicit safe fallback for %j", (staffTranslation, expected) => {
+    const message = Message.create({
+      id: "customer-message-fallback",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Original customer text.",
+      createdAt: new Date("2026-08-27T08:00:00.000Z"),
+    });
+
+    const text = formatCustomerConversationMessageCreatedNotification(
+      new InquiryTestBuilder().buildNew(),
+      "conversation-fallback",
+      message,
+      staffTranslation,
+      staffUrl,
+    ).text;
+
+    expect(text).toContain("Message:\n  Original customer text.");
+    expect(text).toContain(expected);
+  });
+
+  it("renders a Persian customer message once without a redundant translation section", () => {
+    const message = Message.create({
+      id: "customer-message-persian",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "آیا بطری شیشه‌ای ۷۰۰ میلی‌لیتری دارید؟",
+      createdAt: new Date("2026-08-27T08:00:00.000Z"),
+    });
+
+    const text = formatCustomerConversationMessageCreatedNotification(
+      new InquiryTestBuilder().with({source: {locale: "fa", path: "/fa/products/test-bottle"}}).buildNew(),
+      "conversation-persian",
+      message,
+      {status: "FALLBACK", reason: "NOT_REQUIRED"},
+      staffUrl,
+    ).text;
+
+    expect(text.match(/آیا بطری شیشه‌ای ۷۰۰ میلی‌لیتری دارید؟/gu)).toHaveLength(1);
+    expect(text).not.toContain("Staff translation:");
   });
 });

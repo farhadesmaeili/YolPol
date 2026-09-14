@@ -2,8 +2,9 @@ import {describe, expect, it, vi} from "vitest";
 
 import type {TelegramDeliveryRepository, TelegramMessageTransport} from "@/features/inquiries/application/ports/communication-ports";
 import type {InquiryNotificationConversationReader} from "@/features/inquiries/application/ports/conversation-ports";
+import type {StaffTranslationNotificationState} from "@/features/inquiries/application/dto/customer-message-notification";
 import type {InquiryOutbox, PendingInquiryEvent} from "@/features/inquiries/application/ports/inquiry-ports";
-import {ProcessInquiryNotifications} from "@/features/inquiries/application/use-cases/process-inquiry-notifications";
+import {customerMessageTranslationMaximumWaitMilliseconds, ProcessInquiryNotifications} from "@/features/inquiries/application/use-cases/process-inquiry-notifications";
 import type {ClaimedTelegramDelivery, TelegramDeliveryErrorCode, TelegramDeliveryStatus} from "@/features/inquiries/application/types/telegram-delivery";
 import {Message} from "@/features/inquiries/domain/entities/message";
 import {createCustomerConversationMessageCreated} from "@/features/inquiries/domain/events/customer-conversation-message-created";
@@ -25,10 +26,11 @@ type Mutable<T> = {-readonly [Property in keyof T]: T[Property]};
 type FakeRow = Mutable<ClaimedTelegramDelivery> & {status: TelegramDeliveryStatus; availableAt: Date; lastErrorCode: TelegramDeliveryErrorCode | null};
 class FakeDeliveries implements TelegramDeliveryRepository {
   readonly rows: FakeRow[];
+  snapshotCalls = 0;
   constructor(eventId: string, recipients: readonly Readonly<{id: string; externalId: string; kind: "TEAM_GROUP" | "TEAM_MEMBER"}>[]) {
     this.rows = recipients.map(({id, externalId, kind}) => ({outboxEventId: eventId, recipientId: id, conversationId: "conversation-1", recipientKind: kind, recipientExternalId: externalId, attempts: 0, status: "PENDING", availableAt: new Date("2026-02-01T00:00:00.000Z"), lastErrorCode: null}));
   }
-  async snapshotRecipients() { return this.rows.length; }
+  async snapshotRecipients() { this.snapshotCalls += 1; return this.rows.length; }
   async claimDue({outboxEventId, now}: {outboxEventId: string; limit: number; now: Date}) {
     return this.rows.filter((row) => row.outboxEventId === outboxEventId && ["PENDING", "RETRYABLE_FAILURE"].includes(row.status) && row.availableAt <= now).map((row) => { row.status = "IN_FLIGHT"; row.attempts += 1; return Object.freeze({...row}); });
   }
@@ -47,7 +49,7 @@ class FakeDeliveries implements TelegramDeliveryRepository {
 
 const inquiryCreatedConversations: InquiryNotificationConversationReader = {
   async findConversationIdForInquiry() { return "conversation-1"; },
-  async findCustomerWebsiteMessage() { return null; },
+  async findCustomerWebsiteMessageNotification() { return null; },
 };
 const notificationFormatter = {
   formatInquiryCreated: () => ({text: "Inquiry"}),
@@ -173,7 +175,10 @@ describe("ProcessInquiryNotifications", () => {
     ]);
     const conversations: InquiryNotificationConversationReader = {
       findConversationIdForInquiry: vi.fn(),
-      findCustomerWebsiteMessage: vi.fn().mockResolvedValue(customerMessage),
+      findCustomerWebsiteMessageNotification: vi.fn().mockResolvedValue({
+        message: customerMessage,
+        staffTranslation: {status: "SUCCEEDED", body: "لطفاً برنامه زمان‌بندی اصلاح‌شده را ارسال کنید."},
+      }),
     };
     const formatter = {
       formatInquiryCreated: vi.fn(),
@@ -194,14 +199,237 @@ describe("ProcessInquiryNotifications", () => {
       formatter,
       new FakeClock(),
     ).execute()).resolves.toEqual({claimed: 1, processed: 1, scheduledForRetry: 0, delivered: 2, permanentFailures: 0, unknown: 0});
-    expect(conversations.findCustomerWebsiteMessage).toHaveBeenCalledWith({
+    expect(conversations.findCustomerWebsiteMessageNotification).toHaveBeenCalledWith({
       inquiryId: inquiry.id.value,
       conversationId: "conversation-1",
       messageId: customerMessage.id.value,
     });
     expect(conversations.findConversationIdForInquiry).not.toHaveBeenCalled();
-    expect(formatter.formatCustomerConversationMessageCreated).toHaveBeenCalledWith(inquiry, "conversation-1", customerMessage);
+    expect(formatter.formatCustomerConversationMessageCreated).toHaveBeenCalledWith(
+      inquiry,
+      "conversation-1",
+      customerMessage,
+      {status: "SUCCEEDED", body: "لطفاً برنامه زمان‌بندی اصلاح‌شده را ارسال کنید."},
+    );
     expect(formatter.formatInquiryCreated).not.toHaveBeenCalled();
     expect(sendMessage.mock.calls.map(([input]) => input.recipientExternalId)).toEqual(["-100", "101"]);
+  });
+
+  it.each(["PENDING", "RUNNING"] as const)("defers a %s translation before snapshotting recipients, then sends exactly once per destination after success", async (initialStatus) => {
+    const inquiry = new InquiryTestBuilder().with({id: "customer-message-race"}).buildNew();
+    const customerMessage = Message.create({
+      id: "customer-message-race-1",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Please confirm the loading date.",
+      createdAt: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const event = createCustomerConversationMessageCreated({
+      eventId: "customer-message-race-event",
+      inquiryId: inquiry.id.value,
+      conversationId: "conversation-1",
+      messageId: customerMessage.id.value,
+      occurredAt: customerMessage.createdAt,
+    });
+    const repository = new FakeInquiryRepository();
+    await repository.save(inquiry);
+    const deliveries = new FakeDeliveries(event.eventId, [
+      {id: "group", externalId: "-100", kind: "TEAM_GROUP"},
+      {id: "staff", externalId: "101", kind: "TEAM_MEMBER"},
+    ]);
+    let staffTranslation: StaffTranslationNotificationState = {status: initialStatus};
+    const conversations: InquiryNotificationConversationReader = {
+      findConversationIdForInquiry: vi.fn(),
+      findCustomerWebsiteMessageNotification: vi.fn(async () => ({message: customerMessage, staffTranslation})),
+    };
+    const formatter = {
+      formatInquiryCreated: vi.fn(),
+      formatCustomerConversationMessageCreated: vi.fn().mockReturnValue({text: "ORIGINAL AND TRANSLATED"}),
+    };
+    const sendMessage = vi.fn<TelegramMessageTransport["sendMessage"]>(async ({recipientExternalId}) => ({
+      status: "delivered",
+      telegramChatId: Number(recipientExternalId),
+      telegramMessageId: Math.abs(Number(recipientExternalId)),
+    }));
+
+    const firstOutbox = new FakeOutbox([{event, attempts: 1}]);
+    await expect(new ProcessInquiryNotifications(
+      firstOutbox, repository, conversations, deliveries, {sendMessage}, formatter, new FakeClock(),
+    ).execute()).resolves.toMatchObject({processed: 0, scheduledForRetry: 1, delivered: 0});
+    expect(firstOutbox.retries).toEqual([{id: event.eventId, at: new Date("2026-02-01T00:00:30.000Z")}]);
+    expect(deliveries.snapshotCalls).toBe(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    staffTranslation = {status: "SUCCEEDED", body: "لطفاً تاریخ بارگیری را تأیید کنید."};
+    const retryOutbox = new FakeOutbox([{event, attempts: 2}]);
+    await expect(new ProcessInquiryNotifications(
+      retryOutbox,
+      repository,
+      conversations,
+      deliveries,
+      {sendMessage},
+      formatter,
+      new FakeClock(new Date("2026-02-01T00:00:30.000Z")),
+    ).execute()).resolves.toMatchObject({processed: 1, scheduledForRetry: 0, delivered: 2});
+
+    expect(formatter.formatCustomerConversationMessageCreated).toHaveBeenCalledExactlyOnceWith(
+      inquiry,
+      "conversation-1",
+      customerMessage,
+      {status: "SUCCEEDED", body: "لطفاً تاریخ بارگیری را تأیید کنید."},
+    );
+    expect(sendMessage.mock.calls.map(([input]) => input.recipientExternalId)).toEqual(["-100", "101"]);
+    expect(deliveries.rows.map(({status}) => status)).toEqual(["DELIVERED", "DELIVERED"]);
+  });
+
+  it("caps translation retry scheduling at the bounded wait deadline", async () => {
+    const inquiry = new InquiryTestBuilder().with({id: "customer-message-wait-deadline"}).buildNew();
+    const customerMessage = Message.create({
+      id: "customer-message-wait-deadline-1",
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Please confirm the loading date.",
+      createdAt: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const event = createCustomerConversationMessageCreated({
+      eventId: "customer-message-wait-deadline-event",
+      inquiryId: inquiry.id.value,
+      conversationId: "conversation-1",
+      messageId: customerMessage.id.value,
+      occurredAt: customerMessage.createdAt,
+    });
+    const repository = new FakeInquiryRepository();
+    await repository.save(inquiry);
+    const outbox = new FakeOutbox([{event, attempts: 5}]);
+    const deliveries = new FakeDeliveries(event.eventId, [{id: "staff", externalId: "101", kind: "TEAM_MEMBER"}]);
+    const conversations: InquiryNotificationConversationReader = {
+      findConversationIdForInquiry: vi.fn(),
+      findCustomerWebsiteMessageNotification: vi.fn(async () => ({message: customerMessage, staffTranslation: {status: "PENDING" as const}})),
+    };
+    const sendMessage = vi.fn<TelegramMessageTransport["sendMessage"]>();
+
+    await expect(new ProcessInquiryNotifications(
+      outbox,
+      repository,
+      conversations,
+      deliveries,
+      {sendMessage},
+      notificationFormatter,
+      new FakeClock(new Date("2026-02-01T00:14:50.000Z")),
+    ).execute()).resolves.toMatchObject({processed: 0, scheduledForRetry: 1, delivered: 0});
+
+    expect(customerMessageTranslationMaximumWaitMilliseconds).toBe(15 * 60_000);
+    expect(outbox.retries).toEqual([{id: event.eventId, at: new Date("2026-02-01T00:15:00.000Z")}]);
+    expect(deliveries.snapshotCalls).toBe(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(["PENDING", "RUNNING"] as const)("uses one original-only notification per destination when %s exceeds the bounded wait", async (status) => {
+    const inquiry = new InquiryTestBuilder().with({id: `customer-message-stuck-${status.toLowerCase()}`}).buildNew();
+    const customerMessage = Message.create({
+      id: `customer-message-stuck-${status.toLowerCase()}-1`,
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Please confirm the loading date.",
+      createdAt: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const event = createCustomerConversationMessageCreated({
+      eventId: `customer-message-stuck-${status.toLowerCase()}-event`,
+      inquiryId: inquiry.id.value,
+      conversationId: "conversation-1",
+      messageId: customerMessage.id.value,
+      occurredAt: customerMessage.createdAt,
+    });
+    const repository = new FakeInquiryRepository();
+    await repository.save(inquiry);
+    const deliveries = new FakeDeliveries(event.eventId, [
+      {id: "group", externalId: "-100", kind: "TEAM_GROUP"},
+      {id: "staff", externalId: "101", kind: "TEAM_MEMBER"},
+    ]);
+    const conversations: InquiryNotificationConversationReader = {
+      findConversationIdForInquiry: vi.fn(),
+      findCustomerWebsiteMessageNotification: vi.fn(async () => ({message: customerMessage, staffTranslation: {status}})),
+    };
+    const formatter = {
+      formatInquiryCreated: vi.fn(),
+      formatCustomerConversationMessageCreated: vi.fn().mockReturnValue({text: "TIMED OUT TRANSLATION FALLBACK"}),
+    };
+    const sendMessage = vi.fn<TelegramMessageTransport["sendMessage"]>(async ({recipientExternalId}) => ({
+      status: "delivered",
+      telegramChatId: Number(recipientExternalId),
+      telegramMessageId: Math.abs(Number(recipientExternalId)),
+    }));
+
+    const firstOutbox = new FakeOutbox([{event, attempts: 6}]);
+    await expect(new ProcessInquiryNotifications(
+      firstOutbox,
+      repository,
+      conversations,
+      deliveries,
+      {sendMessage},
+      formatter,
+      new FakeClock(new Date("2026-02-01T00:15:00.000Z")),
+    ).execute()).resolves.toMatchObject({processed: 1, scheduledForRetry: 0, delivered: 2});
+    expect(formatter.formatCustomerConversationMessageCreated).toHaveBeenCalledWith(
+      inquiry,
+      "conversation-1",
+      customerMessage,
+      {status: "FALLBACK", reason: "TIMED_OUT"},
+    );
+
+    const replayedOutbox = new FakeOutbox([{event, attempts: 7}]);
+    await expect(new ProcessInquiryNotifications(
+      replayedOutbox,
+      repository,
+      conversations,
+      deliveries,
+      {sendMessage},
+      formatter,
+      new FakeClock(new Date("2026-02-01T00:16:00.000Z")),
+    ).execute()).resolves.toMatchObject({processed: 1, delivered: 0});
+    expect(sendMessage.mock.calls.map(([input]) => input.recipientExternalId)).toEqual(["-100", "101"]);
+  });
+
+  it.each([
+    {status: "FALLBACK", reason: "FAILED"} as const,
+    {status: "FALLBACK", reason: "CANCELLED"} as const,
+    {status: "FALLBACK", reason: "NOT_REQUIRED"} as const,
+  ])("delivers an original-only safe fallback for terminal translation state $reason", async (staffTranslation) => {
+    const inquiry = new InquiryTestBuilder().with({id: `customer-message-${staffTranslation.reason.toLowerCase()}`}).buildNew();
+    const customerMessage = Message.create({
+      id: `customer-message-${staffTranslation.reason.toLowerCase()}-1`,
+      senderType: "CUSTOMER",
+      channel: "WEBSITE",
+      body: "Original customer message.",
+      createdAt: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const event = createCustomerConversationMessageCreated({
+      eventId: `customer-message-${staffTranslation.reason.toLowerCase()}-event`,
+      inquiryId: inquiry.id.value,
+      conversationId: "conversation-1",
+      messageId: customerMessage.id.value,
+      occurredAt: customerMessage.createdAt,
+    });
+    const repository = new FakeInquiryRepository();
+    await repository.save(inquiry);
+    const outbox = new FakeOutbox([{event, attempts: 1}]);
+    const deliveries = new FakeDeliveries(event.eventId, [{id: "staff", externalId: "101", kind: "TEAM_MEMBER"}]);
+    const conversations: InquiryNotificationConversationReader = {
+      findConversationIdForInquiry: vi.fn(),
+      findCustomerWebsiteMessageNotification: vi.fn(async () => ({message: customerMessage, staffTranslation})),
+    };
+    const formatter = {
+      formatInquiryCreated: vi.fn(),
+      formatCustomerConversationMessageCreated: vi.fn().mockReturnValue({text: "SAFE FALLBACK"}),
+    };
+    const sendMessage = vi.fn<TelegramMessageTransport["sendMessage"]>(async () => ({status: "delivered", telegramChatId: 101, telegramMessageId: 1}));
+
+    await expect(new ProcessInquiryNotifications(
+      outbox, repository, conversations, deliveries, {sendMessage}, formatter, new FakeClock(),
+    ).execute()).resolves.toMatchObject({processed: 1, scheduledForRetry: 0, delivered: 1});
+    expect(formatter.formatCustomerConversationMessageCreated).toHaveBeenCalledWith(
+      inquiry, "conversation-1", customerMessage, staffTranslation,
+    );
+    expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 });
