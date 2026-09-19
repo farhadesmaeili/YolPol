@@ -161,7 +161,7 @@ describe("Production deployment hardening", () => {
         "--project-directory", stagingProjectDirectory,
         "--env-file", join(stagingProjectDirectory, "runtime.env"),
         "-f", join(stagingProjectDirectory, "compose.yaml"),
-        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations", "config", "--format", "json",
+        "--profile", "legacy-staging-edge-migration", "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations", "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
         encoding: "utf8",
@@ -371,7 +371,6 @@ describe("Production deployment hardening", () => {
       "staging_compose up -d --no-build --no-deps postgres",
       "staging_compose up -d --no-build --no-deps web",
       "staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback",
-      "staging_compose up -d --no-build --no-deps edge",
     ]);
     expect(invocations.every((invocation) => invocation.includes("--no-build"))).toBe(true);
   });

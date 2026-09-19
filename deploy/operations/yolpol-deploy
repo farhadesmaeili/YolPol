@@ -46,6 +46,9 @@ PRODUCTION_COMPOSE=/opt/yolpol/production/compose.yaml
 PRODUCTION_ENV=/opt/yolpol/production/runtime.env
 PRODUCTION_BACKUPS=/opt/yolpol/production/backups
 PRODUCTION_LAST_BACKUP_FILE=/opt/yolpol/runtime/production-last-backup-created-at
+INGRESS_DIRECTORY=/opt/yolpol/ingress
+INGRESS_COMPOSE=/opt/yolpol/ingress/compose.yaml
+INGRESS_ENV=/opt/yolpol/ingress/runtime.env
 MONITORING_DIRECTORY=/opt/yolpol/monitoring
 MONITORING_COMPOSE=/opt/yolpol/monitoring/compose.yaml
 MONITORING_ENV=/opt/yolpol/monitoring/runtime.env
@@ -68,7 +71,6 @@ usage() {
     '  migrate' \
     '  deploy-app' \
     '  deploy-workers' \
-    '  deploy-edge' \
     '  staff-provision' \
     '  staff-bootstrap-super-admin' \
     '  telegram-webhook-set' \
@@ -88,7 +90,11 @@ usage() {
     '  production-telegram-webhook-set' \
     '  production-telegram-webhook-info' \
     '  production-backup-create' \
-    '  production-backup-verify <backup-id>' >&2
+    '  production-backup-verify <backup-id>' \
+    '  ingress-validate' \
+    '  ingress-status' \
+    '  ingress-health' \
+    '  ingress-health-production' >&2
 }
 
 fail() {
@@ -132,10 +138,10 @@ if [ "$#" -ge 1 ]; then
   candidate_action=$1
   shift
   case "$candidate_action" in
-    validate|status|health|telegram-webhook-info|production-validate|production-status|production-health|production-telegram-webhook-info)
+    validate|status|health|telegram-webhook-info|production-validate|production-status|production-health|production-telegram-webhook-info|ingress-validate|ingress-status|ingress-health|ingress-health-production)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
-    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create|production-pull-approved-images|production-deploy-database|production-migrate|production-deploy-app|production-deploy-workers|production-staff-provision|production-staff-bootstrap-super-admin|production-telegram-webhook-set|production-backup-create)
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create|production-pull-approved-images|production-deploy-database|production-migrate|production-deploy-app|production-deploy-workers|production-staff-provision|production-staff-bootstrap-super-admin|production-telegram-webhook-set|production-backup-create)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
     backup-verify)
@@ -310,12 +316,18 @@ require_production_filesystem() {
   require_directory "$PRODUCTION_DIRECTORY" 0 0 750
   require_directory /opt/yolpol/production/secrets 0 0 700
   require_file "$PRODUCTION_COMPOSE" 0 0 644
-  require_file /opt/yolpol/production/Caddyfile 0 0 644
   require_file "$PRODUCTION_ENV" 0 0 600
   require_file "$PRODUCTION_LAST_BACKUP_FILE" 0 0 600
   for file in postgres.env app-database.env migration-database.env backup-database.env; do require_nonempty_file "/opt/yolpol/production/secrets/$file" 0 0 400; done
   for file in telegram-bot-token telegram-webhook-secret groq-api-key; do require_nonempty_file "/opt/yolpol/production/secrets/$file" 10001 10001 400; done
   require_directory "$PRODUCTION_BACKUPS" 10001 10001 700
+}
+
+require_ingress_filesystem() {
+  require_directory "$INGRESS_DIRECTORY" 0 0 750
+  require_file "$INGRESS_COMPOSE" 0 0 644
+  require_file /opt/yolpol/ingress/Caddyfile 0 0 644
+  require_file "$INGRESS_ENV" 0 0 600
 }
 
 require_monitoring_filesystem() {
@@ -346,6 +358,11 @@ production_compose() {
     "$COMPOSE" --ansi never -p yolpol-production --project-directory "$PRODUCTION_DIRECTORY" --env-file "$PRODUCTION_ENV" -f "$PRODUCTION_COMPOSE" "$@"
 }
 
+ingress_compose() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-ingress --project-directory "$INGRESS_DIRECTORY" --env-file "$INGRESS_ENV" -f "$INGRESS_COMPOSE" "$@"
+}
+
 monitoring_compose() {
   /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
     "$COMPOSE" --ansi never -p yolpol-monitoring --project-directory "$MONITORING_DIRECTORY" --env-file "$MONITORING_ENV" -f "$MONITORING_COMPOSE" "$@"
@@ -355,7 +372,7 @@ validate_staging_contract() {
   require_staging_release_filesystem
   require_staging_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-staging
-  if ! resolved_compose=$(staging_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
+  if ! resolved_compose=$(staging_compose --profile legacy-staging-edge-migration --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
     fail 'Staging Compose resolution failed'
   fi
   printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-staging-compose
@@ -366,10 +383,20 @@ validate_production_contract() {
   require_production_release_filesystem
   require_production_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-production
-  if ! resolved_compose=$(production_compose --profile shared-ingress-prerequisite --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
+  if ! resolved_compose=$(production_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
     fail 'Production Compose resolution failed'
   fi
   printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-production-compose
+  resolved_compose=''
+}
+
+validate_ingress_contract() {
+  require_ingress_filesystem
+  /usr/bin/python3 -I -B "$POLICY" validate-ingress
+  if ! resolved_compose=$(ingress_compose config --format json 2>/dev/null); then
+    fail 'Ingress Compose resolution failed'
+  fi
+  printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-ingress-compose
   resolved_compose=''
 }
 
@@ -385,6 +412,9 @@ validate_monitoring_contract() {
 }
 
 read_revision() {
+  case "$ACTION" in
+    ingress-*) printf '%s' infrastructure; return ;;
+  esac
   revision_environment=$STAGING_ENV
   case "$ACTION" in production-*) revision_environment=$PRODUCTION_ENV ;; esac
   /usr/bin/python3 -I -B - "$revision_environment" <<'PY'
@@ -488,6 +518,18 @@ check_production_health() {
   production_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then((response)=>{if(!response.ok)process.exit(1);process.stdout.write('ready\\n')}).catch(()=>process.exit(1))"
 }
 
+check_ingress_health() {
+  validate_ingress_contract
+  ingress_compose ps --status running --services | /usr/bin/grep -Fxq ingress || fail 'shared ingress service is not running'
+  ingress_compose exec -T ingress caddy validate --config /etc/caddy/Caddyfile
+  ingress_compose exec -T ingress wget -q -O /dev/null http://staging-web:3000/api/health/ready || fail 'shared ingress cannot reach Staging web readiness'
+}
+
+check_ingress_production_health() {
+  check_ingress_health
+  ingress_compose exec -T ingress wget -q -O /dev/null http://production-web:3000/api/health/ready || fail 'shared ingress cannot reach Production web readiness'
+}
+
 run_mutating_action() {
   exec 9>>"$LOCK_FILE"
   /usr/bin/flock -x 9
@@ -513,10 +555,6 @@ run_mutating_action() {
     deploy-workers)
       validate_staging_contract
       staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback
-      ;;
-    deploy-edge)
-      validate_staging_contract
-      staging_compose up -d --no-build --no-deps edge
       ;;
     backup-create)
       validate_staging_contract
@@ -622,6 +660,10 @@ else
     production-validate) validate_production_contract ;;
     production-status) show_production_status ;;
     production-health) check_production_health ;;
+    ingress-validate) validate_ingress_contract ;;
+    ingress-status) validate_ingress_contract; ingress_compose ps ;;
+    ingress-health) check_ingress_health ;;
+    ingress-health-production) check_ingress_production_health ;;
     production-telegram-webhook-info)
       validate_production_contract
       production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info

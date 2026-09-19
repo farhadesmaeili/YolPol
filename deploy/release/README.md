@@ -120,7 +120,7 @@ The planner only validates JSON and emits a plan. It never invokes Docker, Postg
 15. Verify liveness, readiness, workers, and monitoring.
 16. Retain the previous known-good manifest/checksum for rollback.
 
-On the initial one-VPS topology, steps that expose Production publicly remain blocked until Task 0064 installs and validates shared host ingress. Production has no wrapper edge-activation command in the interim.
+On the initial one-VPS topology, Task 0064 now defines shared ingress but does not install it. Steps that expose Production publicly remain blocked until root completes the documented listener handoff, Staging and Production route health, rollback readiness, and separately approved DNS/Cloudflare cutover. Production has no local edge or wrapper edge-activation command. Ordinary Staging/Production web replacement preserves the fixed network alias and does not restart shared ingress.
 
 ## Known limitations
 

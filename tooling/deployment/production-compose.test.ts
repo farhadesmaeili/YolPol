@@ -12,7 +12,6 @@ const runtimePath = resolve(productionDirectory, "runtime.env.example");
 const compose = readFileSync(composePath, "utf8");
 const stagingCompose = readFileSync(resolve(repositoryRoot, "deploy/staging/compose.yaml"), "utf8");
 const runtime = readFileSync(runtimePath, "utf8");
-const caddyfile = readFileSync(resolve(productionDirectory, "Caddyfile"), "utf8");
 const wrapperPath = resolve(repositoryRoot, "deploy/operations/yolpol-deploy");
 const wrapper = readFileSync(wrapperPath, "utf8");
 const policy = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-policy.py"), "utf8");
@@ -57,9 +56,6 @@ describe("Production Compose deployment contract", () => {
     expect(compose).toContain("YOLPOL_DEPLOYMENT_ENVIRONMENT: production");
     expect(compose).toContain("YOLPOL_APP_ORIGIN: https://yolpol.com");
     expect(runtime).toContain("YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN=https://yolpol.com");
-    expect(caddyfile).toContain("yolpol.com {");
-    expect(caddyfile).toContain("www.yolpol.com {");
-    expect(caddyfile).toContain("redir https://yolpol.com{uri} permanent");
   });
 
   it("requires manifest-derived immutable first-party images and has no build contract", () => {
@@ -74,13 +70,13 @@ describe("Production Compose deployment contract", () => {
 
   it("defines only the intended active and profile-gated services", () => {
     for (const service of [
-      "edge", "web", "postgres", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback",
+      "web", "postgres", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback",
       "staff-provision", "staff-bootstrap-super-admin", "telegram-webhook-set", "telegram-webhook-info",
       "migrate", "backup-create", "backup-verify", "backup-deep-verify", "backup-retention", "restore",
     ]) expect(serviceBlock(service)).toBeTruthy();
     expect(serviceBlock("migrate")).toContain('profiles: ["migration"]');
     expect(serviceBlock("restore")).toContain('profiles: ["restore"]');
-    expect(serviceBlock("edge")).toContain('profiles: ["shared-ingress-prerequisite"]');
+    expect(compose).not.toMatch(/^  edge:$/mu);
     for (const service of ["backup-create", "backup-verify", "backup-deep-verify", "backup-retention"]) {
       expect(serviceBlock(service)).toContain('profiles: ["backup"]');
     }
@@ -101,10 +97,11 @@ describe("Production Compose deployment contract", () => {
     expect(wrapper).toContain("^yolpol-production-");
   });
 
-  it("keeps all Production ports private until shared host ingress exists", () => {
-    expect(serviceBlock("edge")).not.toContain("ports:");
+  it("keeps all Production ports private behind the fixed ingress network", () => {
     expect(serviceBlock("web")).not.toContain("ports:");
     expect(serviceBlock("postgres")).not.toContain("ports:");
+    expect(compose).toContain("name: yolpol-production-ingress\n    external: true");
+    expect(serviceBlock("web")).toContain("- production-web");
     expect(compose).toMatch(/backend:\n    internal: true/u);
     expect(serviceBlock("staff-provision")).not.toContain("provider_egress");
     expect(serviceBlock("telegram-webhook-info")).not.toContain("DATABASE_URL");
@@ -170,7 +167,7 @@ describe("Production Compose deployment contract", () => {
     expect(policy).toContain("load_production_release_manifest()");
   });
 
-  it("keeps Production Compose up image-only, blocks edge activation, and preserves Staff TTYs", () => {
+  it("keeps Production Compose up image-only, has no local edge, and preserves Staff TTYs", () => {
     for (const command of [
       "production_compose up -d --no-build --no-deps postgres",
       "production_compose up -d --no-build --no-deps web",
@@ -227,7 +224,7 @@ describe("Production Compose deployment contract", () => {
       const fullResolution = spawnSync("docker", [
         "compose", "-p", "yolpol-production", "--project-directory", productionDirectory,
         "--env-file", runtimePath, "-f", composePath,
-        "--profile", "shared-ingress-prerequisite", "--profile", "migration", "--profile", "backup", "--profile", "restore",
+        "--profile", "migration", "--profile", "backup", "--profile", "restore",
         "--profile", "staff-operations", "--profile", "telegram-operations", "config", "--quiet",
       ], {cwd: repositoryRoot, encoding: "utf8", timeout: 20_000, env: composeEnvironment});
       expect(fullResolution.status, fullResolution.stderr).toBe(0);
@@ -235,7 +232,7 @@ describe("Production Compose deployment contract", () => {
       const result = spawnSync("docker", [
         "compose", "-p", "yolpol-production", "--project-directory", productionDirectory,
         "--env-file", runtimePath, "-f", composePath,
-        "--profile", "shared-ingress-prerequisite", "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations",
+        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations",
         "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
@@ -254,8 +251,9 @@ describe("Production Compose deployment contract", () => {
         (value) => { requireObject(requireObject(value.services).web).build = {context: "/opt"}; },
         (value) => { requireObject(requireObject(value.services).web).user = "0:0"; },
         (value) => { requireObject(requireObject(value.services).postgres).ports = [{mode: "ingress", host_ip: "0.0.0.0", target: 5432, published: "5432", protocol: "tcp"}]; },
-        (value) => { requireObject(requireObject(value.services).edge).ports = [{mode: "ingress", host_ip: "0.0.0.0", target: 443, published: "443", protocol: "tcp"}]; },
-        (value) => { requireObject(requireObject(value.services).edge).profiles = []; },
+        (value) => { requireObject(requireObject(value.services).web).ports = [{mode: "ingress", host_ip: "0.0.0.0", target: 3000, published: "443", protocol: "tcp"}]; },
+        (value) => { requireObject(requireObject(value.networks).ingress).name = "yolpol-staging-ingress"; },
+        (value) => { requireObject(requireObject(value.services).web).networks = {ingress: {aliases: ["staging-web"]}, backend: null}; },
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://attacker.example"}; },
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://staging.yolpol.com"}; },
         (value) => { requireObject(requireObject(value.services)["staff-provision"]).networks = {backend: null, provider_egress: null}; },

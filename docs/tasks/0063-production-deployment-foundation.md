@@ -6,15 +6,15 @@ Implemented and validated as a repository-only contract. Production is not boots
 
 ## Decision
 
-Add a fixed `/opt/yolpol/production` deployment contract with Compose project `yolpol-production`, application identity `production`, canonical origin `https://yolpol.com`, independent database/Caddy state, independent secret and backup paths, and Production-only Telegram/provider configuration. First-party images are required immutable references from the existing authenticated five-role release manifest; Production has no local-image fallback or build context.
+Add a fixed `/opt/yolpol/production` deployment contract with Compose project `yolpol-production`, application identity `production`, canonical origin `https://yolpol.com`, independent database, secret and backup paths, and Production-only Telegram/provider configuration. Task 0064 subsequently removed the temporary local Caddy design in favor of dedicated shared ingress. First-party images are required immutable references from the existing authenticated five-role release manifest; Production has no local-image fallback or build context.
 
 Extend the existing root-owned wrapper with explicit `production-*` actions. Do not add a caller-selectable environment, path, Compose file, service, image, or command channel. Existing unprefixed Staging/Monitoring behavior remains independent and does not require Production files to exist.
 
 ## Operational boundaries
 
-Normal Production services are web, PostgreSQL, and the three workers. Migration, encrypted backup, integrity/deep verification, retention, restore, Staff provisioning, Super Admin bootstrap, Telegram webhook tooling, and the blocked Production edge remain profile-gated. Restore, deep verification, retention deletion, secret management, bootstrap, recovery, and Monitoring activation remain root responsibilities.
+Normal Production services are web, PostgreSQL, and the three workers. Migration, encrypted backup, integrity/deep verification, retention, restore, Staff provisioning, Super Admin bootstrap, and Telegram webhook tooling remain profile-gated. Task 0064 removed the blocked Production-local edge. Restore, deep verification, retention deletion, secret management, bootstrap, recovery, and Monitoring activation remain root responsibilities.
 
-Production uses its own database volume/credentials, Caddy volumes, networks, runtime file, secret directory, backup directory/artifact namespace/age material, Telegram bot/webhook secret/origin, provider credentials, backup-throttle state, and fixed `/opt/yolpol/releases/production/active` authority. Staging uses `/opt/yolpol/releases/staging/active`; either environment can advance or roll back without changing the other's manifest or runtime refs.
+Production uses its own database volume/credentials, backend/provider networks, fixed external ingress attachment, runtime file, secret directory, backup directory/artifact namespace/age material, Telegram bot/webhook secret/origin, provider credentials, backup-throttle state, and fixed `/opt/yolpol/releases/production/active` authority. Shared Caddy state belongs to `yolpol-ingress`, not Production. Staging uses `/opt/yolpol/releases/staging/active`; either environment can advance or roll back without changing the other's manifest or runtime refs.
 
 ## Monitoring decision
 
@@ -28,4 +28,4 @@ Application rollback remains separate from database recovery. Equal migration id
 
 ## Shared-host ingress prerequisite
 
-The real initial topology is one VPS and the verified Staging Caddy already owns public ports 80/443. Production edge is profile-gated, publishes no host port, and has no wrapper activation command. Task 0064 must introduce and validate the shared host-ingress authority before real Production deployment or release automation may expose `https://yolpol.com`.
+The real initial topology is one VPS and the verified legacy Staging Caddy currently owns public ports 80/443. Task 0064 now supplies the repository-side `yolpol-ingress` authority and removes the Production-local edge, but its root-controlled live migration, verification, and DNS/Cloudflare cutover remain prerequisites before Production may be exposed at `https://yolpol.com`.

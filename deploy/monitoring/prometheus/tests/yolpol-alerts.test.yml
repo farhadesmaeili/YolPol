@@ -6,9 +6,9 @@ evaluation_interval: 1m
 tests:
   - interval: 1m
     input_series:
-      - series: 'probe_success{job="blackbox-web",probe="liveness",environment="staging",service="web",instance="http://web:3000/api/health/live"}'
+      - series: 'probe_success{job="blackbox-web",probe="liveness",environment="staging",service="web",instance="http://staging-web:3000/api/health/live"}'
         values: '0+0x5'
-      - series: 'probe_success{job="blackbox-web",probe="readiness",environment="staging",service="web",instance="http://web:3000/api/health/ready"}'
+      - series: 'probe_success{job="blackbox-web",probe="readiness",environment="staging",service="web",instance="http://staging-web:3000/api/health/ready"}'
         values: '0+0x5'
     alert_rule_test:
       - eval_time: 3m
@@ -18,7 +18,7 @@ tests:
               alertname: YolpolWebLivenessUnavailable
               category: availability
               environment: staging
-              instance: http://web:3000/api/health/live
+              instance: http://staging-web:3000/api/health/live
               job: blackbox-web
               probe: liveness
               service: web
@@ -32,7 +32,7 @@ tests:
               alertname: YolpolWebReadinessUnavailable
               category: readiness
               environment: staging
-              instance: http://web:3000/api/health/ready
+              instance: http://staging-web:3000/api/health/ready
               job: blackbox-web
               probe: readiness
               service: web

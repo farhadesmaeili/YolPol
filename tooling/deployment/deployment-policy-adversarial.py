@@ -198,6 +198,27 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertEqual(policy.STAGING_MANIFEST.as_posix(), "/opt/yolpol/releases/staging/active/release-manifest.json")
         self.assertEqual(policy.PRODUCTION_MANIFEST.as_posix(), "/opt/yolpol/releases/production/active/release-manifest.json")
 
+    def test_ingress_runtime_is_closed_and_has_no_release_authority(self) -> None:
+        policy.validate_ingress_runtime(dict(policy.INGRESS_FIXED_VALUES))
+        for key, value in (
+            ("YOLPOL_INGRESS_CADDY_MEMORY_LIMIT", "1g"),
+            ("YOLPOL_GIT_REVISION", "a" * 40),
+            ("YOLPOL_WEB_IMAGE", "ghcr.io/farhadesmaeili/yolpol-web@sha256:" + "a" * 64),
+        ):
+            attacked = {**policy.INGRESS_FIXED_VALUES, key: value}
+            with self.subTest(key=key), self.assertRaises(policy.PolicyError):
+                policy.validate_ingress_runtime(attacked)
+
+    def test_ingress_caddy_routes_are_exact_and_cross_environment_changes_fail(self) -> None:
+        policy.validate_ingress_caddyfile_text(policy.INGRESS_CADDYFILE_TEXT)
+        for attacked in (
+            policy.INGRESS_CADDYFILE_TEXT.replace("staging-web:3000", "production-web:3000", 1),
+            policy.INGRESS_CADDYFILE_TEXT.replace("https://yolpol.com{uri}", "https://staging.yolpol.com{uri}", 1),
+            policy.INGRESS_CADDYFILE_TEXT + "\n:443 { reverse_proxy postgres:5432 }\n",
+        ):
+            with self.subTest(attacked=attacked), self.assertRaises(policy.PolicyError):
+                policy.validate_ingress_caddyfile_text(attacked)
+
 
 class ResolvedComposePolicyTests(unittest.TestCase):
     def base_service(self) -> dict[str, object]:
@@ -227,6 +248,16 @@ class ResolvedComposePolicyTests(unittest.TestCase):
     def test_host_pid_is_allowed_only_for_the_exact_node_exporter_slot(self) -> None:
         service = {**self.base_service(), "pid": "host"}
         policy.validate_generic_service_security("node-exporter", service, allowed_host_pid=True)
+        with self.assertRaises(policy.PolicyError):
+            policy.validate_generic_service_security("other", service)
+
+    def test_only_the_ingress_slot_may_add_the_low_port_capability(self) -> None:
+        service = {**self.base_service(), "cap_add": ["NET_BIND_SERVICE"]}
+        policy.validate_generic_service_security(
+            "ingress",
+            service,
+            allowed_capabilities={"NET_BIND_SERVICE"},
+        )
         with self.assertRaises(policy.PolicyError):
             policy.validate_generic_service_security("other", service)
 

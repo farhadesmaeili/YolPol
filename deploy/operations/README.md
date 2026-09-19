@@ -33,7 +33,6 @@ The wrapper and standard-library Python policy helper:
 | `migrate` | Run only the fixed image-only migration service, non-interactively and with `--no-deps`. |
 | `deploy-app` | Start/update only the Staging web service. |
 | `deploy-workers` | Start/update only the three named Staging workers. |
-| `deploy-edge` | Start/update only the Staging Caddy service. |
 | `staff-provision` | Interactively run only the existing ADMIN/SALES provisioning CLI in the fixed Staff operation service. |
 | `staff-bootstrap-super-admin` | Interactively run only the existing first-Super-Admin bootstrap CLI in its fixed Staff operation service. |
 | `telegram-webhook-set` | Noninteractively register the exact Staging Telegram webhook while preserving pending updates; mutates Telegram provider state. |
@@ -41,9 +40,11 @@ The wrapper and standard-library Python policy helper:
 | `backup-create` | Run the fixed encrypted backup service after a 5 GiB free-space floor and 15-minute success throttle. |
 | `backup-verify <backup-id>` | Run identity-free verification for one strict ASCII Staging backup identifier. |
 
-There is deliberately no operator `deploy-monitoring` command. Restore, deep verification with the recovery identity, backup retention/deletion, arbitrary logs, shell/exec, systemctl, firewall, secret rotation, Docker administration, and database administration remain unavailable.
+There is deliberately no operator `deploy-edge`, `production-deploy-edge`, `ingress-deploy`, or `deploy-monitoring` command. Restore, deep verification with the recovery identity, backup retention/deletion, arbitrary logs, shell/exec, systemctl, firewall, secret rotation, Docker administration, and database administration remain unavailable.
 
-Production uses a second, equally closed namespace rather than a caller-selected environment flag. The explicit commands are `production-validate`, `production-status`, `production-health`, `production-pull-approved-images`, `production-deploy-database`, `production-migrate`, `production-deploy-app`, `production-deploy-workers`, `production-staff-provision`, `production-staff-bootstrap-super-admin`, `production-telegram-webhook-set`, `production-telegram-webhook-info`, `production-backup-create`, and `production-backup-verify <backup-id>`. Every command fixes `/opt/yolpol/production`, project `yolpol-production`, the Production Compose/runtime files, named services, and (where applicable) a strict `yolpol-production-...` backup ID. Existing unprefixed commands retain their Staging/Monitoring behavior and do not require Production to be installed. `production-deploy-edge` is deliberately rejected until the shared-host ingress prerequisite is implemented.
+Production uses a second, equally closed namespace rather than a caller-selected environment flag. The explicit commands are `production-validate`, `production-status`, `production-health`, `production-pull-approved-images`, `production-deploy-database`, `production-migrate`, `production-deploy-app`, `production-deploy-workers`, `production-staff-provision`, `production-staff-bootstrap-super-admin`, `production-telegram-webhook-set`, `production-telegram-webhook-info`, `production-backup-create`, and `production-backup-verify <backup-id>`. Every command fixes `/opt/yolpol/production`, project `yolpol-production`, the Production Compose/runtime files, named services, and (where applicable) a strict `yolpol-production-...` backup ID. Existing unprefixed commands retain their Staging/Monitoring behavior and do not require Production to be installed. Production has no local edge service.
+
+Shared ingress exposes four argument-free read-only actions: `ingress-validate`, `ingress-status`, `ingress-health`, and `ingress-health-production`. They fix `/opt/yolpol/ingress`, project `yolpol-ingress`, both external network identities, and service `ingress`. Validation does not require a backend; ordinary health requires Staging reachability; Production health is a separate post-deployment check. Starting/stopping ingress and using the profiled legacy Staging edge remain root-only migration/recovery work. The caller cannot select an environment, path, project, service, network, Caddyfile, image, or Docker argument.
 
 The Staff commands accept no additional arguments. They use Compose's normal interactive mode and deliberately omit `--interactive=false`, `--no-TTY`, and `--no-build`; the wrapper first proves all three standard streams are terminals. The service command, worker image digest, UID/GID, application database environment file, backend-only network, and resource limits are fixed and policy-validated. Prompts must remain visible, so Staff CLI output is not redirected into the operation log; the normal metadata-only started/final audit records still apply. The password is read by the existing hidden-input implementation and is never placed in arguments, environment, Compose configuration, Git, or wrapper logs.
 
@@ -51,7 +52,7 @@ The Telegram actions also accept no additional arguments and use fixed nonintera
 
 ## Runtime and release authority
 
-`deploy/staging/runtime.env.example`, `deploy/production/runtime.env.example`, and `deploy/monitoring/runtime.env.example` enumerate three independent complete runtime schemas. Each application environment contains one full 40-character lowercase Git SHA; four fixed YOLPOL repository digest references; environment-specific fixed host paths, resource/logging limits, retention values, public age recipient, public Telegram username, and fixed Telegram webhook origin. Staging additionally retains its verified public edge bindings; Production has no host-port input before Task 0064. Production origin is exactly `https://yolpol.com`; Staging remains exactly `https://staging.yolpol.com`. Monitoring contains the fifth fixed repository digest reference plus its existing Staging-specific loopback ports, config/secret paths, external network names, and disabled-by-default backup monitoring. No additional key is supported.
+The Staging, Production, shared-ingress, and Monitoring examples enumerate four independent complete runtime schemas. Each application environment contains one full lowercase Git SHA; four fixed YOLPOL repository digest references; environment-specific paths, resource/logging limits, retention values, public age recipient, public Telegram username, and fixed webhook origin. Staging retains legacy edge binding values only for root migration/rollback; Production has none. Ingress has only four fixed non-secret Caddy resource/logging values and no release/image or credential input. Monitoring contains the fifth first-party digest plus its Staging-specific loopback ports, config/secret paths, fixed external networks, and disabled-by-default backup monitoring. No additional key is supported.
 
 Active release authority is environment-specific:
 
@@ -99,7 +100,7 @@ Every first-party runtime uses non-login UID/GID `10001:10001`. Confirm both num
       telegram-*, groq-api-key                      10001:10001 0400
     backups/                                        10001:10001 0700
   production/                                      root:root 0750
-    compose.yaml, Caddyfile                         root:root 0644
+    compose.yaml                                    root:root 0644
     runtime.env                                     root:root 0600
     secrets/                                        root:root 0700
       postgres.env, app/migration/backup-database.env root:root 0400
@@ -107,6 +108,9 @@ Every first-party runtime uses non-login UID/GID `10001:10001`. Confirm both num
       telegram-*, groq-api-key                      10001:10001 0400
       backup-age-identity                           10001:10001 0400 (only during explicit recovery)
     backups/                                        10001:10001 0700
+  ingress/                                         root:root 0750
+    compose.yaml, Caddyfile                         root:root 0644
+    runtime.env                                     root:root 0600
   monitoring/                                      root:root 0750
     compose.yaml                                    root:root 0644
     runtime.env                                     root:root 0600
@@ -116,11 +120,11 @@ Every first-party runtime uses non-login UID/GID `10001:10001`. Confirm both num
       staging-operations-database-url               10001:10001 0400
 ```
 
-`runtime/production-last-backup-created-at` is an additional `root:root 0600` throttle-state file. Production and Staging have distinct Compose projects, database/Caddy volumes, networks, runtime files, secret paths, database identities, backup directories/namespaces/recipients/recovery material, Telegram bots/webhook secrets/origins, provider credentials, and throttle state. None is interchangeable.
+`runtime/production-last-backup-created-at` is an additional `root:root 0600` throttle-state file. Production and Staging have distinct Compose projects, databases, backend networks, runtime files, secrets, backups, Telegram/provider credentials, and throttle state. Shared ingress owns separate `yolpol-ingress_caddy_data` and `yolpol-ingress_caddy_config` volumes and only the two fixed external ingress networks; it reuses neither legacy Staging Caddy state nor application state.
 
 `incoming/` is the only operator-writable path. The wrapper never reads it. Root promotion must copy reviewed bytes into a root-controlled temporary path, set final ownership/modes, and atomically place them below the trusted tree. All listed paths and the fixed system executable chain are checked with shell type predicates, `readlink -f`, `stat`, and `getfacl`; symlinks, writable ancestors, named ACL entries, ACL masks, and default ACLs fail closed. Because no checked ancestor is operator-writable, validation-to-execution races are outside the attacker model.
 
-Promote the repository-managed Staging, Production, and Monitoring files into exactly the paths shown above and run Compose with their fixed project directories. All promoted Compose definitions are image-only: `/opt/yolpol` needs no source checkout or Dockerfile, and any resolved service `build` metadata fails policy validation. Relative configuration binds remain confined to their fixed project directory while first-party images come only from the authenticated release manifest.
+Promote the repository-managed Staging, Production, ingress, and Monitoring files into exactly the paths shown above and run Compose with their fixed project directories. All promoted Compose definitions are image-only: `/opt/yolpol` needs no source checkout or Dockerfile, and any resolved service `build` metadata fails policy validation. Relative configuration binds remain confined to their fixed project directory while first-party images come only from authenticated application manifests. Ingress uses its separately pinned upstream image and neither application authority.
 
 ## Audit and resource controls
 
@@ -155,11 +159,11 @@ Never use an implicit whole-project `up`, add another service without updating t
 
 1. Confirm the operator is exactly UID/GID 1001, UID/GID 10001 are unused, and the operator has neither Docker group nor socket access.
 2. Install Python 3, `acl`/`getfacl`, Docker Engine, and the Compose plugin at the fixed `/usr/libexec/docker/cli-plugins/docker-compose` path. Confirm every executable and ancestor matches the wrapper contract.
-3. Create the hierarchy and empty state/log files above, including the independent Production backup-throttle file, without truncating existing audit history. Create `/root/.docker/config.json` as `root:root 0600`; do not expose its contents.
+3. Create the hierarchy and empty state/log files above, including the independent Production backup-throttle file, without truncating existing audit history. Create `/root/.docker/config.json` as `root:root 0600`; do not expose its contents. Inspect then create the fixed `yolpol-staging-ingress` and `yolpol-production-ingress` external bridge networks; do not accept caller-selected names.
 4. Authenticate and verify each approved release outside the operator upload path, then root-promote its manifest/checksum only into the intended environment-specific active directory together with that environment's runtime refs. Installing this wrapper on the existing VPS requires a deliberate root migration of the currently active Staging authority from the legacy `/opt/yolpol/releases/active` location into `/opt/yolpol/releases/staging/active`; never copy that value into Production implicitly.
 5. Install `yolpol-deploy`, `yolpol-deploy-policy.py` as `/opt/yolpol/bin/yolpol-deploy-policy`, and the logrotate file with the exact owners/modes above.
 6. Run `visudo -cf deploy/operations/sudoers.yolpol-deploy` before installing it as `/etc/sudoers.d/yolpol-deploy`, owned by root with mode `0440`, then run `visudo -cf /etc/sudoers.d/yolpol-deploy` again.
-7. As root, run the wrapper's `validate`. As the operator, verify the one allowed wrapper command, rejection of malformed arguments, and failure of direct Docker, Compose, shell, systemctl, and alternate sudo commands.
+7. As root, run the wrapper's application and ingress validation actions. As the operator, verify the one allowed wrapper command, rejection of malformed arguments and all edge/deploy attempts, and failure of direct Docker, Compose, shell, systemctl, and alternate sudo commands. Follow `deploy/ingress/README.md` for the separately controlled listener handoff; installation alone must not start ingress.
 
 The sudoers `ALL` before `(root)` is the host selector. `NOPASSWD:NOSETENV` applies only to the exact wrapper pathname; `env_reset`, a fixed `secure_path`, and `use_pty` are command-specific defaults. Although sudo permits arbitrary wrapper arguments, the wrapper itself permits only the grammar documented above.
 
@@ -171,12 +175,12 @@ The sudoers `ALL` before `(root)` is the host selector. `NOPASSWD:NOSETENV` appl
 
 The existing Monitoring project remains intentionally Staging-specific. It is not extended with Production database/exporter credentials, backup mounts, endpoint targets, or Production networks in this feature. Production monitoring requires a separately reviewed repository change and root-only activation; never reuse Staging monitoring credentials to bridge the gap.
 
-## Shared-host ingress prerequisite
+## Shared-host ingress contract
 
-The initial target is one VPS, where the verified Staging Caddy project already owns public host ports 80/443. Production Caddy is profile-gated as `shared-ingress-prerequisite`, publishes no host port, and has no wrapper activation command. Production application/database/worker services can therefore be prepared without competing for Staging ingress, but `https://yolpol.com` cannot be served by this contract yet.
+The initial target is one VPS, where the verified legacy Staging Caddy currently owns public 80/443. Repository steady state assigns those ports only to `yolpol-ingress`. Staging's old edge is profile-gated for root migration/rollback and has no wrapper start action; Production's local edge is removed. Shared ingress attaches only to `yolpol-staging-ingress` and `yolpol-production-ingress`, while each environment exposes only its web alias and keeps databases/workers on separate networks.
 
-Task 0064 must introduce one reviewed host-ingress authority that can route `staging.yolpol.com` and `yolpol.com` concurrently to isolated environment backends, migrate the verified Staging listener without an implicit outage, define TLS/state ownership, and update bootstrap, policy, monitoring, and rollback tests. Until that task is complete, Production is not publicly deployable on the one-VPS topology and release automation must stop before edge activation.
+Task 0064 defines the repository contract but does not perform the live handoff. The current Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains untouched until shared ingress and Staging are verified, Production is fully ready, rollback is prepared, and cutover is separately approved. The precise migration, rollback, health phases, Caddy state, TLS/DNS boundary, and activation gate are documented in `deploy/ingress/README.md`.
 
 ## Remaining operational limitations
 
-Root review/promotion is intentionally manual. This foundation does not provide shared-host Production ingress, signed release attestations, automated server bootstrap/release deployment, active Production monitoring, off-server backup durability, a backup scheduler, migration approval, DNS/TLS/firewall setup, registry credential rotation, PostgreSQL role provisioning, or disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.
+Root review/promotion is intentionally manual. This foundation does not deploy shared ingress, provide signed release attestations, automate server bootstrap/release deployment, activate Production monitoring, provide off-server backup durability or scheduling, approve migrations, change DNS/TLS/firewall/Cloudflare, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.

@@ -5,7 +5,7 @@ import {join, resolve} from "node:path";
 
 const project = "yolpol-monitoring-validation-0059";
 const prefix = `${project}-fixture`;
-const edgeNetwork = `${prefix}-edge`;
+const ingressNetwork = `${prefix}-ingress`;
 const backendNetwork = `${prefix}-backend`;
 const postgresContainer = `${prefix}-postgres`;
 const webContainer = `${prefix}-web`;
@@ -34,7 +34,7 @@ const composeEnvironment = {
   YOLPOL_MONITORING_BIND_ADDRESS: "127.0.0.1",
   YOLPOL_PROMETHEUS_PORT: "19090",
   YOLPOL_ALERTMANAGER_PORT: "19093",
-  YOLPOL_MONITORING_STAGING_EDGE_NETWORK: edgeNetwork,
+  YOLPOL_MONITORING_STAGING_INGRESS_NETWORK: ingressNetwork,
   YOLPOL_MONITORING_STAGING_BACKEND_NETWORK: backendNetwork,
   YOLPOL_ALERTMANAGER_CONFIG_FILE: resolve("deploy/monitoring/alertmanager/alertmanager.local.yml"),
   YOLPOL_MONITORING_TELEGRAM_BOT_TOKEN_FILE: join(secretsDirectory, "telegram-token"),
@@ -96,7 +96,7 @@ async function main() {
 
   docker(["build", "--target", "monitoring-runtime", "--tag", operationsImage, "."]);
   docker(["build", "--target", "migration-runtime", "--tag", migrationImage, "."]);
-  docker(["network", "create", edgeNetwork]);
+  docker(["network", "create", ingressNetwork]);
   docker(["network", "create", backendNetwork]);
 
   docker([
@@ -122,7 +122,7 @@ async function main() {
 
   docker([
     "run", "--detach", "--name", webContainer,
-    "--network", edgeNetwork, "--network-alias", "web",
+    "--network", ingressNetwork, "--network-alias", "staging-web",
     "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
     "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m",
     "--entrypoint", "node", operationsImage,
@@ -189,7 +189,7 @@ try {
   for (const container of [webContainer, postgresContainer]) {
     try { docker(["rm", "--force", container], {stdio: "ignore"}); } catch {}
   }
-  for (const network of [edgeNetwork, backendNetwork]) {
+  for (const network of [ingressNetwork, backendNetwork]) {
     try { docker(["network", "rm", network], {stdio: "ignore"}); } catch {}
   }
   rmSync(fixtureDirectory, {recursive: true, force: true});

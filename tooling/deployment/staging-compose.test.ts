@@ -48,7 +48,7 @@ describe("Staging Compose deployment contract", () => {
     expect(compose).not.toContain(":latest");
   });
 
-  it("defines active services and keeps all migration/backup/restore operations explicit", () => {
+  it("defines application services and keeps legacy edge/migration/backup/restore operations explicit", () => {
     for (const service of [
       "edge",
       "web",
@@ -70,6 +70,7 @@ describe("Staging Compose deployment contract", () => {
 
     expect(compose).toContain("name: yolpol-staging");
     expect(serviceBlock("migrate")).toContain('profiles: ["migration"]');
+    expect(serviceBlock("edge")).toContain('profiles: ["legacy-staging-edge-migration"]');
     expect(serviceBlock("migrate")).toContain('restart: "no"');
     for (const service of ["backup-create", "backup-verify", "backup-deep-verify", "backup-retention"]) {
       expect(serviceBlock(service)).toContain('profiles: ["backup"]');
@@ -128,11 +129,14 @@ describe("Staging Compose deployment contract", () => {
     expect(compose).not.toContain("channel-delivery");
   });
 
-  it("publishes ports only from Caddy and keeps PostgreSQL on the internal backend", () => {
+  it("keeps public ports exclusive to the root-controlled legacy edge profile", () => {
     expect(serviceBlock("edge")).toContain("ports:");
+    expect(serviceBlock("edge")).toContain('profiles: ["legacy-staging-edge-migration"]');
     expect(serviceBlock("web")).not.toContain("ports:");
     expect(serviceBlock("postgres")).not.toContain("ports:");
     expect(compose).toMatch(/backend:\n    internal: true/u);
+    expect(compose).toContain("name: yolpol-staging-ingress\n    external: true");
+    expect(serviceBlock("web")).toContain("- staging-web");
     expect(caddyfile).toContain("staging.yolpol.com");
     expect(caddyfile).toContain("reverse_proxy web:3000");
   });
