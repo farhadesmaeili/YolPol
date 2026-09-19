@@ -19,12 +19,10 @@ policy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(policy)
 
 
-def valid_manifest() -> dict[str, object]:
-    revision = "a" * 40
-    version = "0.1.0"
+def valid_manifest(revision: str = "a" * 40, version: str = "0.1.0") -> dict[str, object]:
     images: list[dict[str, str]] = []
     for role, repository in policy.EXPECTED_IMAGE_REPOSITORIES.items():
-        digest = f"sha256:{hashlib.sha256(role.encode()).hexdigest()}"
+        digest = f"sha256:{hashlib.sha256(f'{role}:{revision}'.encode()).hexdigest()}"
         images.append(
             {
                 "role": role,
@@ -137,6 +135,68 @@ class ReleaseManifestTests(unittest.TestCase):
             attacked = {**staging, key: malicious}
             with self.subTest(key=key, malicious=malicious), self.assertRaises(policy.PolicyError):
                 policy.validate_staging_runtime(attacked, manifest)
+
+    def test_production_runtime_is_closed_and_bound_to_the_same_manifest(self) -> None:
+        manifest = validate_manifest(valid_manifest())
+        images = manifest["imagesByRole"]
+        assert isinstance(images, dict)
+        production = {
+            **policy.PRODUCTION_FIXED_VALUES,
+            "YOLPOL_GIT_REVISION": manifest["gitSha"],
+            "YOLPOL_WEB_IMAGE": images["web"]["immutableRef"],
+            "YOLPOL_WORKER_IMAGE": images["worker"]["immutableRef"],
+            "YOLPOL_MIGRATION_IMAGE": images["migration"]["immutableRef"],
+            "YOLPOL_BACKUP_RESTORE_IMAGE": images["backup-restore"]["immutableRef"],
+            "YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT": "age1" + "q" * 58,
+            "YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME": "YolpolProductionBot",
+        }
+        policy.validate_production_runtime(production, manifest)
+        for key, malicious in (
+            ("YOLPOL_GIT_REVISION", "a" * 39),
+            ("YOLPOL_WEB_IMAGE", "ghcr.io/attacker/root-shell@sha256:" + "a" * 64),
+            ("YOLPOL_WORKER_IMAGE", "ghcr.io/farhadesmaeili/yolpol-worker:latest"),
+            ("YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN", "https://staging.yolpol.com"),
+            ("YOLPOL_PRODUCTION_DATABASE_ENV_FILE", "/opt/yolpol/staging/secrets/app-database.env"),
+        ):
+            attacked = {**production, key: malicious}
+            with self.subTest(key=key, malicious=malicious), self.assertRaises(policy.PolicyError):
+                policy.validate_production_runtime(attacked, manifest)
+
+    def test_staging_and_production_release_progression_is_independent(self) -> None:
+        staging_manifest = validate_manifest(valid_manifest("8" * 40, "0.1.8"))
+        production_manifest = validate_manifest(valid_manifest("7" * 40, "0.1.7"))
+        staging_images = staging_manifest["imagesByRole"]
+        production_images = production_manifest["imagesByRole"]
+        assert isinstance(staging_images, dict) and isinstance(production_images, dict)
+        staging = {
+            **policy.STAGING_FIXED_VALUES,
+            "YOLPOL_GIT_REVISION": staging_manifest["gitSha"],
+            "YOLPOL_WEB_IMAGE": staging_images["web"]["immutableRef"],
+            "YOLPOL_WORKER_IMAGE": staging_images["worker"]["immutableRef"],
+            "YOLPOL_MIGRATION_IMAGE": staging_images["migration"]["immutableRef"],
+            "YOLPOL_BACKUP_RESTORE_IMAGE": staging_images["backup-restore"]["immutableRef"],
+            "YOLPOL_STAGING_BACKUP_AGE_RECIPIENT": "age1" + "q" * 58,
+            "YOLPOL_STAGING_TELEGRAM_BOT_USERNAME": "YolpolStagingBot",
+        }
+        production = {
+            **policy.PRODUCTION_FIXED_VALUES,
+            "YOLPOL_GIT_REVISION": production_manifest["gitSha"],
+            "YOLPOL_WEB_IMAGE": production_images["web"]["immutableRef"],
+            "YOLPOL_WORKER_IMAGE": production_images["worker"]["immutableRef"],
+            "YOLPOL_MIGRATION_IMAGE": production_images["migration"]["immutableRef"],
+            "YOLPOL_BACKUP_RESTORE_IMAGE": production_images["backup-restore"]["immutableRef"],
+            "YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT": "age1" + "q" * 58,
+            "YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME": "YolpolProductionBot",
+        }
+        policy.validate_staging_runtime(staging, staging_manifest)
+        policy.validate_production_runtime(production, production_manifest)
+        with self.assertRaises(policy.PolicyError):
+            policy.validate_production_runtime(production, staging_manifest)
+        with self.assertRaises(policy.PolicyError):
+            policy.validate_staging_runtime(staging, production_manifest)
+        self.assertNotEqual(policy.STAGING_MANIFEST, policy.PRODUCTION_MANIFEST)
+        self.assertEqual(policy.STAGING_MANIFEST.as_posix(), "/opt/yolpol/releases/staging/active/release-manifest.json")
+        self.assertEqual(policy.PRODUCTION_MANIFEST.as_posix(), "/opt/yolpol/releases/production/active/release-manifest.json")
 
 
 class ResolvedComposePolicyTests(unittest.TestCase):
