@@ -14,6 +14,66 @@ The PostgreSQL persistence foundation is active through the narrow Inquiry route
 
 The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
 
+## Operational deployment automation (planned)
+
+The phases below record the agreed operational direction. They are planned work, not a claim that Production deployment, host bootstrap, automated release promotion, or disaster-recovery validation already exists. Existing Staging deployment behavior remains unchanged until each phase is designed, implemented, reviewed, and validated separately.
+
+### Phase A - Production Deployment Foundation
+
+- Add repository-managed Production Compose and configuration.
+- Isolate Production completely from Staging.
+- Give Production independent databases, volumes, networks, Caddy state, backups, credentials, Telegram bot, and runtime configuration.
+- Deploy only immutable release digest references.
+- Preserve production-safe restricted operations.
+
+### Phase B - Server Bootstrap Automation
+
+The goal is one standard workflow that converts a clean or disposable VPS into a YOLPOL-ready host.
+
+The planned automation should cover:
+
+- operating-system prerequisites
+- Docker Engine and Compose installation and validation
+- operator identity
+- filesystem hierarchy
+- permissions and ACL contract
+- restricted deployment wrapper
+- sudoers configuration
+- audit and logrotate setup
+- deployment directories
+- Monitoring foundation
+- runtime configuration bootstrap
+- secure secret consumption
+- release installation
+- validation
+
+Secrets must never be embedded in Git or generated insecurely. Bootstrap automation must consume them through an explicitly secure mechanism.
+
+### Phase C - Release Deployment Automation
+
+The target release flow is:
+
+```text
+GitHub Release
+-> authenticated manifest verification
+-> automatic Staging deployment
+-> health, readiness, and smoke validation
+-> Production approval gate
+-> exact immutable Production deployment
+-> health verification
+-> deployment record
+```
+
+Normal releases should not require interactive SSH.
+
+### Phase D - Rebuild and Disaster-Recovery Validation
+
+- Prove that a fresh disposable server can be rebuilt from the documented automation.
+- Verify backup and recovery requirements.
+- Verify that ordinary deployment does not depend on undocumented host state.
+
+The final target operating model treats servers as disposable and rebuildable. SSH should eventually be reserved mainly for bootstrap recovery, incidents, debugging, and exceptional recovery operations. Routine deployment should happen through controlled automation rather than manual shell commands.
+
 ## 1. Project Foundation
 
 - Multilingual routing and RTL/LTR document support
