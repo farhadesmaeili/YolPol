@@ -16,7 +16,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 ## Operational deployment automation (planned)
 
-The phases below record the agreed operational direction. They are planned work, not a claim that Production deployment, host bootstrap, automated release promotion, or disaster-recovery validation already exists. Existing Staging deployment behavior remains unchanged until each phase is designed, implemented, reviewed, and validated separately.
+The phases below record the agreed operational direction. The Production repository foundation and the current VPS's manual shared-ingress migration are complete, but Production deployment, host bootstrap automation, automated release promotion, and disaster-recovery validation do not yet exist. Remaining phases must be designed, implemented, reviewed, and validated separately.
 
 ### Phase A - Production Deployment Foundation
 
@@ -113,7 +113,7 @@ The final target operating model treats servers as disposable and rebuildable. S
 
 - [x] Confirm production domain as `https://yolpol.com`
 - [x] Add the isolated repository-side Production deployment contract (not deployed)
-- [x] Implement the repository-side Task 0064 shared-host ingress contract (live migration and activation remain pending)
+- [x] Implement Task 0064 and complete the manual shared-host-ingress and Staging Monitoring migration on the current VPS
 - [ ] Automate server bootstrap and authenticated release deployment
 - [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
 - [ ] Bootstrap and deploy the real Production environment after explicit approval

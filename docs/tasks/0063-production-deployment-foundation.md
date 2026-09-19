@@ -28,4 +28,4 @@ Application rollback remains separate from database recovery. Equal migration id
 
 ## Shared-host ingress prerequisite
 
-The real initial topology is one VPS and the verified legacy Staging Caddy currently owns public ports 80/443. Task 0064 now supplies the repository-side `yolpol-ingress` authority and removes the Production-local edge, but its root-controlled live migration, verification, and DNS/Cloudflare cutover remain prerequisites before Production may be exposed at `https://yolpol.com`.
+The real initial topology is one VPS. Task 0064 supplies the `yolpol-ingress` authority and removes the Production-local edge; its root-controlled live migration and Staging verification completed successfully on 2026-09-19. Production provisioning, Production ingress verification, and the final DNS/Cloudflare cutover remain prerequisites before Production may be exposed at `https://yolpol.com`.

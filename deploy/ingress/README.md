@@ -1,6 +1,6 @@
 # YOLPOL shared host ingress
 
-This directory defines the repository-side shared ingress for the initial one-VPS topology. It is not deployed by this feature. The fixed Compose project is `yolpol-ingress`, installed at `/opt/yolpol/ingress`, and it is the only steady-state project authorized to publish host TCP 80/443 and UDP 443.
+This directory defines the shared ingress for the initial one-VPS topology. The fixed Compose project is `yolpol-ingress`, installed at `/opt/yolpol/ingress`, and it is the only steady-state project authorized to publish host TCP 80/443 and UDP 443. The current VPS migration completed successfully on 2026-09-19; the deployment record is `docs/deployments/shared-host-ingress-2026-09-19.md`.
 
 ## Architecture and isolation
 
@@ -49,15 +49,17 @@ Before Production exists, use `ingress-validate`, `ingress-status`, and `ingress
 
 There is deliberately no `ingress-deploy`, caller-selected path/project/network/service, or arbitrary Docker argument. Starting, stopping, or changing shared ingress is root-only infrastructure work. The sudoers grant is unchanged.
 
-## Current live state and prerequisites
+## Current live state and retained rollback
 
-The current VPS still has the legacy Staging Caddy bound to 80/443 and still uses `/opt/yolpol/releases/active`. Before installing the revised wrapper/policy, root must deliberately migrate that release authority to `/opt/yolpol/releases/staging/active`; this is separate from application data and does not alter Production authority at `/opt/yolpol/releases/production/active`.
+Shared ingress is healthy and owns public 80/443. Staging web is reachable as `staging-web` on `yolpol-staging-ingress`; Monitoring Blackbox Exporter uses the same network for its Staging probes. The legacy Staging edge is stopped, while its container, network, Caddy state, and `/opt/yolpol/releases/active` authority are intentionally retained for rollback. The verified Staging authority is also present at `/opt/yolpol/releases/staging/active`. No Production authority or application runtime has been provisioned.
 
-The current Cloudflare configuration also temporarily redirects `yolpol.com` to `staging.yolpol.com`. This repository feature does not change that redirect, DNS, Cloudflare, firewall state, certificates, or the live server. The redirect must remain until shared ingress and Staging are verified, Production runtime/secrets/database/release and workers are ready, rollback is ready, and a separate Production cutover is explicitly approved.
+Cloudflare still temporarily redirects `yolpol.com` and `www.yolpol.com` to `staging.yolpol.com`. A path-scoped temporary compatibility rule currently permits HTTP-01 handling for `/.well-known/acme-challenge/` on the proxied apex and `www` hostnames. Do not treat that rule as a permanent architecture requirement. The redirect must remain until Production runtime, secrets, database, release and workers are ready, rollback is ready, and a separate Production cutover is explicitly approved.
 
-## Future root-controlled migration
+## Root-controlled migration and rollback procedure
 
 Never start shared ingress while any legacy listener owns 80/443.
+
+The current VPS completed this sequence successfully on 2026-09-19. It remains the authoritative order for reconstructing or rolling back the handoff; consult the deployment record before changing retained rollback state.
 
 1. Complete the legacy Staging release-authority migration, then install the reviewed Staging, Production, ingress, policy, and wrapper files with the fixed ownership/modes.
 2. Inspect for conflicting Docker networks, then create exactly `yolpol-staging-ingress` and `yolpol-production-ingress` as root-owned external bridge networks.
@@ -84,4 +86,4 @@ Monitoring now identifies the shared ingress container separately and reaches St
 
 ## Intentionally unsupported here
 
-No VPS access, Docker network creation, container start/stop, certificate request, DNS/Cloudflare change, temporary-redirect removal, secret creation, Production deployment, database action, Telegram registration, full bootstrap/release workflow, commit, or push is performed by this feature.
+The repository contract does not automate VPS bootstrap, ingress lifecycle, certificate requests, DNS/Cloudflare changes, secret creation, Production deployment, database actions, Telegram registration, or release deployment. The completed manual migration did not remove the temporary redirect, provision Production, run an application database migration, or clean up retained rollback assets.
