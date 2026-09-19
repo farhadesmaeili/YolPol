@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented and locally validated as a repository-only contract. Shared ingress is not installed or running, Production is not public, the current VPS and legacy Staging listener are unchanged, and no DNS, Cloudflare, certificate, secret, database, deployment, commit, or push operation is part of this task.
+Implemented, locally validated, and migrated successfully on the current VPS on 2026-09-19. Shared ingress is running as the sole steady-state public listener, Staging and its Blackbox probes use the shared Staging ingress network, and the legacy edge is stopped and retained for rollback. Production remains unprovisioned and is not live. The executed migration and verification evidence are recorded in `docs/deployments/shared-host-ingress-2026-09-19.md`.
 
 ## Decision
 
@@ -32,15 +32,15 @@ Validation checks the fixed files, closed four-key non-secret runtime schema, ex
 
 ## Current-host migration and rollback
 
-The current VPS still uses legacy `/opt/yolpol/releases/active`. Before installing the revised wrapper/policy, root must deliberately migrate the active Staging manifest/checksum to `/opt/yolpol/releases/staging/active`; Production retains independent `/opt/yolpol/releases/production/active`. This release-authority migration is separate from application data and is not executed here.
+The active Staging manifest/checksum was copied to `/opt/yolpol/releases/staging/active` and verified byte-for-byte before handoff. The legacy `/opt/yolpol/releases/active` authority remains intentionally retained for rollback compatibility; no Production active release was provisioned.
 
-After that prerequisite, the reviewed future sequence is: install fixed files; inspect/create the two fixed external networks; validate contracts and Caddy configuration without starting it; recreate Staging web so it remains on the old local edge network and also gains `staging-web` on the new ingress network; verify current Staging; stop legacy edge; confirm 80/443 are free; start shared ingress; verify runtime, Staging route, TLS, and smoke behavior. On failure, stop shared ingress first, then restart only the profiled legacy edge and re-verify Staging. Exact commands and ownership/modes are in `deploy/ingress/README.md`.
+The reviewed sequence was followed: fixed files and networks were installed and validated; Staging web acquired `staging-web` on the new ingress network; the legacy edge was stopped; free public ports were confirmed; shared ingress was started; and runtime, Staging routing, TLS, wrapper validation, and Monitoring probes were verified. The reverse order remains the rollback procedure: stop shared ingress before restarting only the profiled legacy edge and then re-verify Staging. Exact operational constraints remain in `deploy/ingress/README.md`.
 
 ## Cloudflare, TLS, and Production activation
 
-The current live Cloudflare redirect remains `yolpol.com -> staging.yolpol.com`. This task neither changes nor assumes removal of that redirect. It must remain until shared ingress is deployed and Staging is verified through it; Production runtime, secrets, database, authenticated release, backup/recovery readiness, migration decision, web, and workers are healthy; Production ingress routing and rollback are verified; and DNS/Cloudflare cutover is separately approved.
+The current live Cloudflare redirect remains `yolpol.com -> staging.yolpol.com`. Shared ingress and Staging have been verified, but the redirect must remain until Production runtime, secrets, database, authenticated release, backup/recovery readiness, migration decision, web, and workers are healthy; Production ingress routing and rollback are verified; and DNS/Cloudflare cutover is separately approved.
 
-Caddy configuration is suitable for automatic HTTPS when later started, but repository validation does not request a certificate. DNS, Cloudflare proxy/redirect configuration, firewall state, certificate issuance, and live smoke testing remain separate approved operations.
+Caddy obtained valid certificates for `staging.yolpol.com`, `yolpol.com`, and `www.yolpol.com` during the approved migration. The temporary, path-scoped Cloudflare Flexible SSL rule for HTTP-01 compatibility is current operational state, not a permanent architecture requirement. The redirect remains active, and final Production DNS/Cloudflare cutover is still a separate approved operation.
 
 ## Release, bootstrap, and monitoring compatibility
 
@@ -56,4 +56,4 @@ Deployment tests cover sole steady-state port ownership, legacy-edge profile/wra
 
 ## Intentionally deferred
 
-VPS mutation, network creation, listener handoff, certificate issuance, DNS/Cloudflare changes, temporary-redirect removal, Production provisioning/deployment, real secrets, database operations, Telegram webhook registration, full bootstrap/release automation, and Production monitoring activation are not performed here.
+Production provisioning/deployment, temporary-redirect removal, final Cloudflare Production cutover, Production monitoring activation, Telegram webhook registration, full bootstrap/release automation, and cleanup of retained rollback assets remain deferred. This ingress migration performed no application release promotion or database migration.

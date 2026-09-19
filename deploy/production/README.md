@@ -92,7 +92,7 @@ The dedicated `yolpol-ingress` project serves the canonical apex and permanently
 
 Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 now defines the repository-side shared ingress and migration/rollback contract, but nothing is deployed. The current live Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains untouched. Production public activation is still blocked until shared ingress is deployed and verified, Production prerequisites and rollback are ready, and DNS/Cloudflare cutover is separately approved.
+Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The live Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains active. Production public activation is still blocked until the Production runtime, secrets, database, release authority, application containers, Monitoring integration, health checks, and rollback are ready and the DNS/Cloudflare cutover is separately approved. Shared ingress alone does not make Production live.
 
 ## Operator commands and root responsibilities
 
