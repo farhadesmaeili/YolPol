@@ -1,7 +1,0 @@
-www.yolpol.com {
-	redir https://yolpol.com{uri} permanent
-}
-
-yolpol.com {
-	reverse_proxy web:3000
-}

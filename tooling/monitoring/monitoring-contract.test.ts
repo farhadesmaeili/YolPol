@@ -49,9 +49,9 @@ describe("Monitoring and alerting deployment contract", () => {
 
   it("keeps scrape traffic internal and grants only required cross-project access", () => {
     expect(compose).toMatch(/monitoring:\n    internal: true/u);
-    expect(compose).toContain("YOLPOL_MONITORING_STAGING_EDGE_NETWORK:-yolpol-staging_edge");
+    expect(compose).toContain("YOLPOL_MONITORING_STAGING_INGRESS_NETWORK:-yolpol-staging-ingress");
     expect(compose).toContain("YOLPOL_MONITORING_STAGING_BACKEND_NETWORK:-yolpol-staging_backend");
-    expect(serviceBlock("blackbox-exporter")).toContain("- staging_edge");
+    expect(serviceBlock("blackbox-exporter")).toContain("- staging_ingress");
     expect(serviceBlock("postgres-exporter")).toContain("- staging_backend");
     expect(serviceBlock("operations-exporter")).toContain("- staging_backend");
     expect(serviceBlock("alertmanager")).toContain("- alert_egress");
@@ -79,8 +79,8 @@ describe("Monitoring and alerting deployment contract", () => {
     expect(serviceBlock("prometheus")).toContain("--storage.tsdb.retention.size=${YOLPOL_PROMETHEUS_RETENTION_SIZE:-2GB}");
     expect(prometheus).toContain("scrape_interval: 30s");
     expect(prometheus).toContain("evaluation_interval: 30s");
-    expect(prometheus).toContain("http://web:3000/api/health/live");
-    expect(prometheus).toContain("http://web:3000/api/health/ready");
+    expect(prometheus).toContain("http://staging-web:3000/api/health/live");
+    expect(prometheus).toContain("http://staging-web:3000/api/health/ready");
     expect(prometheus).not.toContain("staging.yolpol.com");
   });
 
@@ -111,8 +111,11 @@ describe("Monitoring and alerting deployment contract", () => {
       "YolpolPostgresConnectionPressureCritical", "YolpolHostDiskLowCritical", "YolpolHostMemoryLowCritical",
       "YolpolHostCpuHighCritical", "YolpolInquiryNotificationWorkerAbsent", "YolpolConversationTranslationWorkerAbsent",
       "YolpolAiFallbackWorkerAbsent", "YolpolOperationsExporterDown", "YolpolQueueStaleCritical",
-      "YolpolBackupMissing", "YolpolBackupStaleCritical", "PrometheusTargetScrapeFailing",
+      "YolpolBackupMissing", "YolpolBackupStaleCritical", "YolpolSharedIngressContainerAbsent",
+      "PrometheusTargetScrapeFailing",
     ]) expect(rules).toContain(`alert: ${alert}`);
+    expect(rules).toContain('container_label_com_docker_compose_project="yolpol-ingress"');
+    expect(rules).toContain('container_label_com_docker_compose_service="ingress"');
     for (const tested of ["YolpolWebLivenessUnavailable", "YolpolWebReadinessUnavailable", "YolpolHostDiskLowCritical", "YolpolInquiryNotificationWorkerAbsent", "YolpolQueueStaleCritical", "YolpolBackupMissing", "YolpolBackupStaleCritical"]) {
       expect(ruleTests).toContain(`alertname: ${tested}`);
     }

@@ -29,12 +29,14 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             ("backup-retention", "/backups"): "/opt/yolpol/staging/backups",
         },
         "production": {
-            ("edge", "/etc/caddy/Caddyfile"): "/opt/yolpol/production/Caddyfile",
             ("backup-create", "/backups"): "/opt/yolpol/production/backups",
             ("backup-verify", "/backups"): "/opt/yolpol/production/backups",
             ("backup-deep-verify", "/backups"): "/opt/yolpol/production/backups",
             ("backup-retention", "/backups"): "/opt/yolpol/production/backups",
             ("restore", "/backups"): "/opt/yolpol/production/backups",
+        },
+        "ingress": {
+            ("ingress", "/etc/caddy/Caddyfile"): "/opt/yolpol/ingress/Caddyfile",
         },
         "monitoring": {
             ("prometheus", "/etc/prometheus/prometheus.yml"): "/opt/yolpol/monitoring/prometheus/prometheus.yml",
@@ -53,7 +55,7 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             replacement = bind_sources.get((service_name, volume.get("target")))
             if replacement is not None:
                 volume["source"] = replacement
-    secrets = model["secrets"]
+    secrets = model.get("secrets", {})
     assert isinstance(secrets, dict)
     expected_secret_paths = {
         "staging": {
@@ -68,6 +70,7 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             "groq_api_key": "/opt/yolpol/production/secrets/groq-api-key",
             "backup_age_identity": "/opt/yolpol/production/secrets/backup-age-identity",
         },
+        "ingress": {},
         "monitoring": {
             "alert_telegram_bot_token": "/opt/yolpol/monitoring/secrets/alert-telegram-bot-token",
             "alert_telegram_chat_id": "/opt/yolpol/monitoring/secrets/alert-telegram-chat-id",
@@ -126,6 +129,15 @@ def main() -> None:
             policy.monitoring_expected_keys(),
         )
         policy.validate_monitoring_compose_model(model, runtime)
+    elif mode == "ingress":
+        runtime = policy.parse_runtime_environment(
+            REPOSITORY_ROOT / "deploy/ingress/runtime.env.example",
+            policy.ingress_expected_keys(),
+        )
+        policy.validate_ingress_caddyfile_text(
+            (REPOSITORY_ROOT / "deploy/ingress/Caddyfile").read_text(encoding="ascii")
+        )
+        policy.validate_ingress_compose_model(model, runtime)
     else:
         raise policy.PolicyError("test mode")
 

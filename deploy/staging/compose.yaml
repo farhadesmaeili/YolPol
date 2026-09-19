@@ -75,6 +75,7 @@ x-telegram-operation: &telegram-operation
 
 services:
   edge:
+    profiles: ["legacy-staging-edge-migration"]
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     restart: unless-stopped
     depends_on:
@@ -124,8 +125,11 @@ services:
       start_period: 20s
     stop_grace_period: 30s
     networks:
-      - edge
-      - backend
+      ingress:
+        aliases:
+          - staging-web
+      edge:
+      backend:
     mem_limit: "${YOLPOL_STAGING_WEB_MEMORY_LIMIT:-768m}"
     cpus: "${YOLPOL_STAGING_WEB_CPU_LIMIT:-0.75}"
     pids_limit: 200
@@ -372,6 +376,9 @@ services:
 
 networks:
   edge:
+  ingress:
+    name: yolpol-staging-ingress
+    external: true
   backend:
     internal: true
   provider_egress:

@@ -22,7 +22,7 @@ The phases below record the agreed operational direction. They are planned work,
 
 - Add repository-managed Production Compose and configuration.
 - Isolate Production completely from Staging.
-- Give Production independent databases, volumes, networks, Caddy state, backups, credentials, Telegram bot, and runtime configuration.
+- Give Production independent databases, volumes, backend/ingress networks, backups, credentials, Telegram bot, and runtime configuration.
 - Deploy only immutable release digest references.
 - Preserve production-safe restricted operations.
 
@@ -113,7 +113,7 @@ The final target operating model treats servers as disposable and rebuildable. S
 
 - [x] Confirm production domain as `https://yolpol.com`
 - [x] Add the isolated repository-side Production deployment contract (not deployed)
-- [ ] Implement Task 0064 shared-host ingress before Production activation on the one-VPS topology
+- [x] Implement the repository-side Task 0064 shared-host ingress contract (live migration and activation remain pending)
 - [ ] Automate server bootstrap and authenticated release deployment
 - [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
 - [ ] Bootstrap and deploy the real Production environment after explicit approval

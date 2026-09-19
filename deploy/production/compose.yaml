@@ -70,29 +70,6 @@ x-telegram-operation: &telegram-operation
   logging: *json-logging
 
 services:
-  edge:
-    profiles: ["shared-ingress-prerequisite"]
-    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
-    restart: unless-stopped
-    depends_on:
-      web:
-        condition: service_healthy
-    volumes:
-      - type: bind
-        source: ./Caddyfile
-        target: /etc/caddy/Caddyfile
-        read_only: true
-        bind:
-          create_host_path: false
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - edge
-    mem_limit: "${YOLPOL_PRODUCTION_CADDY_MEMORY_LIMIT:-256m}"
-    cpus: "${YOLPOL_PRODUCTION_CADDY_CPU_LIMIT:-0.20}"
-    pids_limit: 100
-    logging: *json-logging
-
   web:
     <<: *first-party-runtime
     image: "${YOLPOL_WEB_IMAGE:?Set YOLPOL_WEB_IMAGE from the approved release manifest}"
@@ -118,8 +95,10 @@ services:
       start_period: 20s
     stop_grace_period: 30s
     networks:
-      - edge
-      - backend
+      ingress:
+        aliases:
+          - production-web
+      backend:
     mem_limit: "${YOLPOL_PRODUCTION_WEB_MEMORY_LIMIT:-768m}"
     cpus: "${YOLPOL_PRODUCTION_WEB_CPU_LIMIT:-0.75}"
     pids_limit: 200
@@ -362,15 +341,15 @@ services:
       - backend
 
 networks:
-  edge:
+  ingress:
+    name: yolpol-production-ingress
+    external: true
   backend:
     internal: true
   provider_egress:
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
 
 secrets:
   telegram_bot_token:

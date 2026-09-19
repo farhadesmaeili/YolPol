@@ -35,12 +35,13 @@ expect_accepted_grammar() {
 /usr/sbin/visudo -cf /etc/sudoers.d/yolpol-deploy >/dev/null \
   || fail_test 'sudoers syntax validation'
 
-for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers deploy-edge \
+for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers \
   staff-provision staff-bootstrap-super-admin telegram-webhook-set telegram-webhook-info backup-create \
   production-validate production-status production-health production-pull-approved-images \
   production-deploy-database production-migrate production-deploy-app production-deploy-workers \
   production-staff-provision production-staff-bootstrap-super-admin \
-  production-telegram-webhook-set production-telegram-webhook-info production-backup-create; do
+  production-telegram-webhook-set production-telegram-webhook-info production-backup-create \
+  ingress-validate ingress-status ingress-health ingress-health-production; do
   expect_accepted_grammar "$action"
 done
 expect_accepted_grammar backup-verify yolpol-staging-20260913T000000Z-abcdef0
@@ -61,7 +62,12 @@ expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '
 expect_rejected backup-verify 'yolpol-staging-20260913T000000Z-abcdef0-é'
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-$(printf '%065d' 0)"
 expect_rejected production-status extra
+expect_rejected deploy-edge
 expect_rejected production-deploy-edge
+expect_rejected ingress-deploy
+expect_rejected ingress-status extra
+expect_rejected ingress-status --project-directory /tmp/evil
+expect_rejected ingress-health --network attacker
 expect_rejected deploy-app production
 expect_rejected production-deploy-app staging
 expect_rejected migrate --environment production

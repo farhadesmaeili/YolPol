@@ -6,7 +6,7 @@ This directory is the repository-managed foundation for the canonical `https://y
 
 Production uses Compose project `yolpol-production`, `YOLPOL_DEPLOYMENT_ENVIRONMENT=production`, and `YOLPOL_APP_ORIGIN=https://yolpol.com`. The project name and origin are source-controlled and policy-validated; callers cannot select an environment, project, Compose file, runtime file, service, image, or host path.
 
-Production owns distinct `yolpol-production_*` networks and volumes, `/opt/yolpol/production/runtime.env`, `/opt/yolpol/production/secrets`, `/opt/yolpol/production/backups`, database credentials, age recipient/recovery identity, Telegram bot/webhook secret, provider credentials, Caddy state, and `/opt/yolpol/releases/production/active` release authority. None may be copied from, mounted by, or shared with Staging. Production may retain an older approved manifest while Staging advances; promoting Staging never rewrites Production authority or runtime refs.
+Production owns distinct backend/provider networks and database volumes, `/opt/yolpol/production/runtime.env`, `/opt/yolpol/production/secrets`, `/opt/yolpol/production/backups`, database credentials, age recipient/recovery identity, Telegram bot/webhook secret, provider credentials, and `/opt/yolpol/releases/production/active` release authority. Its web service alone also joins fixed external network `yolpol-production-ingress` as `production-web`; that network carries no database or worker. None of Production's private state may be copied from, mounted by, or shared with Staging. Production may retain an older approved manifest while Staging advances; promoting Staging never rewrites Production authority or runtime refs.
 
 ## Filesystem contract
 
@@ -20,7 +20,7 @@ The future root bootstrap must create this deterministic layout without making t
         release-manifest.json                     root:root 0600
         release-manifest.sha256                   root:root 0600
   production/                                     root:root 0750
-    compose.yaml, Caddyfile                       root:root 0644
+    compose.yaml                                  root:root 0644
     runtime.env                                   root:root 0600
     secrets/                                      root:root 0700
       postgres.env                                root:root 0400
@@ -43,16 +43,16 @@ The existing root-owned release, lock, audit, protected operation-log, and incom
 
 `runtime.env` is created from `runtime.env.example` only after root independently selects an authenticated GitHub Release and verifies its strict manifest/checksum, source repository, full Git SHA, platform, database migration identity/fingerprint, five roles, repositories, and immutable digests. Root promotes that pair only to `/opt/yolpol/releases/production/active`; Production validation never reads the Staging active directory. The `.sha256` file detects corruption; it does not authenticate attacker-controlled uploads.
 
-The four Production image values must be exact `repository@sha256:digest` references from that one manifest. The Compose file has no `build` section and no local or floating first-party fallback. It never accepts `latest`. Caddy and PostgreSQL remain separately digest-pinned upstream images. Server-side source builds are unsupported.
+The four Production image values must be exact `repository@sha256:digest` references from that one manifest. The Compose file has no `build` section and no local or floating first-party fallback. It never accepts `latest`. PostgreSQL remains a separately digest-pinned upstream image; Caddy belongs only to the independent shared-ingress project. Server-side source builds are unsupported.
 
 The closed runtime schema contains only non-secret image/revision identity, fixed Production paths/origins, public-safe Telegram username, public age recipient, and bounded resource/logging settings. Unknown, duplicate, empty, unsafe, `COMPOSE_*`, and `DOCKER_*` inputs fail policy validation. Secrets remain in the root-controlled files referenced by the schema and never enter Git, `runtime.env`, documentation values, command arguments, or logs.
 
 ## Runtime and network model
 
-Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. Migration, backup, restore, Staff, Telegram, and the blocked Production edge are profile-gated and never start as a side effect of normal `up`.
+Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. Migration, backup, restore, Staff, and Telegram operations are profile-gated and never start as a side effect of normal `up`. There is no Production-local edge service.
 
-- No Production service publishes a host port until the shared-host ingress prerequisite is implemented.
-- Web is private behind Caddy; PostgreSQL has no host port and uses the internal backend network.
+- No Production service publishes a host port; shared ingress owns 80/443 independently.
+- Web is reachable only as `production-web` on `yolpol-production-ingress` and uses the internal backend network for PostgreSQL. PostgreSQL has no host port and never joins ingress.
 - Provider-capable workers use the separate provider-egress network. PostgreSQL and Staff operations do not.
 - Telegram operations receive only their required Telegram files and provider egress; they receive no database URL or Groq key.
 - No service uses host networking, privileged mode, devices, added capabilities, or a Docker socket.
@@ -86,13 +86,13 @@ Production requires a bot token and webhook secret that are not used by Staging.
 
 Groq and future provider credentials are Production-only file-backed secrets. This Compose contract does not change provider-neutral application policy or routing. Staff provisioning and first-Super-Admin bootstrap reuse the existing authoritative CLIs as explicit interactive one-shot operations with real stdin/stdout/stderr TTYs, backend-only access, no provider egress, no provider secret, and no public port.
 
-## Caddy and activation prerequisites
+## Shared ingress and activation prerequisites
 
-`Caddyfile` serves the apex canonical host and permanently redirects `www.yolpol.com` to the matching apex path. Its `caddy_data` and `caddy_config` volumes are Production-project state and never shared with Staging.
+The dedicated `yolpol-ingress` project serves the canonical apex and permanently redirects `www.yolpol.com` to the matching apex path. Its Caddy state is neither Production application state nor shared with legacy Staging Caddy.
 
-Staging currently owns the one VPS's public 80/443 listener. Two independent Compose Caddy projects cannot bind the same host IP/ports concurrently. The Production edge is therefore gated behind the `shared-ingress-prerequisite` profile, publishes no host ports, and has no wrapper activation command. Starting normal Production services cannot stop, rebind, or compete with Staging, but it also cannot make `https://yolpol.com` available.
+Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 must create the reviewed shared-host ingress authority, route both canonical hosts to isolated environment backends, define TLS/state ownership, safely migrate the verified Staging listener, and add bootstrap/policy/rollback validation. Until then, real Production deployment on the one-VPS topology is blocked before ingress activation. This repository change does not alter the current redirect, DNS, Cloudflare, or certificate state.
+Task 0064 now defines the repository-side shared ingress and migration/rollback contract, but nothing is deployed. The current live Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains untouched. Production public activation is still blocked until shared ingress is deployed and verified, Production prerequisites and rollback are ready, and DNS/Cloudflare cutover is separately approved.
 
 ## Operator commands and root responsibilities
 
@@ -102,12 +102,12 @@ Root remains responsible for bootstrap, authenticated release promotion, runtime
 
 ## Monitoring decision
 
-The current `yolpol-monitoring` project is deliberately Staging-specific: it mounts Staging networks/backups and uses Staging PostgreSQL and Operations Metrics credentials. This feature leaves it byte-for-byte unchanged and does not attach Production networks or credentials to it. Production monitoring is a separate follow-up that must explicitly design isolated exporter credentials, network attachment, backup signals, endpoints, alert routing, and policy tests before activation. Production must not be declared operationally ready until that follow-up and acceptance are complete.
+The current `yolpol-monitoring` project remains application-data-specific to Staging. It identifies shared-ingress container presence and probes Staging web through `staging-web`, but it does not attach the Production ingress/backend network or credentials and does not claim an active Production public probe. Production monitoring is a separate follow-up requiring isolated exporter credentials, endpoint probes, alert routing, and policy tests before activation.
 
 ## Future automation compatibility
 
-A future bootstrap tool can install the fixed tree, owners, modes, Compose/Caddy files, runtime schema, secret destinations, separate Staging/Production release authorities, and wrapper without inferring hidden state. A future release workflow can promote an approved manifest only to its fixed environment, create and verify a backup, compare migration identity, pull exact digests, migrate conditionally, deploy fixed private services, verify readiness, and record the result through the closed command surface. It must stop before Production ingress until Task 0064 is complete. Neither automation phase is implemented here, and normal release operation still requires root-controlled promotion and approval.
+A future bootstrap tool can install the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. A future release workflow can promote an approved manifest only to Production, create and verify a backup, compare migration identity, pull exact digests, migrate conditionally, replace web/workers on stable networks, verify readiness, and leave shared ingress running. Neither automation phase is implemented here, and Production activation remains separately approved.
 
 ## Intentionally unsupported
 
-This foundation does not provide shared-host Production ingress, deploy Production, create host paths, secrets, credentials, a database, bot, webhook, certificate, DNS record, GitHub Environment, bootstrap workflow, deployment workflow, monitoring stack, backup schedule, off-server store, PITR, down migration, automatic database rollback, restore cutover, arbitrary logs, arbitrary Compose, or shell access.
+This repository now provides the shared-host ingress contract but does not install it, deploy Production, create host paths/networks, secrets, credentials, a database, bot, webhook, certificate, DNS record, GitHub Environment, bootstrap workflow, deployment workflow, Production monitoring, backup schedule, off-server store, PITR, down migration, automatic database rollback, restore cutover, arbitrary logs, arbitrary Compose, or shell access.

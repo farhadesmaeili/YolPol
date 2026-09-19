@@ -2,44 +2,58 @@
 
 ## Status
 
-Required prerequisite for real Production deployment on the initial one-VPS topology. Not implemented by Task 0063.
+Implemented and locally validated as a repository-only contract. Shared ingress is not installed or running, Production is not public, the current VPS and legacy Staging listener are unchanged, and no DNS, Cloudflare, certificate, secret, database, deployment, commit, or push operation is part of this task.
 
-## Problem
+## Decision
 
-The verified Staging Caddy project currently owns public TCP 80/443 and UDP 443. A second Production Compose project cannot bind the same host IP and ports concurrently. Stopping or rebinding Staging implicitly would violate the availability and deployment-isolation contracts.
-
-Task 0063 therefore keeps Production edge behind the `shared-ingress-prerequisite` profile, publishes no Production host port, and exposes no `production-deploy-edge` wrapper action. Private Production database, web, and worker preparation does not make Production publicly deployable.
-
-## Required outcome
-
-Introduce one reviewed host-ingress authority that concurrently routes:
+Use one dedicated Compose project, `yolpol-ingress`, installed at fixed path `/opt/yolpol/ingress`, as the sole steady-state owner of public TCP 80/443 and UDP 443 on the one-VPS topology. It routes:
 
 ```text
-staging.yolpol.com -> isolated Staging web backend
-yolpol.com         -> isolated Production web backend
-www.yolpol.com     -> permanent canonical apex redirect
+staging.yolpol.com -> staging-web:3000 on yolpol-staging-ingress
+yolpol.com         -> production-web:3000 on yolpol-production-ingress
+www.yolpol.com     -> permanent https://yolpol.com{uri} redirect
 ```
 
-The design must preserve separate PostgreSQL data, credentials, runtime files, secrets, provider state, backups, application networks, and environment-specific release authority. The ingress service must receive no application, database, Telegram, Groq, Staff, backup, or recovery credential.
+The two external bridge network names and web aliases are source-controlled and policy-validated. Only the matching environment's `web` joins each ingress network. Shared ingress joins those two networks and no backend network. PostgreSQL, workers, migration, backup, Staff, and Telegram operations remain absent, so Caddy cannot reach either database through Docker networking and cannot bridge the private environment networks.
 
-## Required design work
+Shared ingress has its own digest-pinned Caddy image and `yolpol-ingress_caddy_data` / `yolpol-ingress_caddy_config` volumes. It receives no application secret, provider credential, release manifest, host network, privileged mode, device, or Docker socket. It is host infrastructure, not a sixth first-party release-manifest role.
 
-- Decide and document ownership of the single public 80/443 listener, TLS state, Caddy configuration, and rollback state.
-- Add narrowly scoped ingress-to-environment networks without joining Staging and Production backend/database networks.
-- Migrate the already-deployed Staging listener through an explicit, reversible root-controlled procedure with health checks and no implicit Staging shutdown.
-- Define fixed filesystem paths, owners/modes, Compose project identity, policy validation, resource limits, logging, and certificate prerequisites.
-- Extend the restricted wrapper only with fixed operations that cannot select arbitrary hosts, routes, networks, files, or services.
-- Update Monitoring with explicit environment-labeled probes after the routing design is approved.
-- Update bootstrap and release automation contracts so Production promotion stops before public activation unless shared ingress is installed and healthy.
+## Port and legacy-edge model
 
-## Acceptance tests
+Production's gated local edge and Caddy state were removed. Production exposes `web` only through `yolpol-production-ingress` and has no port-publishing service.
 
-- Staging and Production web services run concurrently with distinct projects, networks, runtime refs, and releases.
-- Exactly one repository-authorized ingress service publishes the intended public ports.
-- Both hosts route to the correct isolated backend and pass environment-appropriate readiness/indexing checks.
-- Unknown hosts and cross-environment routing fail closed.
-- Staging remains available during the reviewed transition or the procedure stops and rolls back explicitly.
-- Production activation cannot overwrite Staging TLS/config state, and Staging rollback cannot select Production state.
-- No ingress container receives application secrets or Docker socket access.
+The Staging `edge` definition remains temporarily under profile `legacy-staging-edge-migration`. Its original local `yolpol-staging_edge` network and Caddy volumes are retained so the currently deployed listener can continue serving while Staging web is attached to the new ingress network, and so root can roll back after cutover. The service is absent from ordinary startup; `deploy-edge` is removed from the operator wrapper. Only an explicitly reviewed root migration/rollback procedure may start it. Shared ingress and legacy edge must never run as public listeners simultaneously.
 
-DNS, Cloudflare, certificate issuance, VPS mutation, and live cutover remain separately approved operational actions even after the repository contract is implemented.
+## Operations and health
+
+The wrapper fixes all paths, project names, services, networks, and Compose arguments. It adds only `ingress-validate`, `ingress-status`, `ingress-health`, and `ingress-health-production`; it provides no ingress start/deploy command and accepts no extra arguments. Root owns ingress lifecycle and future bootstrap/cutover. Sudoers is unchanged.
+
+Validation checks the fixed files, closed four-key non-secret runtime schema, exact resolved Compose model, pinned image, published ports, capabilities, mounts, resources, networks, and volumes without needing either application backend live. `ingress-health` separately requires the running Caddy service, valid configuration, and Staging readiness reachability. `ingress-health-production` adds Production readiness and is intentionally used only after Production exists. Public HTTPS hostname verification remains a cutover step, not a repository test.
+
+## Current-host migration and rollback
+
+The current VPS still uses legacy `/opt/yolpol/releases/active`. Before installing the revised wrapper/policy, root must deliberately migrate the active Staging manifest/checksum to `/opt/yolpol/releases/staging/active`; Production retains independent `/opt/yolpol/releases/production/active`. This release-authority migration is separate from application data and is not executed here.
+
+After that prerequisite, the reviewed future sequence is: install fixed files; inspect/create the two fixed external networks; validate contracts and Caddy configuration without starting it; recreate Staging web so it remains on the old local edge network and also gains `staging-web` on the new ingress network; verify current Staging; stop legacy edge; confirm 80/443 are free; start shared ingress; verify runtime, Staging route, TLS, and smoke behavior. On failure, stop shared ingress first, then restart only the profiled legacy edge and re-verify Staging. Exact commands and ownership/modes are in `deploy/ingress/README.md`.
+
+## Cloudflare, TLS, and Production activation
+
+The current live Cloudflare redirect remains `yolpol.com -> staging.yolpol.com`. This task neither changes nor assumes removal of that redirect. It must remain until shared ingress is deployed and Staging is verified through it; Production runtime, secrets, database, authenticated release, backup/recovery readiness, migration decision, web, and workers are healthy; Production ingress routing and rollback are verified; and DNS/Cloudflare cutover is separately approved.
+
+Caddy configuration is suitable for automatic HTTPS when later started, but repository validation does not request a certificate. DNS, Cloudflare proxy/redirect configuration, firewall state, certificate issuance, and live smoke testing remain separate approved operations.
+
+## Release, bootstrap, and monitoring compatibility
+
+Staging and Production may run different authenticated releases because ingress reads neither manifest. Replacing either web container preserves its stable network alias and does not recreate or restart shared ingress. An ingress image/configuration change has its own root-controlled infrastructure lifecycle.
+
+Future bootstrap has deterministic project path, project identity, external network names, file modes, runtime schema, state volumes, validation, startup order, migration prerequisite, and rollback procedure. Full bootstrap and release automation remain separate tasks.
+
+Monitoring now identifies the shared ingress container and probes Staging web through the stable Staging alias. No active Production public-route monitoring is claimed. Production route probes and final environment-labeled public ingress monitoring remain gated on Production activation and a focused monitoring review.
+
+## Acceptance evidence
+
+Deployment tests cover sole steady-state port ownership, legacy-edge profile/wrapper rejection, removal of Production local edge, hostname routing and canonical redirect, fixed network names and aliases, backend isolation, ingress hardening, closed wrapper grammar, resolved Compose mutation rejection, independent release authorities, and ingress release independence. Repository-only Compose resolution does not start containers or require public DNS.
+
+## Intentionally deferred
+
+VPS mutation, network creation, listener handoff, certificate issuance, DNS/Cloudflare changes, temporary-redirect removal, Production provisioning/deployment, real secrets, database operations, Telegram webhook registration, full bootstrap/release automation, and Production monitoring activation are not performed here.
