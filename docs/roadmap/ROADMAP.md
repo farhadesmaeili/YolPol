@@ -112,6 +112,11 @@ The final target operating model treats servers as disposable and rebuildable. S
 ## 5. Launch Readiness
 
 - [x] Confirm production domain as `https://yolpol.com`
+- [x] Add the isolated repository-side Production deployment contract (not deployed)
+- [ ] Implement Task 0064 shared-host ingress before Production activation on the one-VPS topology
+- [ ] Automate server bootstrap and authenticated release deployment
+- [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
+- [ ] Bootstrap and deploy the real Production environment after explicit approval
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 

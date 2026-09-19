@@ -35,10 +35,16 @@ expect_accepted_grammar() {
 /usr/sbin/visudo -cf /etc/sudoers.d/yolpol-deploy >/dev/null \
   || fail_test 'sudoers syntax validation'
 
-for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers deploy-edge backup-create; do
+for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers deploy-edge \
+  staff-provision staff-bootstrap-super-admin telegram-webhook-set telegram-webhook-info backup-create \
+  production-validate production-status production-health production-pull-approved-images \
+  production-deploy-database production-migrate production-deploy-app production-deploy-workers \
+  production-staff-provision production-staff-bootstrap-super-admin \
+  production-telegram-webhook-set production-telegram-webhook-info production-backup-create; do
   expect_accepted_grammar "$action"
 done
 expect_accepted_grammar backup-verify yolpol-staging-20260913T000000Z-abcdef0
+expect_accepted_grammar production-backup-verify yolpol-production-20260913T000000Z-abcdef0
 
 expect_rejected
 expect_rejected unknown
@@ -54,6 +60,18 @@ expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '\t')evil"
 expect_rejected backup-verify 'yolpol-staging-20260913T000000Z-abcdef0-é'
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-$(printf '%065d' 0)"
+expect_rejected production-status extra
+expect_rejected production-deploy-edge
+expect_rejected deploy-app production
+expect_rejected production-deploy-app staging
+expect_rejected migrate --environment production
+expect_rejected production-migrate --environment staging
+expect_rejected production-backup-verify
+expect_rejected production-backup-verify yolpol-staging-20260913T000000Z-abcdef0
+expect_rejected backup-verify yolpol-production-20260913T000000Z-abcdef0
+expect_rejected production-backup-verify '../../root/.ssh/authorized_keys'
+expect_rejected production-backup-verify 'yolpol-production-20260913T000000Z-$(id)'
+expect_rejected production-backup-verify "yolpol-production-20260913T000000Z-abcdef0$(printf '\n')evil"
 
 printf 'touch %s\n' "$MARKER" > /tmp/poison
 chmod 0644 /tmp/poison

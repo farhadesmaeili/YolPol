@@ -29,13 +29,23 @@ OPERATION_LOG=/opt/yolpol/runtime/deployment-operation.log
 LAST_BACKUP_FILE=/opt/yolpol/runtime/last-backup-created-at
 LOGROTATE_CONFIG=/etc/logrotate.d/yolpol-deploy
 RELEASE_DIRECTORY=/opt/yolpol/releases
-ACTIVE_RELEASE_DIRECTORY=/opt/yolpol/releases/active
-RELEASE_MANIFEST=/opt/yolpol/releases/active/release-manifest.json
-RELEASE_CHECKSUM=/opt/yolpol/releases/active/release-manifest.sha256
+STAGING_RELEASE_DIRECTORY=/opt/yolpol/releases/staging
+STAGING_ACTIVE_RELEASE_DIRECTORY=/opt/yolpol/releases/staging/active
+STAGING_RELEASE_MANIFEST=/opt/yolpol/releases/staging/active/release-manifest.json
+STAGING_RELEASE_CHECKSUM=/opt/yolpol/releases/staging/active/release-manifest.sha256
+PRODUCTION_RELEASE_DIRECTORY=/opt/yolpol/releases/production
+PRODUCTION_ACTIVE_RELEASE_DIRECTORY=/opt/yolpol/releases/production/active
+PRODUCTION_RELEASE_MANIFEST=/opt/yolpol/releases/production/active/release-manifest.json
+PRODUCTION_RELEASE_CHECKSUM=/opt/yolpol/releases/production/active/release-manifest.sha256
 STAGING_DIRECTORY=/opt/yolpol/staging
 STAGING_COMPOSE=/opt/yolpol/staging/compose.yaml
 STAGING_ENV=/opt/yolpol/staging/runtime.env
 STAGING_BACKUPS=/opt/yolpol/staging/backups
+PRODUCTION_DIRECTORY=/opt/yolpol/production
+PRODUCTION_COMPOSE=/opt/yolpol/production/compose.yaml
+PRODUCTION_ENV=/opt/yolpol/production/runtime.env
+PRODUCTION_BACKUPS=/opt/yolpol/production/backups
+PRODUCTION_LAST_BACKUP_FILE=/opt/yolpol/runtime/production-last-backup-created-at
 MONITORING_DIRECTORY=/opt/yolpol/monitoring
 MONITORING_COMPOSE=/opt/yolpol/monitoring/compose.yaml
 MONITORING_ENV=/opt/yolpol/monitoring/runtime.env
@@ -47,6 +57,7 @@ usage() {
   printf '%s\n' \
     'Usage: yolpol-deploy <command>' \
     '       yolpol-deploy backup-verify <backup-id>' \
+    '       yolpol-deploy production-backup-verify <backup-id>' \
     '' \
     'Commands:' \
     '  validate' \
@@ -63,7 +74,21 @@ usage() {
     '  telegram-webhook-set' \
     '  telegram-webhook-info' \
     '  backup-create' \
-    '  backup-verify <backup-id>' >&2
+    '  backup-verify <backup-id>' \
+    '  production-validate' \
+    '  production-status' \
+    '  production-health' \
+    '  production-pull-approved-images' \
+    '  production-deploy-database' \
+    '  production-migrate' \
+    '  production-deploy-app' \
+    '  production-deploy-workers' \
+    '  production-staff-provision' \
+    '  production-staff-bootstrap-super-admin' \
+    '  production-telegram-webhook-set' \
+    '  production-telegram-webhook-info' \
+    '  production-backup-create' \
+    '  production-backup-verify <backup-id>' >&2
 }
 
 fail() {
@@ -93,14 +118,24 @@ validate_backup_id() {
   printf '%s' "$candidate" | /usr/bin/grep -Eq '^yolpol-staging-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$'
 }
 
+validate_production_backup_id() {
+  candidate=$1
+  [ -n "$candidate" ] || return 1
+  [ "${#candidate}" -le 107 ] || return 1
+  case "$candidate" in
+    *[!A-Za-z0-9-]*) return 1 ;;
+  esac
+  printf '%s' "$candidate" | /usr/bin/grep -Eq '^yolpol-production-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$'
+}
+
 if [ "$#" -ge 1 ]; then
   candidate_action=$1
   shift
   case "$candidate_action" in
-    validate|status|health|telegram-webhook-info)
+    validate|status|health|telegram-webhook-info|production-validate|production-status|production-health|production-telegram-webhook-info)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
-    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create)
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-edge|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create|production-pull-approved-images|production-deploy-database|production-migrate|production-deploy-app|production-deploy-workers|production-staff-provision|production-staff-bootstrap-super-admin|production-telegram-webhook-set|production-backup-create)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
     backup-verify)
@@ -114,6 +149,19 @@ if [ "$#" -ge 1 ]; then
         REQUEST_VALID=true
       else
         REQUEST_ERROR='invalid backup ID'
+      fi
+      ;;
+    production-backup-verify)
+      if [ "$#" -ne 1 ]; then
+        REQUEST_ERROR='production-backup-verify requires exactly one backup ID'
+      elif validate_production_backup_id "$1"; then
+        ACTION=production-backup-verify
+        BACKUP_ID=$1
+        BACKUP_AUDIT_ID=$1
+        MUTATING=true
+        REQUEST_VALID=true
+      else
+        REQUEST_ERROR='invalid Production backup ID'
       fi
       ;;
     *) REQUEST_ERROR='unknown command' ;;
@@ -214,7 +262,6 @@ require_base_contract() {
   require_directory /opt/yolpol/bin 0 0 755
   require_directory /opt/yolpol/incoming 1001 1001 700
   require_directory "$RELEASE_DIRECTORY" 0 0 700
-  require_directory "$ACTIVE_RELEASE_DIRECTORY" 0 0 700
   require_directory "$RUNTIME_DIRECTORY" 0 0 700
   require_directory "$RUNTIME_TMP" 0 0 700
   require_file "$WRAPPER" 0 0 755
@@ -224,8 +271,6 @@ require_base_contract() {
   require_file "$OPERATION_LOG" 0 0 600
   require_file "$LAST_BACKUP_FILE" 0 0 600
   require_file "$LOGROTATE_CONFIG" 0 0 644
-  require_nonempty_file "$RELEASE_MANIFEST" 0 0 600
-  require_nonempty_file "$RELEASE_CHECKSUM" 0 0 600
   [ -S /var/run/docker.sock ] || fail 'Docker socket is unavailable'
   socket_owner=$(/usr/bin/stat -c '%u' /var/run/docker.sock)
   socket_group=$(/usr/bin/stat -c '%g' /var/run/docker.sock)
@@ -234,6 +279,20 @@ require_base_contract() {
   [ $((0$socket_mode & 007)) -eq 0 ] || fail 'Docker socket is world accessible'
   operator_groups=$(/usr/bin/id -G yolpol-operator) || fail 'operator identity is unavailable'
   case " $operator_groups " in *" $socket_group "*) fail 'operator must not have Docker socket group access' ;; esac
+}
+
+require_staging_release_filesystem() {
+  require_directory "$STAGING_RELEASE_DIRECTORY" 0 0 700
+  require_directory "$STAGING_ACTIVE_RELEASE_DIRECTORY" 0 0 700
+  require_nonempty_file "$STAGING_RELEASE_MANIFEST" 0 0 600
+  require_nonempty_file "$STAGING_RELEASE_CHECKSUM" 0 0 600
+}
+
+require_production_release_filesystem() {
+  require_directory "$PRODUCTION_RELEASE_DIRECTORY" 0 0 700
+  require_directory "$PRODUCTION_ACTIVE_RELEASE_DIRECTORY" 0 0 700
+  require_nonempty_file "$PRODUCTION_RELEASE_MANIFEST" 0 0 600
+  require_nonempty_file "$PRODUCTION_RELEASE_CHECKSUM" 0 0 600
 }
 
 require_staging_filesystem() {
@@ -245,6 +304,18 @@ require_staging_filesystem() {
   for file in postgres.env app-database.env migration-database.env backup-database.env; do require_nonempty_file "/opt/yolpol/staging/secrets/$file" 0 0 400; done
   for file in telegram-bot-token telegram-webhook-secret groq-api-key; do require_nonempty_file "/opt/yolpol/staging/secrets/$file" 10001 10001 400; done
   require_directory "$STAGING_BACKUPS" 10001 10001 700
+}
+
+require_production_filesystem() {
+  require_directory "$PRODUCTION_DIRECTORY" 0 0 750
+  require_directory /opt/yolpol/production/secrets 0 0 700
+  require_file "$PRODUCTION_COMPOSE" 0 0 644
+  require_file /opt/yolpol/production/Caddyfile 0 0 644
+  require_file "$PRODUCTION_ENV" 0 0 600
+  require_file "$PRODUCTION_LAST_BACKUP_FILE" 0 0 600
+  for file in postgres.env app-database.env migration-database.env backup-database.env; do require_nonempty_file "/opt/yolpol/production/secrets/$file" 0 0 400; done
+  for file in telegram-bot-token telegram-webhook-secret groq-api-key; do require_nonempty_file "/opt/yolpol/production/secrets/$file" 10001 10001 400; done
+  require_directory "$PRODUCTION_BACKUPS" 10001 10001 700
 }
 
 require_monitoring_filesystem() {
@@ -270,12 +341,18 @@ staging_compose() {
     "$COMPOSE" --ansi never -p yolpol-staging --project-directory "$STAGING_DIRECTORY" --env-file "$STAGING_ENV" -f "$STAGING_COMPOSE" "$@"
 }
 
+production_compose() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-production --project-directory "$PRODUCTION_DIRECTORY" --env-file "$PRODUCTION_ENV" -f "$PRODUCTION_COMPOSE" "$@"
+}
+
 monitoring_compose() {
   /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root DOCKER_CONFIG=/root/.docker TMPDIR="$RUNTIME_TMP" LC_ALL=C \
     "$COMPOSE" --ansi never -p yolpol-monitoring --project-directory "$MONITORING_DIRECTORY" --env-file "$MONITORING_ENV" -f "$MONITORING_COMPOSE" "$@"
 }
 
 validate_staging_contract() {
+  require_staging_release_filesystem
   require_staging_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-staging
   if ! resolved_compose=$(staging_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
@@ -285,7 +362,19 @@ validate_staging_contract() {
   resolved_compose=''
 }
 
+validate_production_contract() {
+  require_production_release_filesystem
+  require_production_filesystem
+  /usr/bin/python3 -I -B "$POLICY" validate-production
+  if ! resolved_compose=$(production_compose --profile shared-ingress-prerequisite --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json 2>/dev/null); then
+    fail 'Production Compose resolution failed'
+  fi
+  printf '%s' "$resolved_compose" | /usr/bin/python3 -I -B "$POLICY" validate-production-compose
+  resolved_compose=''
+}
+
 validate_monitoring_contract() {
+  require_staging_release_filesystem
   require_monitoring_filesystem
   /usr/bin/python3 -I -B "$POLICY" validate-monitoring
   if ! resolved_compose=$(monitoring_compose config --format json 2>/dev/null); then
@@ -296,7 +385,9 @@ validate_monitoring_contract() {
 }
 
 read_revision() {
-  /usr/bin/python3 -I -B - "$STAGING_ENV" <<'PY'
+  revision_environment=$STAGING_ENV
+  case "$ACTION" in production-*) revision_environment=$PRODUCTION_ENV ;; esac
+  /usr/bin/python3 -I -B - "$revision_environment" <<'PY'
 import re
 import sys
 try:
@@ -358,11 +449,27 @@ check_backup_capacity() {
   [ $((now - last_backup)) -ge "$MIN_BACKUP_INTERVAL_SECONDS" ] || fail 'backup creation is rate limited'
 }
 
+check_production_backup_capacity() {
+  available_kib=$(/usr/bin/df -Pk "$PRODUCTION_BACKUPS" | /usr/bin/awk 'END {print $4}')
+  case "$available_kib" in *[!0-9]*|'') fail 'Production backup capacity check failed' ;; esac
+  [ "$available_kib" -ge "$MIN_BACKUP_FREE_KIB" ] || fail 'Production backup free-space floor not met'
+  last_backup=$(/usr/bin/stat -c '%Y' "$PRODUCTION_LAST_BACKUP_FILE") || fail 'Production backup throttle state failed'
+  now=$(/usr/bin/date -u +%s)
+  case "$last_backup:$now" in *[!0-9:]*) fail 'Production backup throttle state failed' ;; esac
+  [ "$now" -ge "$last_backup" ] || fail 'Production backup throttle clock moved backwards'
+  [ $((now - last_backup)) -ge "$MIN_BACKUP_INTERVAL_SECONDS" ] || fail 'Production backup creation is rate limited'
+}
+
 show_status() {
   validate_staging_contract
   validate_monitoring_contract
   staging_compose ps
   monitoring_compose ps
+}
+
+show_production_status() {
+  validate_production_contract
+  production_compose ps
 }
 
 check_health() {
@@ -371,6 +478,14 @@ check_health() {
     staging_compose ps --status running --services | /usr/bin/grep -Fxq "$service" || fail 'required Staging service is not running'
   done
   staging_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then((response)=>{if(!response.ok)process.exit(1);process.stdout.write('ready\\n')}).catch(()=>process.exit(1))"
+}
+
+check_production_health() {
+  validate_production_contract
+  for service in web postgres inquiry-notifications conversation-translation conversation-ai-fallback; do
+    production_compose ps --status running --services | /usr/bin/grep -Fxq "$service" || fail 'required Production service is not running'
+  done
+  production_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then((response)=>{if(!response.ok)process.exit(1);process.stdout.write('ready\\n')}).catch(()=>process.exit(1))"
 }
 
 run_mutating_action() {
@@ -425,6 +540,48 @@ run_mutating_action() {
       validate_staging_contract
       staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set
       ;;
+    production-pull-approved-images)
+      validate_production_contract
+      production_compose --profile migration --profile backup pull
+      ;;
+    production-deploy-database)
+      validate_production_contract
+      production_compose up -d --no-build --no-deps postgres
+      ;;
+    production-migrate)
+      validate_production_contract
+      run_sensitive production_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate
+      ;;
+    production-deploy-app)
+      validate_production_contract
+      production_compose up -d --no-build --no-deps web
+      ;;
+    production-deploy-workers)
+      validate_production_contract
+      production_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback
+      ;;
+    production-backup-create)
+      validate_production_contract
+      check_production_backup_capacity
+      run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create
+      /usr/bin/touch "$PRODUCTION_LAST_BACKUP_FILE"
+      ;;
+    production-backup-verify)
+      validate_production_contract
+      run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
+      ;;
+    production-staff-provision)
+      validate_production_contract
+      run_interactive production_compose --profile staff-operations run --rm --no-deps staff-provision
+      ;;
+    production-staff-bootstrap-super-admin)
+      validate_production_contract
+      run_interactive production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin
+      ;;
+    production-telegram-webhook-set)
+      validate_production_contract
+      production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set
+      ;;
   esac
 }
 
@@ -461,6 +618,13 @@ else
     telegram-webhook-info)
       validate_staging_contract
       staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info
+      ;;
+    production-validate) validate_production_contract ;;
+    production-status) show_production_status ;;
+    production-health) check_production_health ;;
+    production-telegram-webhook-info)
+      validate_production_contract
+      production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info
       ;;
   esac
 fi
