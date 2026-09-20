@@ -24,6 +24,7 @@ try {
     "deploy/operations/yolpol-deploy",
     "deploy/operations/yolpol-deploy-policy.py",
     "deploy/operations/sudoers.yolpol-deploy",
+    "deploy/control-plane/sudoers.yolpol-deployment-agent",
   ]) {
     copyFileSync(resolve(source), join(temporaryContext, basename(source)));
   }

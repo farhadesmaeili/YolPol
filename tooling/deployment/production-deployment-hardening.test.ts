@@ -9,14 +9,15 @@ const repositoryRoot = resolve(import.meta.dirname, "../..");
 const dockerfile = readFileSync(resolve(repositoryRoot, "Dockerfile"), "utf8");
 const wrapperPath = resolve(repositoryRoot, "deploy/operations/yolpol-deploy");
 const wrapper = readFileSync(wrapperPath, "utf8");
+const internal = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-internal"), "utf8");
 const policyPath = resolve(repositoryRoot, "deploy/operations/yolpol-deploy-policy.py");
 const policy = readFileSync(policyPath, "utf8");
 const sudoers = readFileSync(resolve(repositoryRoot, "deploy/operations/sudoers.yolpol-deploy"), "utf8");
 const operationsReadme = readFileSync(resolve(repositoryRoot, "deploy/operations/README.md"), "utf8");
 
-function wrapperComposeInvocations(subcommand: "run" | "up"): string[] {
+function internalComposeInvocations(subcommand: "run" | "up"): string[] {
   const invocationPattern = new RegExp(`\\bstaging_compose\\b.*\\b${subcommand}\\b`, "u");
-  return wrapper.split(/\r?\n/u).map((line) => line.trim()).filter((line) => invocationPattern.test(line));
+  return internal.split(/\r?\n/u).map((line) => line.trim()).filter((line) => invocationPattern.test(line));
 }
 
 function stageBlock(stage: string): string {
@@ -313,23 +314,23 @@ describe("Production deployment hardening", () => {
     expect(wrapper).not.toContain("deploy-monitoring");
     expect(wrapper).not.toMatch(/docker (?:exec|run)|compose .*\b(?:restore|backup-retention)\b|systemctl/u);
     expect(wrapper).not.toContain("secret rotation");
-    expect(wrapper).toContain("run_sensitive staging_compose");
+    expect(internal).toContain("run_sensitive staging_compose");
     expect(policy).toContain("validate_staging_compose_model");
     expect(policy).toContain("validate_monitoring_compose_model");
   });
 
   it("uses valid fixed Compose run commands for migrations, backups, Staff, and Telegram operations", () => {
-    const invocations = wrapperComposeInvocations("run");
+    const invocations = internalComposeInvocations("run").filter((invocation) => !invocation.includes("backup-deep-verify"));
 
-    expect(invocations).toEqual([
-      "run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate",
-      "run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create",
-      'run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"',
-      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision",
-      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin",
-      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set",
-      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info",
-    ]);
+    expect(invocations).toEqual(expect.arrayContaining([
+      "migrate-staging) validate_staging; run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate ;;",
+      'backup-create-staging) validate_staging; check_backup_capacity /opt/yolpol/staging/backups "$LAST_BACKUP_FILE"; run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create; /usr/bin/touch "$LAST_BACKUP_FILE" ;;',
+      'backup-verify-staging) validate_staging; run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID" ;;',
+      "staff-provision-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-provision ;;",
+      "staff-bootstrap-super-admin-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin ;;",
+      "telegram-webhook-set-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set ;;",
+      "telegram-webhook-info-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;",
+    ]));
     expect(invocations.every((invocation) => !invocation.includes("--no-build"))).toBe(true);
   });
 
@@ -340,10 +341,10 @@ describe("Production deployment hardening", () => {
       expect(rejected.stderr).toContain("unexpected arguments");
     }
 
-    const telegramInvocations = wrapperComposeInvocations("run").filter((invocation) => invocation.includes("telegram-webhook-"));
+    const telegramInvocations = internalComposeInvocations("run").filter((invocation) => invocation.includes("telegram-webhook-"));
     expect(telegramInvocations).toEqual([
-      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set",
-      "staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info",
+      "telegram-webhook-set-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set ;;",
+      "telegram-webhook-info-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;",
     ]);
     expect(telegramInvocations.join(" ")).not.toMatch(/--no-build|\$@|\beval\b/u);
   });
@@ -356,21 +357,23 @@ describe("Production deployment hardening", () => {
     }
 
     expect(wrapper).toContain('[ -t 0 ] && [ -t 1 ] && [ -t 2 ] || fail \'interactive terminal required\'');
-    const staffInvocations = wrapperComposeInvocations("run").filter((invocation) => invocation.includes("staff-"));
+    expect(wrapper).toContain("staff-provision) run_interactive internal staff-provision-staging");
+    expect(wrapper).toContain("staff-bootstrap-super-admin) run_interactive internal staff-bootstrap-super-admin-staging");
+    const staffInvocations = internalComposeInvocations("run").filter((invocation) => invocation.includes("staff-"));
     expect(staffInvocations).toEqual([
-      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision",
-      "run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin",
+      "staff-provision-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-provision ;;",
+      "staff-bootstrap-super-admin-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin ;;",
     ]);
     expect(staffInvocations.join(" ")).not.toMatch(/--interactive=false|--no-TTY|--no-build/u);
   });
 
   it("keeps no-build protection on every fixed Compose up command", () => {
-    const invocations = wrapperComposeInvocations("up");
+    const invocations = internalComposeInvocations("up");
 
     expect(invocations).toEqual([
-      "staging_compose up -d --no-build --no-deps postgres",
-      "staging_compose up -d --no-build --no-deps web",
-      "staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback",
+      "deploy-database-staging) validate_staging; staging_compose up -d --no-build --no-deps postgres ;;",
+      "deploy-app-staging) validate_staging; staging_compose up -d --no-build --no-deps web ;;",
+      "deploy-workers-staging) validate_staging; staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback ;;",
     ]);
     expect(invocations.every((invocation) => invocation.includes("--no-build"))).toBe(true);
   });

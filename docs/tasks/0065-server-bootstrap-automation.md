@@ -44,6 +44,8 @@ Bootstrap creates no application/database/Monitoring volumes and starts no Compo
 
 Phase C remains responsible for authenticated release retrieval, automatic Staging deployment, health/readiness/smoke gates, Production approval, exact same-digest promotion, migration/backup gates, and deployment records. Phase D remains responsible for actual disposable rebuild and backup-recovery proof.
 
+Task 0066 later extended this bootstrap inventory with an isolated deployment-agent account, control-plane contracts, systemd units, strict credential-path metadata, ledger/journal directories, and an exact two-command agent sudo rule. The extension does not enable/start the timer or generate credentials; the original Phase B activation boundary remains intact.
+
 ## Validation
 
 The focused Vitest contract covers supported-host assumptions, closed grammar, fixed installation inventory, secret/runtime/release separation, unchanged sudoers, fixed networks, actual Docker Compose env-file parsing, and absence of activation/destructive surfaces. The disposable Debian test covers root enforcement, command grammar, fixed source ownership/mode/symlink rejection, directory convergence, base-versus-Production readiness, release-pair failure injection, privileged-group/broad-sudo rejection, recovery-secret absence, repeated apply, exact modes, closed runtime schema, secret no-log behavior, explicit rotation, incompatible network rejection, and release-authority separation. Existing deployment policy/adversarial tests continue to validate the installed wrapper contract.

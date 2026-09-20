@@ -40,6 +40,9 @@ SUPPORTED_ARCHITECTURE = "x86_64"
 OPERATOR_NAME = "yolpol-operator"
 OPERATOR_UID = 1001
 OPERATOR_GID = 1001
+AGENT_NAME = "yolpol-deployment-agent"
+AGENT_UID = 1002
+AGENT_GID = 1002
 CONTAINER_UID = 10001
 CONTAINER_GID = 10001
 COMPOSE_PATH = Path("/usr/libexec/docker/cli-plugins/docker-compose")
@@ -92,6 +95,7 @@ DIRECTORIES = (
     DirectoryContract("/opt/yolpol/releases/production/active", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/runtime", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/runtime/tmp", 0, 0, 0o700),
+    DirectoryContract("/opt/yolpol/runtime/deployment-journals", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/staging", 0, 0, 0o750),
     DirectoryContract("/opt/yolpol/staging/secrets", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/staging/backups", CONTAINER_UID, CONTAINER_GID, 0o700),
@@ -106,6 +110,9 @@ DIRECTORIES = (
     DirectoryContract("/opt/yolpol/monitoring/blackbox", 0, 0, 0o755),
     DirectoryContract("/opt/yolpol/monitoring/secrets", 0, 0, 0o700),
     DirectoryContract("/root/.docker", 0, 0, 0o700),
+    DirectoryContract("/etc/yolpol", 0, 0, 0o755),
+    DirectoryContract("/etc/yolpol/control-plane", 0, AGENT_GID, 0o750),
+    DirectoryContract("/var/lib/yolpol-deployment-agent", AGENT_UID, AGENT_GID, 0o700),
 )
 
 STATE_FILES = (
@@ -114,6 +121,7 @@ STATE_FILES = (
     ("/opt/yolpol/runtime/deployment-operation.log", 0o600, b""),
     ("/opt/yolpol/runtime/last-backup-created-at", 0o600, b""),
     ("/opt/yolpol/runtime/production-last-backup-created-at", 0o600, b""),
+    ("/opt/yolpol/runtime/deployment-ledger.json", 0o600, b'{"schemaVersion":1,"records":[]}\n'),
     ("/root/.docker/config.json", 0o600, b"{}\n"),
 )
 
@@ -121,6 +129,13 @@ MANAGED_FILES = (
     FileContract("deploy/bootstrap/yolpol-bootstrap.py", "/opt/yolpol/bin/yolpol-bootstrap", 0, 0, 0o555),
     FileContract("deploy/operations/yolpol-deploy", "/opt/yolpol/bin/yolpol-deploy", 0, 0, 0o755),
     FileContract("deploy/operations/yolpol-deploy-policy.py", "/opt/yolpol/bin/yolpol-deploy-policy", 0, 0, 0o555),
+    FileContract("deploy/operations/yolpol-deploy-internal", "/opt/yolpol/bin/yolpol-deploy-internal", 0, 0, 0o500),
+    FileContract("deploy/control-plane/yolpol_control_plane.py", "/opt/yolpol/bin/yolpol_control_plane.py", 0, 0, 0o555),
+    FileContract("deploy/control-plane/yolpol-deployment-agent.py", "/opt/yolpol/bin/yolpol-deployment-agent", 0, 0, 0o555),
+    FileContract("deploy/control-plane/yolpol-release-controller.py", "/opt/yolpol/bin/yolpol-release-controller", 0, 0, 0o500),
+    FileContract("deploy/control-plane/yolpol-deployment-agent.service", "/etc/systemd/system/yolpol-deployment-agent.service", 0, 0, 0o644),
+    FileContract("deploy/control-plane/yolpol-deployment-agent.timer", "/etc/systemd/system/yolpol-deployment-agent.timer", 0, 0, 0o644),
+    FileContract("deploy/control-plane/agent.json.example", "/etc/yolpol/control-plane/agent.json.example", 0, AGENT_GID, 0o440),
     FileContract("deploy/operations/logrotate.yolpol-deploy", "/etc/logrotate.d/yolpol-deploy", 0, 0, 0o644),
     FileContract("deploy/staging/compose.yaml", "/opt/yolpol/staging/compose.yaml", 0, 0, 0o644),
     FileContract("deploy/staging/Caddyfile", "/opt/yolpol/staging/Caddyfile", 0, 0, 0o644),
@@ -137,6 +152,12 @@ MANAGED_FILES = (
 
 SUDOERS_SOURCE = "deploy/operations/sudoers.yolpol-deploy"
 SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deploy")
+AGENT_SUDOERS_SOURCE = "deploy/control-plane/sudoers.yolpol-deployment-agent"
+AGENT_SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deployment-agent")
+CONTROL_PLANE_CONFIG = Path("/etc/yolpol/control-plane/agent.json")
+GITHUB_APP_PRIVATE_KEY = Path("/etc/yolpol/control-plane/github-app-private.pem")
+STAGING_CAPABILITY_PRIVATE_KEY = Path("/etc/yolpol/control-plane/staging-capability-private.pem")
+PRODUCTION_CAPABILITY_PRIVATE_KEY = Path("/etc/yolpol/control-plane/production-capability-private.pem")
 
 
 @dataclass(frozen=True)
@@ -219,12 +240,12 @@ def command_exists(path: str | Path) -> bool:
 
 
 def install_prerequisites() -> None:
-    base = ["/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/sbin/visudo"]
+    base = ["/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/bin/jq", "/usr/bin/openssl", "/usr/sbin/visudo"]
     if not all(command_exists(path) for path in base):
         run(["/usr/bin/apt-get", "update"])
         run([
             "/usr/bin/apt-get", "install", "--yes", "--no-install-recommends",
-            "python3", "acl", "curl", "ca-certificates", "gnupg", "sudo",
+            "python3", "acl", "curl", "ca-certificates", "gnupg", "jq", "openssl", "sudo",
         ])
     if not command_exists("/usr/bin/docker") or not command_exists(COMPOSE_PATH):
         install_docker_packages()
@@ -271,7 +292,7 @@ def install_docker_packages() -> None:
 
 def validate_prerequisites() -> None:
     for path in (
-        "/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/sbin/visudo",
+        "/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/bin/jq", "/usr/bin/openssl", "/usr/sbin/visudo",
         "/usr/bin/docker", COMPOSE_PATH,
     ):
         if not command_exists(path):
@@ -317,7 +338,146 @@ def ensure_operator() -> None:
     group_ids = os.getgrouplist(OPERATOR_NAME, OPERATOR_GID)
     validate_operator_groups(group_ids)
     validate_docker_socket(group_ids)
+    validate_agent_sudo(allow_missing=True)
     validate_operator_sudo(allow_missing=True)
+
+
+def ensure_deployment_agent() -> None:
+    try:
+        group = grp.getgrnam(AGENT_NAME)
+    except KeyError:
+        try:
+            conflicting_group = grp.getgrgid(AGENT_GID)
+        except KeyError:
+            conflicting_group = None
+        if conflicting_group is not None:
+            fail("deployment agent GID is already assigned")
+        run(["/usr/sbin/groupadd", "--system", "--gid", str(AGENT_GID), AGENT_NAME])
+        group = grp.getgrnam(AGENT_NAME)
+    if group.gr_gid != AGENT_GID:
+        fail("existing deployment agent group is incompatible")
+    try:
+        user = pwd.getpwnam(AGENT_NAME)
+    except KeyError:
+        try:
+            conflicting_user = pwd.getpwuid(AGENT_UID)
+        except KeyError:
+            conflicting_user = None
+        if conflicting_user is not None:
+            fail("deployment agent UID is already assigned")
+        run([
+            "/usr/sbin/useradd", "--system", "--uid", str(AGENT_UID), "--gid", str(AGENT_GID),
+            "--home-dir", "/nonexistent", "--no-create-home", "--shell", "/usr/sbin/nologin", AGENT_NAME,
+        ])
+        user = pwd.getpwnam(AGENT_NAME)
+    if (
+        user.pw_uid != AGENT_UID or user.pw_gid != AGENT_GID
+        or user.pw_shell != "/usr/sbin/nologin" or user.pw_dir != "/nonexistent"
+    ):
+        fail("existing deployment agent account is incompatible")
+    group_ids = os.getgrouplist(AGENT_NAME, AGENT_GID)
+    if set(group_ids) != {AGENT_GID}:
+        fail("deployment agent has supplementary group membership")
+    names = {entry.gr_name for entry in grp.getgrall() if entry.gr_gid in set(group_ids)}
+    if names & PRIVILEGED_GROUP_NAMES:
+        fail("deployment agent has privileged group membership")
+    validate_docker_socket(group_ids)
+    validate_agent_sudo(allow_missing=True)
+
+
+def validate_deployment_agent() -> None:
+    try:
+        user = pwd.getpwnam(AGENT_NAME)
+        group = grp.getgrnam(AGENT_NAME)
+    except KeyError as error:
+        raise BootstrapError("deployment agent identity is missing") from error
+    if (
+        user.pw_uid != AGENT_UID or user.pw_gid != AGENT_GID or group.gr_gid != AGENT_GID
+        or user.pw_shell != "/usr/sbin/nologin" or user.pw_dir != "/nonexistent"
+    ):
+        fail("deployment agent identity is incompatible")
+    group_ids = os.getgrouplist(AGENT_NAME, AGENT_GID)
+    if set(group_ids) != {AGENT_GID}:
+        fail("deployment agent has supplementary group membership")
+    validate_docker_socket(group_ids)
+    validate_agent_sudo(allow_missing=False)
+
+
+def validate_optional_control_plane_credentials() -> None:
+    contracts = (
+        (CONTROL_PLANE_CONFIG, 0, AGENT_GID, 0o440),
+        (GITHUB_APP_PRIVATE_KEY, 0, AGENT_GID, 0o440),
+        (STAGING_CAPABILITY_PRIVATE_KEY, 0, 0, 0o400),
+        (PRODUCTION_CAPABILITY_PRIVATE_KEY, 0, 0, 0o400),
+    )
+    for path, uid, gid, mode in contracts:
+        if not path.exists() and not path.is_symlink():
+            continue
+        check_metadata(path, uid, gid, mode, directory=False)
+        if not path.is_file() or path.stat().st_size == 0:
+            fail(f"control-plane credential/configuration is empty: {path}")
+
+
+def validate_agent_sudo(*, allow_missing: bool) -> None:
+    result = subprocess.run(
+        ["/usr/bin/sudo", "-n", "-l", "-U", AGENT_NAME],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"},
+    )
+    if result.returncode != 0:
+        if allow_missing:
+            return
+        fail("deployment agent sudo policy is unavailable")
+    try:
+        output = result.stdout.decode("utf-8", "strict")
+    except UnicodeError as error:
+        raise BootstrapError("deployment agent sudo policy output rejected") from error
+    marker = "may run the following commands"
+    marker_index = output.lower().find(marker)
+    if marker_index < 0:
+        if allow_missing and "not allowed to run sudo" in output.lower():
+            return
+        fail("deployment agent sudo policy cannot be proven")
+    expected = {
+        "/opt/yolpol/bin/yolpol-deploy apply-staging-intent",
+        "/opt/yolpol/bin/yolpol-deploy apply-production-intent",
+    }
+    commands: set[str] = set()
+    for line in (line.strip() for line in output[marker_index:].splitlines()[1:] if line.strip()):
+        permitted = exact_agent_sudo_commands(line)
+        if permitted is None:
+            fail("deployment agent has broader sudo privilege")
+        commands.update(permitted)
+    if commands != expected:
+        fail("deployment agent sudo policy is not exact")
+
+
+def exact_agent_sudo_commands(rule: str) -> set[str] | None:
+    run_as = re.fullmatch(r"\(([^()]*)\)\s+(.+)", rule)
+    if run_as is None or run_as.group(1).strip() != "root":
+        return None
+    remainder = run_as.group(2)
+    tags: list[str] = []
+    while True:
+        tag = re.match(r"^([A-Z][A-Z0-9_]*):\s*", remainder)
+        if tag is None:
+            break
+        tags.append(tag.group(1))
+        remainder = remainder[tag.end():]
+    if len(tags) != 2 or set(tags) != {"NOPASSWD", "NOSETENV"}:
+        return None
+    commands: set[str] = set()
+    for command in remainder.split(","):
+        match = re.fullmatch(
+            r"/opt/yolpol/bin/yolpol-deploy\s+(apply-staging-intent|apply-production-intent)",
+            command.strip(),
+        )
+        if match is None:
+            return None
+        commands.add(f"/opt/yolpol/bin/yolpol-deploy {match.group(1)}")
+    return commands or None
 
 
 def validate_operator() -> None:
@@ -567,11 +727,12 @@ def validate_source_file(relative_path: str) -> bytes:
             os.close(file_descriptor)
 
 
-def load_managed_source_material() -> tuple[Path, list[tuple[FileContract, bytes]], bytes]:
+def load_managed_source_material() -> tuple[Path, list[tuple[FileContract, bytes]], bytes, bytes]:
     source_root = trusted_source_root()
     sudoers_content = validate_source_file(SUDOERS_SOURCE)
+    agent_sudoers_content = validate_source_file(AGENT_SUDOERS_SOURCE)
     managed = [(contract, validate_source_file(contract.source)) for contract in MANAGED_FILES]
-    return source_root, managed, sudoers_content
+    return source_root, managed, sudoers_content, agent_sudoers_content
 
 
 def preflight_managed_destination(
@@ -594,17 +755,21 @@ def preflight_managed_destination(
 
 
 def install_managed_files(*, replace: bool) -> None:
-    source_root, managed, sudoers_content = load_managed_source_material()
+    source_root, managed, sudoers_content, agent_sudoers_content = load_managed_source_material()
     run(["/usr/sbin/visudo", "-cf", str(source_root / SUDOERS_SOURCE)], capture=True)
+    run(["/usr/sbin/visudo", "-cf", str(source_root / AGENT_SUDOERS_SOURCE)], capture=True)
     for contract, content in managed:
         preflight_managed_destination(
             Path(contract.destination), content, contract.uid, contract.gid, contract.mode, replace=replace,
         )
     preflight_managed_destination(SUDOERS_DESTINATION, sudoers_content, 0, 0, 0o440, replace=replace)
+    preflight_managed_destination(AGENT_SUDOERS_DESTINATION, agent_sudoers_content, 0, 0, 0o440, replace=replace)
     for contract, content in managed:
         atomic_write(Path(contract.destination), content, contract.uid, contract.gid, contract.mode, replace=replace)
     atomic_write(SUDOERS_DESTINATION, sudoers_content, 0, 0, 0o440, replace=replace)
+    atomic_write(AGENT_SUDOERS_DESTINATION, agent_sudoers_content, 0, 0, 0o440, replace=replace)
     run(["/usr/sbin/visudo", "-cf", str(SUDOERS_DESTINATION)], capture=True)
+    run(["/usr/sbin/visudo", "-cf", str(AGENT_SUDOERS_DESTINATION)], capture=True)
 
 
 def validate_all_source_material() -> None:
@@ -616,7 +781,9 @@ def validate_managed_files() -> None:
         destination = Path(contract.destination)
         check_metadata(destination, contract.uid, contract.gid, contract.mode, directory=False)
     check_metadata(SUDOERS_DESTINATION, 0, 0, 0o440, directory=False)
+    check_metadata(AGENT_SUDOERS_DESTINATION, 0, 0, 0o440, directory=False)
     run(["/usr/sbin/visudo", "-cf", str(SUDOERS_DESTINATION)], capture=True)
+    run(["/usr/sbin/visudo", "-cf", str(AGENT_SUDOERS_DESTINATION)], capture=True)
 
 
 def network_model(name: str) -> dict[str, Any] | None:
@@ -674,11 +841,16 @@ def bootstrap_apply(*, replace_contracts: bool) -> None:
     validate_supported_host()
     install_prerequisites()
     ensure_operator()
+    ensure_deployment_agent()
     for contract in DIRECTORIES:
         ensure_directory(contract)
     ensure_state_files()
     install_managed_files(replace=replace_contracts)
+    if command_exists("/usr/bin/systemctl"):
+        run(["/usr/bin/systemctl", "daemon-reload"])
     validate_operator_sudo(allow_missing=False)
+    validate_agent_sudo(allow_missing=False)
+    validate_optional_control_plane_credentials()
     ensure_networks()
 
 
@@ -686,11 +858,13 @@ def bootstrap_check() -> None:
     validate_supported_host()
     validate_prerequisites()
     validate_operator()
+    validate_deployment_agent()
     for contract in DIRECTORIES:
         check_metadata(Path(contract.path), contract.uid, contract.gid, contract.mode, directory=True)
     for name, mode, _ in STATE_FILES:
         check_metadata(Path(name), 0, 0, mode, directory=False)
     validate_managed_files()
+    validate_optional_control_plane_credentials()
     validate_networks()
 
 

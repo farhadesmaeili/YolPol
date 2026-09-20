@@ -14,6 +14,7 @@ const stagingCompose = readFileSync(resolve(repositoryRoot, "deploy/staging/comp
 const runtime = readFileSync(runtimePath, "utf8");
 const wrapperPath = resolve(repositoryRoot, "deploy/operations/yolpol-deploy");
 const wrapper = readFileSync(wrapperPath, "utf8");
+const internal = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-internal"), "utf8");
 const policy = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-policy.py"), "utf8");
 
 function serviceBlock(service: string): string {
@@ -172,10 +173,12 @@ describe("Production Compose deployment contract", () => {
       "production_compose up -d --no-build --no-deps postgres",
       "production_compose up -d --no-build --no-deps web",
       "production_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback",
-    ]) expect(wrapper).toContain(command);
-    expect(wrapper).not.toMatch(/production_compose up .*\bedge\b/u);
-    expect(wrapper).toContain("run_interactive production_compose --profile staff-operations run --rm --no-deps staff-provision");
-    expect(wrapper).toContain("run_interactive production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin");
+    ]) expect(internal).toContain(command);
+    expect(internal).not.toMatch(/production_compose up .*\bedge\b/u);
+    expect(internal).toContain("production_compose --profile staff-operations run --rm --no-deps staff-provision");
+    expect(internal).toContain("production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin");
+    expect(wrapper).toContain("production-staff-provision) run_interactive internal staff-provision-production");
+    expect(wrapper).toContain("production-staff-bootstrap-super-admin) run_interactive internal staff-bootstrap-super-admin-production");
   });
 
   dockerIt("resolves and passes the closed Production policy while rejecting adversarial mutations", () => {

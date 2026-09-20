@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll GitHub for authenticated YOLPOL deployments
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=1s
+RandomizedDelaySec=2s
+Persistent=false
+Unit=yolpol-deployment-agent.service
+
+[Install]
+WantedBy=timers.target

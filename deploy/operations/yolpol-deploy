@@ -21,6 +21,9 @@ umask 077
 YOLPOL_ROOT=/opt/yolpol
 WRAPPER=/opt/yolpol/bin/yolpol-deploy
 POLICY=/opt/yolpol/bin/yolpol-deploy-policy
+INTERNAL=/opt/yolpol/bin/yolpol-deploy-internal
+RELEASE_CONTROLLER=/opt/yolpol/bin/yolpol-release-controller
+CONTROL_PLANE_MODULE=/opt/yolpol/bin/yolpol_control_plane.py
 RUNTIME_DIRECTORY=/opt/yolpol/runtime
 RUNTIME_TMP=/opt/yolpol/runtime/tmp
 LOCK_FILE=/opt/yolpol/runtime/deployment.lock
@@ -76,6 +79,7 @@ usage() {
     '  telegram-webhook-set' \
     '  telegram-webhook-info' \
     '  backup-create' \
+    '  backup-create-verify-deep' \
     '  backup-verify <backup-id>' \
     '  production-validate' \
     '  production-status' \
@@ -90,11 +94,15 @@ usage() {
     '  production-telegram-webhook-set' \
     '  production-telegram-webhook-info' \
     '  production-backup-create' \
+    '  production-backup-create-verify-deep' \
     '  production-backup-verify <backup-id>' \
     '  ingress-validate' \
     '  ingress-status' \
     '  ingress-health' \
-    '  ingress-health-production' >&2
+    '  ingress-health-production' \
+    '  deploy-operations-exporter' \
+    '  apply-staging-intent' \
+    '  apply-production-intent' >&2
 }
 
 fail() {
@@ -141,7 +149,7 @@ if [ "$#" -ge 1 ]; then
     validate|status|health|telegram-webhook-info|production-validate|production-status|production-health|production-telegram-webhook-info|ingress-validate|ingress-status|ingress-health|ingress-health-production)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
-    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create|production-pull-approved-images|production-deploy-database|production-migrate|production-deploy-app|production-deploy-workers|production-staff-provision|production-staff-bootstrap-super-admin|production-telegram-webhook-set|production-backup-create)
+    pull-approved-images|deploy-database|migrate|deploy-app|deploy-workers|deploy-operations-exporter|staff-provision|staff-bootstrap-super-admin|telegram-webhook-set|backup-create|backup-create-verify-deep|production-pull-approved-images|production-deploy-database|production-migrate|production-deploy-app|production-deploy-workers|production-staff-provision|production-staff-bootstrap-super-admin|production-telegram-webhook-set|production-backup-create|production-backup-create-verify-deep|apply-staging-intent|apply-production-intent)
       if [ "$#" -eq 0 ]; then ACTION=$candidate_action; MUTATING=true; REQUEST_VALID=true; else REQUEST_ERROR='unexpected arguments'; fi
       ;;
     backup-verify)
@@ -255,9 +263,10 @@ require_system_trust() {
   require_directory /root 0 0 700
   require_directory /root/.docker 0 0 700
   require_file /root/.docker/config.json 0 0 600
-  for executable in /bin/sh /usr/bin/awk /usr/bin/date /usr/bin/df /usr/bin/env /usr/bin/flock /usr/bin/getfacl \
-    /usr/bin/grep /usr/bin/id /usr/bin/python3 /usr/bin/readlink /usr/bin/stat /usr/bin/sync \
-    /usr/bin/touch /usr/bin/docker "$COMPOSE"; do
+  for executable in /bin/sh /usr/bin/awk /usr/bin/cat /usr/bin/chmod /usr/bin/chown /usr/bin/curl \
+    /usr/bin/date /usr/bin/df /usr/bin/env /usr/bin/flock /usr/bin/getfacl /usr/bin/grep /usr/bin/id \
+    /usr/bin/jq /usr/bin/mktemp /usr/bin/openssl /usr/bin/python3 /usr/bin/readlink /usr/bin/rm \
+    /usr/bin/stat /usr/bin/sync /usr/bin/touch /usr/bin/wc /usr/bin/docker "$COMPOSE"; do
     require_trusted_executable "$executable"
   done
 }
@@ -272,6 +281,9 @@ require_base_contract() {
   require_directory "$RUNTIME_TMP" 0 0 700
   require_file "$WRAPPER" 0 0 755
   require_file "$POLICY" 0 0 555
+  require_file "$INTERNAL" 0 0 500
+  require_file "$RELEASE_CONTROLLER" 0 0 500
+  require_file "$CONTROL_PLANE_MODULE" 0 0 555
   require_file "$LOCK_FILE" 0 0 600
   require_file "$AUDIT_LOG" 0 0 600
   require_file "$OPERATION_LOG" 0 0 600
@@ -534,93 +546,36 @@ run_mutating_action() {
   exec 9>>"$LOCK_FILE"
   /usr/bin/flock -x 9
   case "$ACTION" in
-    pull-approved-images)
-      validate_staging_contract
-      validate_monitoring_contract
-      staging_compose --profile migration --profile backup pull
-      monitoring_compose pull
-      ;;
-    deploy-database)
-      validate_staging_contract
-      staging_compose up -d --no-build --no-deps postgres
-      ;;
-    migrate)
-      validate_staging_contract
-      run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate
-      ;;
-    deploy-app)
-      validate_staging_contract
-      staging_compose up -d --no-build --no-deps web
-      ;;
-    deploy-workers)
-      validate_staging_contract
-      staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback
-      ;;
-    backup-create)
-      validate_staging_contract
-      check_backup_capacity
-      run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create
-      /usr/bin/touch "$LAST_BACKUP_FILE"
-      ;;
-    backup-verify)
-      validate_staging_contract
-      run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
-      ;;
-    staff-provision)
-      validate_staging_contract
-      run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-provision
-      ;;
-    staff-bootstrap-super-admin)
-      validate_staging_contract
-      run_interactive staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin
-      ;;
-    telegram-webhook-set)
-      validate_staging_contract
-      staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set
-      ;;
-    production-pull-approved-images)
-      validate_production_contract
-      production_compose --profile migration --profile backup pull
-      ;;
-    production-deploy-database)
-      validate_production_contract
-      production_compose up -d --no-build --no-deps postgres
-      ;;
-    production-migrate)
-      validate_production_contract
-      run_sensitive production_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate
-      ;;
-    production-deploy-app)
-      validate_production_contract
-      production_compose up -d --no-build --no-deps web
-      ;;
-    production-deploy-workers)
-      validate_production_contract
-      production_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback
-      ;;
-    production-backup-create)
-      validate_production_contract
-      check_production_backup_capacity
-      run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create
-      /usr/bin/touch "$PRODUCTION_LAST_BACKUP_FILE"
-      ;;
-    production-backup-verify)
-      validate_production_contract
-      run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID"
-      ;;
-    production-staff-provision)
-      validate_production_contract
-      run_interactive production_compose --profile staff-operations run --rm --no-deps staff-provision
-      ;;
-    production-staff-bootstrap-super-admin)
-      validate_production_contract
-      run_interactive production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin
-      ;;
-    production-telegram-webhook-set)
-      validate_production_contract
-      production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set
-      ;;
+    pull-approved-images) internal pull-staging ;;
+    deploy-database) internal deploy-database-staging ;;
+    migrate) internal migrate-staging ;;
+    deploy-app) internal deploy-app-staging ;;
+    deploy-workers) internal deploy-workers-staging ;;
+    deploy-operations-exporter) internal deploy-operations-exporter ;;
+    backup-create) internal backup-create-staging ;;
+    backup-create-verify-deep) internal backup-create-verify-deep-staging ;;
+    backup-verify) internal backup-verify-staging "$BACKUP_ID" ;;
+    staff-provision) run_interactive internal staff-provision-staging ;;
+    staff-bootstrap-super-admin) run_interactive internal staff-bootstrap-super-admin-staging ;;
+    telegram-webhook-set) internal telegram-webhook-set-staging ;;
+    production-pull-approved-images) internal pull-production ;;
+    production-deploy-database) internal deploy-database-production ;;
+    production-migrate) internal migrate-production ;;
+    production-deploy-app) internal deploy-app-production ;;
+    production-deploy-workers) internal deploy-workers-production ;;
+    production-backup-create) internal backup-create-production ;;
+    production-backup-create-verify-deep) internal backup-create-verify-deep-production ;;
+    production-backup-verify) internal backup-verify-production "$BACKUP_ID" ;;
+    production-staff-provision) run_interactive internal staff-provision-production ;;
+    production-staff-bootstrap-super-admin) run_interactive internal staff-bootstrap-super-admin-production ;;
+    production-telegram-webhook-set) internal telegram-webhook-set-production ;;
+    apply-staging-intent) /usr/bin/python3 -B "$RELEASE_CONTROLLER" apply staging ;;
+    apply-production-intent) /usr/bin/python3 -B "$RELEASE_CONTROLLER" apply production ;;
   esac
+}
+
+internal() {
+  YOLPOL_INTERNAL_LOCK_FD=9 "$INTERNAL" "$@"
 }
 
 if [ "$REQUEST_VALID" != true ] && [ "$(/usr/bin/id -u)" != 0 ]; then
@@ -650,23 +605,21 @@ if [ "$MUTATING" = true ]; then
   run_mutating_action
 else
   case "$ACTION" in
-    validate) validate_staging_contract; validate_monitoring_contract ;;
-    status) show_status ;;
-    health) check_health ;;
+    validate) "$INTERNAL" validate-staging ;;
+    status) "$INTERNAL" status-staging ;;
+    health) "$INTERNAL" health-staging ;;
     telegram-webhook-info)
-      validate_staging_contract
-      staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info
+      "$INTERNAL" telegram-webhook-info-staging
       ;;
-    production-validate) validate_production_contract ;;
-    production-status) show_production_status ;;
-    production-health) check_production_health ;;
-    ingress-validate) validate_ingress_contract ;;
-    ingress-status) validate_ingress_contract; ingress_compose ps ;;
-    ingress-health) check_ingress_health ;;
-    ingress-health-production) check_ingress_production_health ;;
+    production-validate) "$INTERNAL" validate-production ;;
+    production-status) "$INTERNAL" status-production ;;
+    production-health) "$INTERNAL" health-production ;;
+    ingress-validate) "$INTERNAL" ingress-validate ;;
+    ingress-status) "$INTERNAL" ingress-status ;;
+    ingress-health) "$INTERNAL" ingress-health-staging ;;
+    ingress-health-production) "$INTERNAL" ingress-health-production ;;
     production-telegram-webhook-info)
-      validate_production_contract
-      production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info
+      "$INTERNAL" telegram-webhook-info-production
       ;;
   esac
 fi

@@ -1,8 +1,8 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface available to `yolpol-operator`.
+This directory implements Phase B server bootstrap and the narrow Task 0066 extension that installs, but does not activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface.
 
-Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, or remove legacy rollback state. Release download/authentication and routine Staging/Production promotion remain Phase C.
+Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the inactive Phase C1 control-plane contract.
 
 ## Supported host
 
@@ -31,11 +31,13 @@ The bootstrap cannot authenticate its own bytes after root has already executed 
 
 There is no arbitrary source-path option. `apply` and `refresh-contracts` revalidate the fixed root-only source tree and read allow-listed files with no-follow descriptors before installing them. They never install contracts directly from an operator checkout. The installed `/opt/yolpol/bin/yolpol-bootstrap` deliberately cannot apply or refresh repository contracts.
 
-The normal operator remains UID/GID `1001:1001`, has no supplementary groups, has no Docker-socket access, and has no sudo beyond the exact wrapper command. Effective `sudo -l -U yolpol-operator` output is checked so a conflicting host-level grant fails closed. UID/GID `10001:10001` remains container-only and must not identify a host user or group. Bootstrap is not added to sudoers. The only unattended grant remains:
+The normal operator remains UID/GID `1001:1001`, has no supplementary groups, has no Docker-socket access, and has no sudo beyond the exact wrapper command. Effective `sudo -l -U yolpol-operator` output is checked so a conflicting host-level grant fails closed. UID/GID `10001:10001` remains container-only and must not identify a host user or group. Bootstrap is not added to sudoers. The operator grant remains:
 
 ```text
 /opt/yolpol/bin/yolpol-deploy
 ```
+
+Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. See `deploy/control-plane/README.md`.
 
 ## Commands
 
@@ -81,7 +83,7 @@ Then use the installed root-only command to install independently approved input
 7. Prove foundation convergence by running source-only `apply` again from the same authenticated fixed source followed by base `check`.
 8. In the later explicitly approved Production phase, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production`.
 
-The sequence prepares host state only. Root-controlled ingress/Monitoring activation and future release deployment remain separate reviewed procedures.
+The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures.
 
 ## Runtime installation
 

@@ -87,6 +87,14 @@ class BootstrapTests(unittest.TestCase):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "must run as root"):
                 bootstrap.require_root()
 
+    def test_deployment_agent_identity_and_exact_sudo_are_enforced(self) -> None:
+        with mock.patch.object(bootstrap, "validate_docker_socket"):
+            bootstrap.validate_deployment_agent()
+        account = __import__("pwd").getpwnam("yolpol-deployment-agent")
+        self.assertEqual((account.pw_uid, account.pw_gid, account.pw_dir, account.pw_shell), (
+            1002, 1002, "/nonexistent", "/usr/sbin/nologin",
+        ))
+
     def test_directory_creation_is_idempotent_and_rejects_incompatible_state(self) -> None:
         target = self.temporary / "foundation"
         contract = bootstrap.DirectoryContract(str(target), 0, 0, 0o750)
@@ -133,20 +141,30 @@ class BootstrapTests(unittest.TestCase):
             "yolpol-operator ALL=(root) NOPASSWD:NOSETENV: "
             "/opt/yolpol/bin/yolpol-deploy\n"
         ).encode("ascii")
+        agent_sudoers_content = (
+            "yolpol-deployment-agent ALL=(root) NOPASSWD:NOSETENV: "
+            "/opt/yolpol/bin/yolpol-deploy apply-staging-intent, "
+            "/opt/yolpol/bin/yolpol-deploy apply-production-intent\n"
+        ).encode("ascii")
         (source_root / "sudoers").write_bytes(sudoers_content)
+        (source_root / "agent-sudoers").write_bytes(agent_sudoers_content)
         first = destination_root / "first"
         second = destination_root / "second"
         sudoers_destination = destination_root / "installed-sudoers"
+        agent_sudoers_destination = destination_root / "installed-agent-sudoers"
         second.write_bytes(b"old-second\n")
         second.chmod(0o600)
         sudoers_destination.write_bytes(sudoers_content)
         sudoers_destination.chmod(0o440)
+        agent_sudoers_destination.write_bytes(agent_sudoers_content)
+        agent_sudoers_destination.chmod(0o440)
         contracts = (
             bootstrap.FileContract("source-first", str(first), 0, 0, 0o600),
             bootstrap.FileContract("source-second", str(second), 0, 0, 0o600),
         )
         source_content = {
             "sudoers": sudoers_content,
+            "agent-sudoers": agent_sudoers_content,
             "source-first": b"new-first\n",
             "source-second": b"new-second\n",
         }
@@ -154,6 +172,8 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "MANAGED_FILES", contracts),
             mock.patch.object(bootstrap, "SUDOERS_SOURCE", "sudoers"),
             mock.patch.object(bootstrap, "SUDOERS_DESTINATION", sudoers_destination),
+            mock.patch.object(bootstrap, "AGENT_SUDOERS_SOURCE", "agent-sudoers"),
+            mock.patch.object(bootstrap, "AGENT_SUDOERS_DESTINATION", agent_sudoers_destination),
             mock.patch.object(bootstrap, "trusted_source_root", return_value=source_root),
             mock.patch.object(bootstrap, "validate_source_file", side_effect=source_content.__getitem__),
         ):
@@ -351,7 +371,8 @@ class BootstrapTests(unittest.TestCase):
     def test_foundation_check_is_independent_from_production_readiness(self) -> None:
         base_functions = (
             "validate_supported_host", "validate_prerequisites", "validate_operator",
-            "validate_managed_files", "validate_networks",
+            "validate_deployment_agent", "validate_managed_files",
+            "validate_optional_control_plane_credentials", "validate_networks",
         )
         patches = [mock.patch.object(bootstrap, name) for name in base_functions]
         with contextlib.ExitStack() as stack:
@@ -377,11 +398,15 @@ class BootstrapTests(unittest.TestCase):
             mock.patch.object(bootstrap, "validate_supported_host"),
             mock.patch.object(bootstrap, "install_prerequisites"),
             mock.patch.object(bootstrap, "ensure_operator"),
+            mock.patch.object(bootstrap, "ensure_deployment_agent"),
             mock.patch.object(bootstrap, "ensure_directory") as ensure_directory,
             mock.patch.object(bootstrap, "ensure_state_files") as ensure_state,
             mock.patch.object(bootstrap, "install_managed_files") as install_managed,
             mock.patch.object(bootstrap, "validate_operator_sudo") as validate_sudo,
+            mock.patch.object(bootstrap, "validate_agent_sudo") as validate_agent_sudo,
+            mock.patch.object(bootstrap, "validate_optional_control_plane_credentials"),
             mock.patch.object(bootstrap, "ensure_networks") as ensure_networks,
+            mock.patch.object(bootstrap, "command_exists", return_value=False),
         ):
             bootstrap.bootstrap_apply(replace_contracts=False)
             bootstrap.bootstrap_apply(replace_contracts=False)
@@ -389,6 +414,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(ensure_state.call_count, 2)
         self.assertEqual(install_managed.call_count, 2)
         self.assertEqual(validate_sudo.call_count, 2)
+        self.assertEqual(validate_agent_sudo.call_count, 2)
         self.assertEqual(ensure_networks.call_count, 2)
 
     def test_release_authorities_are_separate(self) -> None:
@@ -477,6 +503,65 @@ class BootstrapTests(unittest.TestCase):
             sudoers_path.write_bytes(valid)
             sudoers_path.chmod(0o440)
         bootstrap.validate_operator_sudo(allow_missing=False)
+
+    def test_agent_sudo_tags_and_commands_are_semantically_exact(self) -> None:
+        expected = {
+            "/opt/yolpol/bin/yolpol-deploy apply-staging-intent",
+            "/opt/yolpol/bin/yolpol-deploy apply-production-intent",
+        }
+        self.assertEqual(
+            bootstrap.exact_agent_sudo_commands(
+                "(root) NOSETENV: NOPASSWD: "
+                "/opt/yolpol/bin/yolpol-deploy apply-production-intent, "
+                "/opt/yolpol/bin/yolpol-deploy apply-staging-intent"
+            ),
+            expected,
+        )
+        sudoers_path = bootstrap.AGENT_SUDOERS_DESTINATION
+        valid = sudoers_path.read_bytes()
+        prefix = "yolpol-deployment-agent ALL=(root) "
+        commands = (
+            "/opt/yolpol/bin/yolpol-deploy apply-staging-intent, "
+            "/opt/yolpol/bin/yolpol-deploy apply-production-intent"
+        )
+        invalid_grants = {
+            "missing-no-setenv": f"{prefix}NOPASSWD: {commands}\n",
+            "missing-no-passwd": f"{prefix}NOSETENV: {commands}\n",
+            "repeated-no-passwd": f"{prefix}NOPASSWD:NOPASSWD: {commands}\n",
+            "repeated-no-setenv": f"{prefix}NOSETENV:NOSETENV: {commands}\n",
+            "setenv": f"{prefix}NOPASSWD:SETENV: {commands}\n",
+            "all-command": f"{prefix}NOPASSWD:NOSETENV: ALL\n",
+            "alternate-run-as": (
+                "yolpol-deployment-agent ALL=(ALL) NOPASSWD:NOSETENV: " + commands + "\n"
+            ),
+            "command-suffix": (
+                f"{prefix}NOPASSWD:NOSETENV: "
+                "/opt/yolpol/bin/yolpol-deploy apply-staging-intent *, "
+                "/opt/yolpol/bin/yolpol-deploy apply-production-intent\n"
+            ),
+            "additional-grant": (
+                f"{prefix}NOPASSWD:NOSETENV: {commands}\n"
+                f"{prefix}NOPASSWD:NOSETENV: /usr/bin/id\n"
+            ),
+        }
+        try:
+            for name, grant in invalid_grants.items():
+                with self.subTest(name=name):
+                    sudoers_path.write_text(grant, encoding="ascii")
+                    sudoers_path.chmod(0o440)
+                    subprocess.run(
+                        ["/usr/sbin/visudo", "-cf", str(sudoers_path)],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                    )
+                    with self.assertRaisesRegex(
+                        bootstrap.BootstrapError, "broader sudo privilege|sudo policy is not exact",
+                    ):
+                        bootstrap.validate_agent_sudo(allow_missing=False)
+        finally:
+            sudoers_path.write_bytes(valid)
+            sudoers_path.chmod(0o440)
+        bootstrap.validate_agent_sudo(allow_missing=False)
 
     def test_recovery_secrets_are_not_normal_bootstrap_commands_or_readiness_inputs(self) -> None:
         source = BOOTSTRAP_PATH.read_text(encoding="utf-8")

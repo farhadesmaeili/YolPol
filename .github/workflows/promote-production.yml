@@ -1,0 +1,70 @@
+name: Promote Published Release to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Exact published vMAJOR.MINOR.PATCH Release tag
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: production-release-promotion
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Authenticate selected Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      git_sha: ${{ steps.release.outputs.git_sha }}
+      manifest_sha256: ${{ steps.release.outputs.manifest_sha256 }}
+    steps:
+      - name: Check out trusted promotion tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.14.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Authenticate published Release
+        id: release
+        run: pnpm exec tsx tooling/deployment/release-deployment.ts verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YOLPOL_RELEASE_TAG: ${{ inputs.release_tag }}
+
+  promote:
+    name: Approved Production deployment
+    needs: preflight
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment: production
+      release_tag: ${{ inputs.release_tag }}
+      git_sha: ${{ needs.preflight.outputs.git_sha }}
+      manifest_sha256: ${{ needs.preflight.outputs.manifest_sha256 }}
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+      id-token: write

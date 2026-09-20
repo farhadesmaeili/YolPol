@@ -1,6 +1,6 @@
 # YOLPOL Release and Rollback Operations
 
-This repository defines release artifacts; it does not deploy them. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. When a release is promoted from Staging to Production, Production selects the same tested immutable image digests; the environments nevertheless retain independent active authorities and may run different approved versions. Neither promotion nor rollback rebuilds source.
+This repository defines release artifacts and the inactive Phase C1 authenticated deployment contract. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. When a release is promoted from Staging to Production, Production selects the same tested immutable image digests; the environments nevertheless retain independent active authorities and may run different approved versions. Neither promotion nor rollback rebuilds source. Host/GitHub activation remains a separate reviewed operation; see `deploy/control-plane/README.md`.
 
 ## Version and source policy
 
@@ -10,7 +10,7 @@ This repository defines release artifacts; it does not deploy them. A release is
 - MINOR is a new compatible product or platform capability.
 - MAJOR is reserved for an intentional major compatibility/version boundary.
 
-Stable tags must point to a commit contained in `main`. The release workflow runs only for tag pushes matching `v*.*.*`, then applies the strict validator; normal pushes and pull requests remain CI-only. It fetches `main`, verifies ancestry, runs the release validation suite, and never merges branches or deploys.
+Stable tags must point to a commit contained in `main`. The release workflow runs only for tag pushes matching `v*.*.*`, then applies the strict validator; normal pushes and pull requests remain CI-only. It fetches `main`, verifies ancestry, runs the release validation suite, never merges branches, publishes the Release, and then calls the approved reusable Staging deployment workflow.
 
 ## First-party images
 

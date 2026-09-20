@@ -86,4 +86,4 @@ Monitoring now identifies the shared ingress container separately and reaches St
 
 ## Intentionally unsupported here
 
-The repository contract does not automate VPS bootstrap, ingress lifecycle, certificate requests, DNS/Cloudflare changes, secret creation, Production deployment, database actions, Telegram registration, or release deployment. The completed manual migration did not remove the temporary redirect, provision Production, run an application database migration, or clean up retained rollback assets.
+The ingress contract does not automate VPS bootstrap, ingress lifecycle, certificate requests, DNS/Cloudflare changes, secret creation, Production provisioning/public activation, database recovery, or Telegram registration. Task 0066 adds an inactive release-deployment contract without granting it ingress mutation. The completed manual migration did not remove the temporary redirect, provision Production, run an application database migration, or clean up retained rollback assets.
