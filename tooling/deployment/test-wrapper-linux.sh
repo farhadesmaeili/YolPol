@@ -2,6 +2,8 @@
 
 set -eu
 
+/usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deploy.sudoers /etc/sudoers.d/yolpol-deploy
+
 WRAPPER=/opt/yolpol/bin/yolpol-deploy
 MARKER=/tmp/yolpol-environment-injection
 
@@ -138,5 +140,8 @@ set -e
 [ "$sudo_status" -ne 0 ] || fail_test 'invalid arbitrary sudo argument unexpectedly succeeded'
 printf '%s' "$sudo_output" | grep -Fq 'not allowed to execute' \
   && fail_test 'sudoers did not match arbitrary wrapper arguments as documented'
+
+/usr/bin/python3 -I -B /usr/local/bin/test-bootstrap-linux.py \
+  || fail_test 'server bootstrap Linux validation'
 
 printf '%s\n' 'deployment disposable Linux adversarial validation passed'

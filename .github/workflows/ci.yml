@@ -52,6 +52,9 @@ jobs:
       - name: Run unit tests
         run: pnpm test
 
+      - name: Validate server bootstrap contract
+        run: pnpm test:bootstrap
+
       - name: Validate Drizzle migrations
         run: pnpm db:check
         env:
