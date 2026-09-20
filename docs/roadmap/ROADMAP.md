@@ -8,7 +8,7 @@ The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata,
 
 Localized Inquiry submission, Product preselection, consent linkage, server validation, trusted Product resolution, and transactional PostgreSQL persistence are implemented. Distributed abuse controls and durable notification delivery remain deferred.
 
-The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
+The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and authenticated release deployment remain deferred.
 
 ## Export Logistics foundation
 
@@ -16,7 +16,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 ## Operational deployment automation (planned)
 
-The phases below record the agreed operational direction. The Production repository foundation and the current VPS's manual shared-ingress migration are complete, but Production deployment, host bootstrap automation, automated release promotion, and disaster-recovery validation do not yet exist. Remaining phases must be designed, implemented, reviewed, and validated separately.
+The phases below record the agreed operational direction. The Production repository foundation, the current VPS's manual shared-ingress migration, and the repository-managed Phase B host-bootstrap contract are complete. The current VPS has not been changed by Phase B; Production deployment, automated release promotion, and disaster-recovery validation do not yet exist. Remaining phases must be designed, implemented, reviewed, and validated separately.
 
 ### Phase A - Production Deployment Foundation
 
@@ -28,9 +28,9 @@ The phases below record the agreed operational direction. The Production reposit
 
 ### Phase B - Server Bootstrap Automation
 
-The goal is one standard workflow that converts a clean or disposable VPS into a YOLPOL-ready host.
+Implemented in Task 0065 as one root-only, fail-closed workflow for supported Debian 12 amd64 hosts. The workflow prepares or validates a clean/disposable host, installs only reviewed fixed contracts, consumes runtime/secrets through closed schemas, preserves independent release authorities, and starts no YOLPOL Compose workloads. Installing Docker on a clean host may enable the Docker daemon as a prerequisite.
 
-The planned automation should cover:
+The implemented repository contract covers:
 
 - operating-system prerequisites
 - Docker Engine and Compose installation and validation
@@ -114,7 +114,8 @@ The final target operating model treats servers as disposable and rebuildable. S
 - [x] Confirm production domain as `https://yolpol.com`
 - [x] Add the isolated repository-side Production deployment contract (not deployed)
 - [x] Implement Task 0064 and complete the manual shared-host-ingress and Staging Monitoring migration on the current VPS
-- [ ] Automate server bootstrap and authenticated release deployment
+- [x] Automate the repository-managed server bootstrap contract (not applied to the current VPS)
+- [ ] Automate authenticated release deployment
 - [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
 - [ ] Bootstrap and deploy the real Production environment after explicit approval
 - Content review in all locales

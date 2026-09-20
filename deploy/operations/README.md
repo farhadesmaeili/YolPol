@@ -155,9 +155,13 @@ cAdvisor's read-only Docker socket bind is still Docker-API access and must be t
 
 Never use an implicit whole-project `up`, add another service without updating the policy, or delegate this root procedure to `yolpol-operator`.
 
-## Installation gate for a later root session
+## Root bootstrap automation
 
-1. Confirm the operator is exactly UID/GID 1001, UID/GID 10001 are unused, and the operator has neither Docker group nor socket access.
+Task 0065 turns the former manual installation gate into the executable, tested workflow in `deploy/bootstrap/README.md`. Root must first place independently authenticated repository bytes at the fixed root-only `/root/yolpol-bootstrap-source` boundary. Only that source copy may run `apply` or `refresh-contracts`; the installed `/opt/yolpol/bin/yolpol-bootstrap` accepts closed runtime, application/Monitoring secret, and independently authenticated release inputs. Base `check` validates only the host foundation, with separate named environment checks. Recovery credentials remain deferred to an explicit recovery workflow. Bootstrap starts no YOLPOL Compose workload and remains outside sudoers; installing Docker on a clean host may enable the Docker daemon as a prerequisite.
+
+The detailed steps below remain the authoritative security checklist and explain what the automation enforces:
+
+1. Confirm the operator is exactly UID/GID 1001 with no supplementary groups, UID/GID 10001 are unused, the operator has no Docker socket access, and effective sudo is exactly the one wrapper grant.
 2. Install Python 3, `acl`/`getfacl`, Docker Engine, and the Compose plugin at the fixed `/usr/libexec/docker/cli-plugins/docker-compose` path. Confirm every executable and ancestor matches the wrapper contract.
 3. Create the hierarchy and empty state/log files above, including the independent Production backup-throttle file, without truncating existing audit history. Create `/root/.docker/config.json` as `root:root 0600`; do not expose its contents. Inspect then create the fixed `yolpol-staging-ingress` and `yolpol-production-ingress` external bridge networks; do not accept caller-selected names.
 4. Authenticate and verify each approved release outside the operator upload path, then root-promote its manifest/checksum only into the intended environment-specific active directory together with that environment's runtime refs. Installing this wrapper on the existing VPS requires a deliberate root migration of the currently active Staging authority from the legacy `/opt/yolpol/releases/active` location into `/opt/yolpol/releases/staging/active`; never copy that value into Production implicitly.
@@ -183,4 +187,4 @@ Task 0064 defines the repository contract, and the live handoff and Staging veri
 
 ## Remaining operational limitations
 
-Root review/promotion is intentionally manual. Shared ingress was deployed manually; this foundation still does not provide signed release attestations, automate server bootstrap/release deployment, activate Production monitoring, provide off-server backup durability or scheduling, approve migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.
+Root source/release authentication and promotion are intentionally manual. Shared ingress was deployed manually; the repository now provides the Phase B bootstrap workflow, but it has not been applied to the current VPS and does not automate authenticated release deployment. This foundation still does not provide signed release attestations, activate Production monitoring, provide off-server backup durability or scheduling, approve migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.

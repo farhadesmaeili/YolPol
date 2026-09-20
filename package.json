@@ -16,6 +16,7 @@
     "test:monitoring:disposable": "node tooling/monitoring/run-disposable-validation.mjs",
     "test:deployment": "vitest run tooling/deployment",
     "test:deployment:disposable": "node tooling/deployment/run-disposable-validation.mjs",
+    "test:bootstrap": "vitest run tooling/deployment/server-bootstrap.test.ts",
     "test:release": "vitest run tooling/release",
     "test:integration": "node tooling/testing/run-inquiry-postgres-integration.mjs",
     "db:generate": "drizzle-kit generate",
