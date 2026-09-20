@@ -1,0 +1,32 @@
+[Unit]
+Description=YOLPOL authenticated deployment poller
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/yolpol/control-plane/agent.json
+ConditionPathExists=/etc/yolpol/control-plane/github-app-private.pem
+
+[Service]
+Type=oneshot
+User=yolpol-deployment-agent
+Group=yolpol-deployment-agent
+ExecStart=/opt/yolpol/bin/yolpol-deployment-agent
+TimeoutStartSec=82min
+UMask=0077
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/opt/yolpol /run /var/lib/yolpol-deployment-agent

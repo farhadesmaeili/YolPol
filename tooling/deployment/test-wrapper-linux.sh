@@ -3,6 +3,7 @@
 set -eu
 
 /usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deploy.sudoers /etc/sudoers.d/yolpol-deploy
+/usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deployment-agent.sudoers /etc/sudoers.d/yolpol-deployment-agent
 
 WRAPPER=/opt/yolpol/bin/yolpol-deploy
 MARKER=/tmp/yolpol-environment-injection

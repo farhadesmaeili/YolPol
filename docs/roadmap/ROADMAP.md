@@ -14,9 +14,9 @@ The PostgreSQL persistence foundation is active through the narrow Inquiry route
 
 The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
 
-## Operational deployment automation (planned)
+## Operational deployment automation
 
-The phases below record the agreed operational direction. The Production repository foundation, the current VPS's manual shared-ingress migration, and the repository-managed Phase B host-bootstrap contract are complete. The current VPS has not been changed by Phase B; Production deployment, automated release promotion, and disaster-recovery validation do not yet exist. Remaining phases must be designed, implemented, reviewed, and validated separately.
+The Production repository foundation, the current VPS's manual shared-ingress migration, the repository-managed Phase B host-bootstrap contract, and the repository-only Phase C1 authenticated deployment contract are complete. Neither Phase B nor Phase C1 was activated on the current VPS. GitHub Environment/App configuration, Production provisioning/public activation, Phase C2 off-server durability, and disaster-recovery validation remain separate work.
 
 ### Phase A - Production Deployment Foundation
 
@@ -51,7 +51,7 @@ Secrets must never be embedded in Git or generated insecurely. Bootstrap automat
 
 ### Phase C - Release Deployment Automation
 
-The target release flow is:
+Task 0066 Phase C1 implements the repository path:
 
 ```text
 GitHub Release
@@ -64,7 +64,7 @@ GitHub Release
 -> deployment record
 ```
 
-Normal releases should not require interactive SSH.
+Normal releases use no interactive SSH. An approved GitHub-hosted Environment job binds exact intent bytes to GitHub OIDC and an explicit Deployment; a repository-scoped read-only GitHub App agent discovers it, and the root controller applies the existing one-lock host contracts. Staging deployment and same-fingerprint, already-provisioned Production promotion are covered. Production migration changes remain fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until Phase C2 adds independently verified off-server durability. VPS activation and GitHub settings are not complete.
 
 ### Phase D - Rebuild and Disaster-Recovery Validation
 

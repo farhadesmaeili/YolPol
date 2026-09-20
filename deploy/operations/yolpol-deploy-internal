@@ -1,0 +1,271 @@
+#!/bin/sh
+# Root-only lock-free primitives. Never expose this file through sudo.
+
+set -eu
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+HOME=/root
+TMPDIR=/opt/yolpol/runtime/tmp
+LC_ALL=C
+IFS=' '
+export PATH HOME TMPDIR LC_ALL
+unset BASH_ENV CDPATH ENV GLOBIGNORE LD_LIBRARY_PATH LD_PRELOAD NODE_OPTIONS NODE_PATH \
+  PYTHONCASEOK PYTHONHOME PYTHONINSPECT PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE PYTHONWARNINGS \
+  DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_API_VERSION \
+  COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_PATH_SEPARATOR \
+  COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE COMPOSE_CONVERT_WINDOWS_PATHS \
+  COMPOSE_IGNORE_ORPHANS COMPOSE_REMOVE_ORPHANS COMPOSE_PARALLEL_LIMIT \
+  COMPOSE_ANSI COMPOSE_STATUS_STDOUT COMPOSE_PROGRESS COMPOSE_MENU COMPOSE_EXPERIMENTAL
+umask 077
+
+COMPOSE=/usr/libexec/docker/cli-plugins/docker-compose
+POLICY=/opt/yolpol/bin/yolpol-deploy-policy
+LOCK_FILE=/opt/yolpol/runtime/deployment.lock
+OPERATION_LOG=/opt/yolpol/runtime/deployment-operation.log
+STAGING_DIRECTORY=/opt/yolpol/staging
+STAGING_ENV=/opt/yolpol/staging/runtime.env
+STAGING_COMPOSE=/opt/yolpol/staging/compose.yaml
+PRODUCTION_DIRECTORY=/opt/yolpol/production
+PRODUCTION_ENV=/opt/yolpol/production/runtime.env
+PRODUCTION_COMPOSE=/opt/yolpol/production/compose.yaml
+INGRESS_DIRECTORY=/opt/yolpol/ingress
+INGRESS_ENV=/opt/yolpol/ingress/runtime.env
+INGRESS_COMPOSE=/opt/yolpol/ingress/compose.yaml
+MONITORING_DIRECTORY=/opt/yolpol/monitoring
+MONITORING_ENV=/opt/yolpol/monitoring/runtime.env
+MONITORING_COMPOSE=/opt/yolpol/monitoring/compose.yaml
+LAST_BACKUP_FILE=/opt/yolpol/runtime/last-backup-created-at
+PRODUCTION_LAST_BACKUP_FILE=/opt/yolpol/runtime/production-last-backup-created-at
+MIN_BACKUP_FREE_KIB=5242880
+MIN_BACKUP_INTERVAL_SECONDS=900
+
+fail() {
+  printf 'yolpol-deploy-internal: %s\n' "$1" >&2
+  exit 1
+}
+
+[ "$(/usr/bin/id -u)" = 0 ] || fail 'root identity required'
+[ "$#" -ge 1 ] && [ "$#" -le 2 ] || fail 'internal arguments rejected'
+ACTION=$1
+BACKUP_ID=${2:-}
+
+case "$ACTION" in
+  validate-staging|validate-production|status-staging|status-production|health-staging|health-production|ingress-validate|ingress-status|ingress-health-staging|ingress-health-production|telegram-webhook-info-staging|telegram-webhook-info-production) MUTATING=false ;;
+  pull-staging|pull-production|deploy-database-staging|deploy-database-production|migrate-staging|migrate-production|deploy-app-staging|deploy-app-production|deploy-workers-staging|deploy-workers-production|deploy-operations-exporter|staff-provision-staging|staff-provision-production|staff-bootstrap-super-admin-staging|staff-bootstrap-super-admin-production|telegram-webhook-set-staging|telegram-webhook-set-production|backup-create-staging|backup-create-production|backup-create-verify-deep-staging|backup-create-verify-deep-production|backup-verify-staging|backup-verify-production|public-smoke-staging) MUTATING=true ;;
+  *) fail 'internal action rejected' ;;
+esac
+
+case "$ACTION" in
+  backup-verify-staging)
+    [ "$#" -eq 2 ] && printf '%s' "$BACKUP_ID" | /usr/bin/grep -Eq '^yolpol-staging-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$' || fail 'Staging backup ID rejected'
+    ;;
+  backup-verify-production)
+    [ "$#" -eq 2 ] && printf '%s' "$BACKUP_ID" | /usr/bin/grep -Eq '^yolpol-production-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$' || fail 'Production backup ID rejected'
+    ;;
+  *) [ "$#" -eq 1 ] || fail 'unexpected internal argument' ;;
+esac
+
+if [ "$MUTATING" = true ]; then
+  [ "${YOLPOL_INTERNAL_LOCK_FD:-}" = 9 ] || fail 'internal lock context rejected'
+  [ -e /proc/self/fd/9 ] || fail 'internal lock descriptor unavailable'
+  [ "$(/usr/bin/readlink -f /proc/self/fd/9)" = "$LOCK_FILE" ] || fail 'internal lock identity rejected'
+fi
+
+resolve_docker_config() {
+  candidate=${YOLPOL_DOCKER_CONFIG:-/root/.docker}
+  case "$candidate" in
+    /root/.docker) ;;
+    /run/yolpol-deployment/request-*/docker)
+      [ -d "$candidate" ] && [ ! -L "$candidate" ] || fail 'temporary Docker config rejected'
+      [ "$(/usr/bin/stat -c '%u:%g:%a' "$candidate")" = '0:0:700' ] || fail 'temporary Docker config metadata rejected'
+      ;;
+    *) fail 'Docker config path rejected' ;;
+  esac
+  DOCKER_CONFIG=$candidate
+  export DOCKER_CONFIG
+}
+resolve_docker_config
+
+staging_compose() {
+  /usr/bin/env -i PATH="$PATH" HOME=/root DOCKER_CONFIG="$DOCKER_CONFIG" TMPDIR="$TMPDIR" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-staging --project-directory "$STAGING_DIRECTORY" --env-file "$STAGING_ENV" -f "$STAGING_COMPOSE" "$@"
+}
+
+production_compose() {
+  /usr/bin/env -i PATH="$PATH" HOME=/root DOCKER_CONFIG="$DOCKER_CONFIG" TMPDIR="$TMPDIR" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-production --project-directory "$PRODUCTION_DIRECTORY" --env-file "$PRODUCTION_ENV" -f "$PRODUCTION_COMPOSE" "$@"
+}
+
+monitoring_compose() {
+  /usr/bin/env -i PATH="$PATH" HOME=/root DOCKER_CONFIG="$DOCKER_CONFIG" TMPDIR="$TMPDIR" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-monitoring --project-directory "$MONITORING_DIRECTORY" --env-file "$MONITORING_ENV" -f "$MONITORING_COMPOSE" "$@"
+}
+
+ingress_compose() {
+  /usr/bin/env -i PATH="$PATH" HOME=/root DOCKER_CONFIG="$DOCKER_CONFIG" TMPDIR="$TMPDIR" LC_ALL=C \
+    "$COMPOSE" --ansi never -p yolpol-ingress --project-directory "$INGRESS_DIRECTORY" --env-file "$INGRESS_ENV" -f "$INGRESS_COMPOSE" "$@"
+}
+
+validate_staging() {
+  /usr/bin/python3 -I -B "$POLICY" validate-staging
+  staging_compose --profile legacy-staging-edge-migration --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json \
+    | /usr/bin/python3 -I -B "$POLICY" validate-staging-compose
+}
+
+validate_production() {
+  /usr/bin/python3 -I -B "$POLICY" validate-production
+  production_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json \
+    | /usr/bin/python3 -I -B "$POLICY" validate-production-compose
+}
+
+validate_monitoring() {
+  /usr/bin/python3 -I -B "$POLICY" validate-monitoring
+  monitoring_compose config --format json | /usr/bin/python3 -I -B "$POLICY" validate-monitoring-compose
+}
+
+validate_ingress() {
+  /usr/bin/python3 -I -B "$POLICY" validate-ingress
+  ingress_compose config --format json | /usr/bin/python3 -I -B "$POLICY" validate-ingress-compose
+}
+
+run_sensitive() {
+  started=$(/usr/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
+  if "$@" >>"$OPERATION_LOG" 2>&1; then
+    printf '%s action=%s result=success\n' "$started" "$ACTION" >>"$OPERATION_LOG"
+  else
+    status=$?
+    printf '%s action=%s result=failure exit=%s\n' "$started" "$ACTION" "$status" >>"$OPERATION_LOG"
+    return "$status"
+  fi
+}
+
+check_backup_capacity() {
+  directory=$1
+  throttle=$2
+  available=$(/usr/bin/df -Pk "$directory" | /usr/bin/awk 'NR == 2 {print $4}')
+  case "$available" in *[!0-9]*|'') fail 'backup capacity unavailable' ;; esac
+  [ "$available" -ge "$MIN_BACKUP_FREE_KIB" ] || fail 'backup capacity below threshold'
+  if [ -s "$throttle" ]; then
+    last=$(/usr/bin/stat -c '%Y' "$throttle")
+    now=$(/usr/bin/date +%s)
+    [ $((now - last)) -ge "$MIN_BACKUP_INTERVAL_SECONDS" ] || fail 'backup throttled'
+  fi
+}
+
+extract_backup_id() {
+  output=$1
+  environment=$2
+  identifier=$(/usr/bin/jq -r 'select(.event == "backup.create.completed" and .result == "succeeded") | .backupId // empty' "$output")
+  [ -n "$identifier" ] || fail 'backup completion record missing'
+  [ "$(printf '%s\n' "$identifier" | /usr/bin/wc -l)" -eq 1 ] || fail 'multiple backup completion records rejected'
+  if [ "$environment" = staging ]; then
+    printf '%s' "$identifier" | /usr/bin/grep -Eq '^yolpol-staging-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$' || fail 'backup completion identifier rejected'
+  else
+    printf '%s' "$identifier" | /usr/bin/grep -Eq '^yolpol-production-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$' || fail 'backup completion identifier rejected'
+  fi
+  printf '%s' "$identifier"
+}
+
+backup_gate() {
+  environment=$1
+  output=$(/usr/bin/mktemp "$TMPDIR/.backup-gate.XXXXXX")
+  error_output=$(/usr/bin/mktemp "$TMPDIR/.backup-gate-error.XXXXXX")
+  /usr/bin/chown 0:0 "$output" "$error_output"
+  /usr/bin/chmod 600 "$output" "$error_output"
+  trap '/usr/bin/rm -f -- "$output" "$error_output"' EXIT HUP INT TERM
+  if [ "$environment" = staging ]; then
+    validate_staging
+    check_backup_capacity /opt/yolpol/staging/backups "$LAST_BACKUP_FILE"
+    if ! staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create >"$output" 2>"$error_output"; then
+      /usr/bin/cat "$output" "$error_output" >>"$OPERATION_LOG"
+      fail 'backup creation failed'
+    fi
+    identifier=$(extract_backup_id "$output" staging)
+    /usr/bin/cat "$output" "$error_output" >>"$OPERATION_LOG"
+    run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$identifier"
+    run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-deep-verify deep-verify "$identifier"
+    /usr/bin/touch "$LAST_BACKUP_FILE"
+  else
+    validate_production
+    check_backup_capacity /opt/yolpol/production/backups "$PRODUCTION_LAST_BACKUP_FILE"
+    if ! production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create >"$output" 2>"$error_output"; then
+      /usr/bin/cat "$output" "$error_output" >>"$OPERATION_LOG"
+      fail 'Production backup creation failed'
+    fi
+    identifier=$(extract_backup_id "$output" production)
+    /usr/bin/cat "$output" "$error_output" >>"$OPERATION_LOG"
+    run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$identifier"
+    run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-deep-verify deep-verify "$identifier"
+    /usr/bin/touch "$PRODUCTION_LAST_BACKUP_FILE"
+  fi
+  /usr/bin/rm -f -- "$output" "$error_output"
+  trap - EXIT HUP INT TERM
+  printf '{"schemaVersion":1,"environment":"%s","backupId":"%s","integrityVerified":true,"deepVerified":true}\n' "$environment" "$identifier"
+}
+
+health_staging() {
+  validate_staging
+  for service in web postgres inquiry-notifications conversation-translation conversation-ai-fallback; do
+    staging_compose ps --status running --services | /usr/bin/grep -Fxq "$service" || fail 'required Staging service is not running'
+  done
+  staging_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+}
+
+health_production() {
+  validate_production
+  for service in web postgres inquiry-notifications conversation-translation conversation-ai-fallback; do
+    production_compose ps --status running --services | /usr/bin/grep -Fxq "$service" || fail 'required Production service is not running'
+  done
+  production_compose exec -T web node -e "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+}
+
+public_staging_smoke() {
+  headers=$(/usr/bin/mktemp "$TMPDIR/.staging-smoke.XXXXXX")
+  trap '/usr/bin/rm -f -- "$headers"' EXIT HUP INT TERM
+  for route in /api/health/live /api/health/ready /en; do
+    /usr/bin/curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 15 \
+      --output /dev/null --dump-header "$headers" "https://staging.yolpol.com$route"
+  done
+  /usr/bin/grep -Eiq '^x-robots-tag: noindex, nofollow, noarchive\r?$' "$headers" || fail 'Staging noindex header missing'
+  /usr/bin/rm -f -- "$headers"
+  trap - EXIT HUP INT TERM
+}
+
+case "$ACTION" in
+  validate-staging) validate_staging; validate_monitoring ;;
+  validate-production) validate_production ;;
+  status-staging) validate_staging; staging_compose ps ;;
+  status-production) validate_production; production_compose ps ;;
+  health-staging) health_staging ;;
+  health-production) health_production ;;
+  pull-staging) validate_staging; validate_monitoring; staging_compose --profile migration --profile backup pull; monitoring_compose pull operations-exporter ;;
+  pull-production) validate_production; production_compose --profile migration --profile backup pull ;;
+  deploy-database-staging) validate_staging; staging_compose up -d --no-build --no-deps postgres ;;
+  deploy-database-production) validate_production; production_compose up -d --no-build --no-deps postgres ;;
+  migrate-staging) validate_staging; run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate ;;
+  migrate-production) validate_production; run_sensitive production_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate ;;
+  deploy-app-staging) validate_staging; staging_compose up -d --no-build --no-deps web ;;
+  deploy-app-production) validate_production; production_compose up -d --no-build --no-deps web ;;
+  deploy-workers-staging) validate_staging; staging_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback ;;
+  deploy-workers-production) validate_production; production_compose up -d --no-build --no-deps inquiry-notifications conversation-translation conversation-ai-fallback ;;
+  deploy-operations-exporter) validate_monitoring; monitoring_compose up -d --no-build --no-deps operations-exporter ;;
+  backup-create-staging) validate_staging; check_backup_capacity /opt/yolpol/staging/backups "$LAST_BACKUP_FILE"; run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create; /usr/bin/touch "$LAST_BACKUP_FILE" ;;
+  backup-create-production) validate_production; check_backup_capacity /opt/yolpol/production/backups "$PRODUCTION_LAST_BACKUP_FILE"; run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-create; /usr/bin/touch "$PRODUCTION_LAST_BACKUP_FILE" ;;
+  backup-create-verify-deep-staging) backup_gate staging ;;
+  backup-create-verify-deep-production) backup_gate production ;;
+  backup-verify-staging) validate_staging; run_sensitive staging_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID" ;;
+  backup-verify-production) validate_production; run_sensitive production_compose --profile backup run --rm --no-deps --interactive=false --no-TTY backup-verify verify "$BACKUP_ID" ;;
+  staff-provision-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-provision ;;
+  staff-provision-production) validate_production; production_compose --profile staff-operations run --rm --no-deps staff-provision ;;
+  staff-bootstrap-super-admin-staging) validate_staging; staging_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin ;;
+  staff-bootstrap-super-admin-production) validate_production; production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin ;;
+  telegram-webhook-set-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set ;;
+  telegram-webhook-set-production) validate_production; production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set ;;
+  telegram-webhook-info-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;
+  telegram-webhook-info-production) validate_production; production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;
+  ingress-validate) validate_ingress ;;
+  ingress-status) validate_ingress; ingress_compose ps ;;
+  ingress-health-staging) validate_ingress; ingress_compose ps --status running --services | /usr/bin/grep -Fxq ingress; ingress_compose exec -T ingress caddy validate --config /etc/caddy/Caddyfile; ingress_compose exec -T ingress wget -q -O /dev/null http://staging-web:3000/api/health/ready ;;
+  ingress-health-production) validate_ingress; ingress_compose ps --status running --services | /usr/bin/grep -Fxq ingress; ingress_compose exec -T ingress caddy validate --config /etc/caddy/Caddyfile; ingress_compose exec -T ingress wget -q -O /dev/null http://staging-web:3000/api/health/ready; ingress_compose exec -T ingress wget -q -O /dev/null http://production-web:3000/api/health/ready ;;
+  public-smoke-staging) public_staging_smoke ;;
+esac

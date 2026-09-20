@@ -18,11 +18,13 @@ describe("release publication workflow", () => {
     expect(workflow).not.toMatch(/branches:\s/u);
   });
 
-  it("uses only narrow built-in-token permissions and does not deploy", () => {
+  it("uses only narrow built-in-token permissions and delegates Staging after publication", () => {
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("contents: write");
     expect(workflow).toContain("password: ${{ secrets.GITHUB_TOKEN }}");
-    expect(workflow).not.toMatch(/id-token: write|administration:|ssh|scp|deploy/u);
+    expect(workflow).toContain("deploy-staging:");
+    expect(workflow).toContain("id-token: write");
+    expect(workflow).not.toMatch(/administration:|ssh|scp/u);
   });
 
   it("publishes every first-party runtime target and no test target", () => {

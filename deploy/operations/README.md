@@ -1,12 +1,14 @@
 # YOLPOL Restricted Deployment Operations
 
+Task 0066 preserves this public closed grammar and its single global mutation lock. Compose execution now also exists in `/opt/yolpol/bin/yolpol-deploy-internal`, a root-only mode-`0500` primitive that is never sudo-exposed. Public human actions acquire the lock once and delegate fixed internal action names; the authenticated release controller holds the same lock across its entire transaction and never recursively calls this wrapper.
+
 This directory defines a repository-side contract for a future VPS. Nothing here installs sudoers, contacts a server, changes Docker, creates credentials, runs migrations, or deploys containers.
 
 ## Security boundary
 
 `yolpol-operator` remains an unprivileged SSH account. It must not be in the `docker` group, read `/var/run/docker.sock`, receive unrestricted sudo, or own any trusted deployment path. Root SSH remains the separate bootstrap, Monitoring, recovery, retention, and emergency path.
 
-The only unattended sudo grant is the root-owned `/opt/yolpol/bin/yolpol-deploy` wrapper. A sudoers command specification with only an executable pathname permits arbitrary arguments to that executable. Safety therefore comes from the wrapper's closed argument grammar: it rejects every unknown command, missing argument, extra argument, and malformed backup identifier before executing an operation. Do not add sudoers argument wildcards or another command.
+All unattended sudo grants terminate at the root-owned `/opt/yolpol/bin/yolpol-deploy` wrapper. The operator may invoke the wrapper's closed grammar; the isolated deployment agent may invoke only its two exact argument-free intent actions. A pathname-only sudo specification would permit arbitrary arguments, so the agent rule includes the fixed arguments and the wrapper independently rejects every unknown command, missing argument, extra argument, and malformed backup identifier before executing an operation. Do not add sudoers wildcards or another executable.
 
 The wrapper and standard-library Python policy helper:
 
@@ -187,4 +189,4 @@ Task 0064 defines the repository contract, and the live handoff and Staging veri
 
 ## Remaining operational limitations
 
-Root source/release authentication and promotion are intentionally manual. Shared ingress was deployed manually; the repository now provides the Phase B bootstrap workflow, but it has not been applied to the current VPS and does not automate authenticated release deployment. This foundation still does not provide signed release attestations, activate Production monitoring, provide off-server backup durability or scheduling, approve migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.
+Shared ingress was deployed manually. The repository now provides the Phase B bootstrap workflow and the inactive Phase C1 authenticated deployment control plane, but neither has been applied or activated on the current VPS by these tasks. The foundation still does not provide signed release attestations, activate Production monitoring, provide Phase C2 off-server backup durability or scheduling, automate Production-changing migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.

@@ -5,8 +5,7 @@ on:
     tags:
       - "v*.*.*"
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -21,6 +20,8 @@ jobs:
     name: Validate release source
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       git_sha: ${{ steps.metadata.outputs.git_sha }}
@@ -262,6 +263,8 @@ jobs:
     needs: [validate, publish-images]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      manifest_sha256: ${{ steps.release-assets.outputs.manifest_sha256 }}
     permissions:
       contents: write
     steps:
@@ -294,6 +297,7 @@ jobs:
           merge-multiple: true
 
       - name: Generate and verify release assets
+        id: release-assets
         shell: bash
         run: |
           set -euo pipefail
@@ -311,6 +315,9 @@ jobs:
           pnpm release:manifest:verify \
             --manifest release-assets/release-manifest.json \
             --checksum release-assets/release-manifest.sha256
+          manifest_sha256="$(sha256sum release-assets/release-manifest.json | awk '{print $1}')"
+          [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]]
+          printf 'manifest_sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow release assets
         uses: actions/upload-artifact@v7
@@ -344,3 +351,18 @@ jobs:
               --generate-notes \
               --title "YOLPOL $GITHUB_REF_NAME"
           fi
+
+  deploy-staging:
+    name: Deploy published Release to Staging
+    needs: [validate, release]
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment: staging
+      release_tag: ${{ github.ref_name }}
+      git_sha: ${{ needs.validate.outputs.git_sha }}
+      manifest_sha256: ${{ needs.release.outputs.manifest_sha256 }}
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+      id-token: write

@@ -73,7 +73,8 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).toContain('TRUSTED_SOURCE_ROOT = Path("/root/yolpol-bootstrap-source")');
     expect(bootstrap).toContain("apply and refresh-contracts require the fixed trusted source command");
     expect(bootstrap).toContain('SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deploy")');
-    expect(bootstrap.match(/"\/usr\/sbin\/visudo", "-cf"/gu)).toHaveLength(3);
+    expect(bootstrap).toContain('AGENT_SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deployment-agent")');
+    expect(bootstrap.match(/"\/usr\/sbin\/visudo", "-cf"/gu)).toHaveLength(6);
   });
 
   it("keeps runtime, secrets, and release authorities closed and separated", () => {
