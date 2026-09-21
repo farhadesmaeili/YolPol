@@ -16,7 +16,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 ## Operational deployment automation
 
-The Production repository foundation, the current VPS's manual shared-ingress migration, the repository-managed Phase B host-bootstrap contract, and the repository-only Phase C1 authenticated deployment contract are complete. Neither Phase B nor Phase C1 was activated on the current VPS. GitHub Environment/App configuration, Production provisioning/public activation, Phase C2 off-server durability, and disaster-recovery validation remain separate work.
+The Production repository foundation, the current VPS's manual shared-ingress migration, the repository-managed Phase B host-bootstrap contract, and the repository-only Phase C1 authenticated deployment contract are complete. The current VPS audit identified Ubuntu 24.04 LTS/noble, so Task 0067 is the release-blocking compatibility correction that adds it to the previously Debian-12-only bootstrap allow-list. The trusted bootstrap source was established on the live VPS and `apply` was attempted, but source validation was followed by a fail-closed rejection at the supported-host gate; prerequisite, identity, directory, and managed-contract installation did not begin, so Phase B did not converge or activate. Phase C1 was not activated either. GitHub Environment/App configuration, Production provisioning/public activation, Phase C2 off-server durability, and disaster-recovery validation remain separate work. Release `v0.1.8` remains untagged until bootstrap and control-plane readiness is complete.
 
 ### Phase A - Production Deployment Foundation
 
@@ -28,7 +28,7 @@ The Production repository foundation, the current VPS's manual shared-ingress mi
 
 ### Phase B - Server Bootstrap Automation
 
-Implemented in Task 0065 as one root-only, fail-closed workflow for supported Debian 12 amd64 hosts. The workflow prepares or validates a clean/disposable host, installs only reviewed fixed contracts, consumes runtime/secrets through closed schemas, preserves independent release authorities, and starts no YOLPOL Compose workloads. Installing Docker on a clean host may enable the Docker daemon as a prerequisite.
+Implemented in Task 0065 as one root-only, fail-closed workflow and expanded in Task 0067 to exactly Debian 12/bookworm and Ubuntu 24.04/noble on `x86_64` (`amd64`). The workflow prepares or validates a clean/disposable host, installs only reviewed fixed contracts, consumes runtime/secrets through closed schemas, preserves independent release authorities, and starts no YOLPOL Compose workloads. Installing Docker on a clean host may enable the Docker daemon as a prerequisite.
 
 The implemented repository contract covers:
 
@@ -114,7 +114,7 @@ The final target operating model treats servers as disposable and rebuildable. S
 - [x] Confirm production domain as `https://yolpol.com`
 - [x] Add the isolated repository-side Production deployment contract (not deployed)
 - [x] Implement Task 0064 and complete the manual shared-host-ingress and Staging Monitoring migration on the current VPS
-- [x] Automate the repository-managed server bootstrap contract (not applied to the current VPS)
+- [x] Automate the repository-managed server bootstrap contract, including the Ubuntu 24.04/noble compatibility fix (the earlier apply attempt failed closed at the supported-host gate; Phase B did not converge or activate)
 - [ ] Automate authenticated release deployment
 - [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
 - [ ] Bootstrap and deploy the real Production environment after explicit approval
