@@ -28,6 +28,16 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             ("backup-deep-verify", "/backups"): "/opt/yolpol/staging/backups",
             ("backup-retention", "/backups"): "/opt/yolpol/staging/backups",
         },
+        "production": {
+            ("backup-create", "/backups"): "/opt/yolpol/production/backups",
+            ("backup-verify", "/backups"): "/opt/yolpol/production/backups",
+            ("backup-deep-verify", "/backups"): "/opt/yolpol/production/backups",
+            ("backup-retention", "/backups"): "/opt/yolpol/production/backups",
+            ("restore", "/backups"): "/opt/yolpol/production/backups",
+        },
+        "ingress": {
+            ("ingress", "/etc/caddy/Caddyfile"): "/opt/yolpol/ingress/Caddyfile",
+        },
         "monitoring": {
             ("prometheus", "/etc/prometheus/prometheus.yml"): "/opt/yolpol/monitoring/prometheus/prometheus.yml",
             ("prometheus", "/etc/prometheus/rules"): "/opt/yolpol/monitoring/prometheus/rules",
@@ -45,7 +55,7 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             replacement = bind_sources.get((service_name, volume.get("target")))
             if replacement is not None:
                 volume["source"] = replacement
-    secrets = model["secrets"]
+    secrets = model.get("secrets", {})
     assert isinstance(secrets, dict)
     expected_secret_paths = {
         "staging": {
@@ -54,6 +64,13 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             "groq_api_key": "/opt/yolpol/staging/secrets/groq-api-key",
             "backup_age_identity": "/opt/yolpol/staging/secrets/backup-age-identity",
         },
+        "production": {
+            "telegram_bot_token": "/opt/yolpol/production/secrets/telegram-bot-token",
+            "telegram_webhook_secret": "/opt/yolpol/production/secrets/telegram-webhook-secret",
+            "groq_api_key": "/opt/yolpol/production/secrets/groq-api-key",
+            "backup_age_identity": "/opt/yolpol/production/secrets/backup-age-identity",
+        },
+        "ingress": {},
         "monitoring": {
             "alert_telegram_bot_token": "/opt/yolpol/monitoring/secrets/alert-telegram-bot-token",
             "alert_telegram_chat_id": "/opt/yolpol/monitoring/secrets/alert-telegram-chat-id",
@@ -89,12 +106,38 @@ def main() -> None:
             "backup-database.env": {"DATABASE_URL": "postgresql://yolpol:synthetic-password@postgres:5432/yolpol"},
         }
         policy.validate_staging_compose_model(model, runtime, secret_environments)
+    elif mode == "production":
+        runtime = policy.parse_runtime_environment(
+            REPOSITORY_ROOT / "deploy/production/runtime.env.example",
+            policy.production_expected_keys(),
+        )
+        secret_environments = {
+            "postgres": {
+                "POSTGRES_DB": "yolpol_production",
+                "POSTGRES_USER": "yolpol_production",
+                "POSTGRES_PASSWORD": "synthetic-production-password",
+            },
+            "app-database.env": {"DATABASE_URL": "postgresql://yolpol_app:synthetic-production-password@postgres:5432/yolpol_production"},
+            "migration-database.env": {"DATABASE_URL": "postgresql://yolpol_migration:synthetic-production-password@postgres:5432/yolpol_production"},
+            "backup-database.env": {"DATABASE_URL": "postgresql://yolpol_backup:synthetic-production-password@postgres:5432/yolpol_production"},
+            "restore-database.env": {"DATABASE_URL": "postgresql://yolpol_restore:synthetic-production-password@recovery-postgres:5432/yolpol_recovery"},
+        }
+        policy.validate_production_compose_model(model, runtime, secret_environments)
     elif mode == "monitoring":
         runtime = policy.parse_runtime_environment(
             REPOSITORY_ROOT / "deploy/monitoring/runtime.env.example",
             policy.monitoring_expected_keys(),
         )
         policy.validate_monitoring_compose_model(model, runtime)
+    elif mode == "ingress":
+        runtime = policy.parse_runtime_environment(
+            REPOSITORY_ROOT / "deploy/ingress/runtime.env.example",
+            policy.ingress_expected_keys(),
+        )
+        policy.validate_ingress_caddyfile_text(
+            (REPOSITORY_ROOT / "deploy/ingress/Caddyfile").read_text(encoding="ascii")
+        )
+        policy.validate_ingress_compose_model(model, runtime)
     else:
         raise policy.PolicyError("test mode")
 

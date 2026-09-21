@@ -1,6 +1,6 @@
 # YOLPOL Release and Rollback Operations
 
-This repository defines release artifacts; it does not deploy them. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. Staging and Production promotion select the same immutable image digests. Neither promotion nor rollback rebuilds source.
+This repository defines release artifacts and the inactive Phase C1 authenticated deployment contract. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. When a release is promoted from Staging to Production, Production selects the same tested immutable image digests; the environments nevertheless retain independent active authorities and may run different approved versions. Neither promotion nor rollback rebuilds source. Host/GitHub activation remains a separate reviewed operation; see `deploy/control-plane/README.md`.
 
 ## Version and source policy
 
@@ -10,7 +10,7 @@ This repository defines release artifacts; it does not deploy them. A release is
 - MINOR is a new compatible product or platform capability.
 - MAJOR is reserved for an intentional major compatibility/version boundary.
 
-Stable tags must point to a commit contained in `main`. The release workflow runs only for tag pushes matching `v*.*.*`, then applies the strict validator; normal pushes and pull requests remain CI-only. It fetches `main`, verifies ancestry, runs the release validation suite, and never merges branches or deploys.
+Stable tags must point to a commit contained in `main`. The release workflow runs only for tag pushes matching `v*.*.*`, then applies the strict validator; normal pushes and pull requests remain CI-only. It fetches `main`, verifies ancestry, runs the release validation suite, never merges branches, publishes the Release, and then calls the approved reusable Staging deployment workflow.
 
 ## First-party images
 
@@ -71,7 +71,7 @@ Manifest generation additionally takes `--git-sha`, `--repository`, `--images-di
 
 ## Promotion and migration gate
 
-Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Root copies the five immutable references and full Git SHA from one checksum-verified manifest into the environment's root-owned runtime settings. The promoted Staging and Monitoring Compose definitions are image-only and require neither a source checkout nor a Dockerfile below `/opt/yolpol`. On the VPS, `yolpol-operator` invokes only the restricted `/opt/yolpol/bin/yolpol-deploy` command surface; the wrapper fixes Compose paths, sanitizes the environment, verifies digest-only references, and uses `--no-build` for Compose `up` operations. One-off Compose `run` operations omit that unsupported flag and still cannot rebuild because the deployment definitions contain no build contexts. Production must never rebuild source or substitute a same-named tag.
+Promotion follows `BUILD ONCE -> IDENTIFY BY DIGEST -> TEST IN STAGING -> PROMOTE SAME DIGEST -> PRODUCTION`. Root promotes the checksum-verified manifest and matching runtime refs to `/opt/yolpol/releases/staging/active` first. Production continues validating against `/opt/yolpol/releases/production/active` until approval; only then does root promote the exact tested manifest and refs into the Production authority. Updating or rolling back either environment never rewrites the other's active files. The promoted Staging, Production, and Monitoring Compose definitions are image-only and require neither a source checkout nor a Dockerfile below `/opt/yolpol`. On the VPS, `yolpol-operator` invokes only the restricted `/opt/yolpol/bin/yolpol-deploy` command surface; unprefixed actions remain Staging-specific and explicit `production-*` actions fix the Production project and paths. The wrapper sanitizes the environment, verifies digest-only references, and uses `--no-build` for Compose `up` operations. One-off Compose `run` operations omit that unsupported flag and still cannot rebuild because the deployment definitions contain no build contexts. Production must never rebuild source or substitute a same-named tag.
 
 When a release includes migrations, preserve this explicit gate:
 
@@ -120,6 +120,8 @@ The planner only validates JSON and emits a plan. It never invokes Docker, Postg
 15. Verify liveness, readiness, workers, and monitoring.
 16. Retain the previous known-good manifest/checksum for rollback.
 
+On the initial one-VPS topology, Task 0064 now defines shared ingress but does not install it. Steps that expose Production publicly remain blocked until root completes the documented listener handoff, Staging and Production route health, rollback readiness, and separately approved DNS/Cloudflare cutover. Production has no local edge or wrapper edge-activation command. Ordinary Staging/Production web replacement preserves the fixed network alias and does not restart shared ingress.
+
 ## Known limitations
 
-The foundation does not deploy a server, configure registry pull access, change package visibility, sign images/manifests, manage Cosign keys, create a Production Compose project, infer schema backward compatibility, provide down migrations, perform database cutover, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.
+The foundation does not deploy a server, configure registry pull access, change package visibility, sign images/manifests, manage Cosign keys, automate server bootstrap/release deployment, activate Production monitoring, infer schema backward compatibility, provide down migrations, perform database cutover, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.

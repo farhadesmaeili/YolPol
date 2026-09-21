@@ -27,7 +27,7 @@ The authoritative VPS ownership, restricted-wrapper, sudoers, lock, audit, and i
     backups/                  encrypted artifacts and adjacent manifests only
 ```
 
-Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Monitoring consumes that manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which adds `--no-build` to Compose `up` operations; it must never use `latest` or rebuild a release on the server. One-off Compose `run` operations omit that unsupported flag and remain image-only because the promoted Compose definition contains no `build` metadata. Local validation may omit the image variables only after explicitly building the fixed `:local` image names.
+Create `runtime.env` from `runtime.env.example`, copy its full Git revision and four immutable Staging image references from one authenticated and checksum-verified release manifest, and keep it outside Git. Root promotes that manifest only to `/opt/yolpol/releases/staging/active`; Production keeps its independent `/opt/yolpol/releases/production/active` authority. Monitoring consumes the Staging manifest's fifth Operations Metrics ref. A checksum supplied beside an operator upload is not authentication; follow the root promotion procedure in `deploy/operations/README.md`. SemVer tags are readable aliases only. Deployment must use `repository@sha256:digest` values and the root-owned restricted wrapper, which adds `--no-build` to Compose `up` operations; it must never use `latest` or rebuild a release on the server. One-off Compose `run` operations omit that unsupported flag and remain image-only because the promoted Compose definition contains no `build` metadata. Local validation may omit the image variables only after explicitly building the fixed `:local` image names.
 
 The `secrets` directory is `root:root` mode `700` and is not operator-readable. Database env files are `root:root` mode `400` because root-run Compose consumes them. Compose file-backed secrets are read-only bind mounts and do not portably honor target `uid`, `gid`, or `mode`; files mounted into first-party containers are therefore owned by the dedicated container-only UID/GID `10001:10001` with mode `400` inside the root-only parent. Do not create a host login with that identity or weaken file permissions. Verify this exact non-root read path on the target host before activation.
 
@@ -44,7 +44,7 @@ The root Dockerfile has four runtime targets:
 - `migration-runtime`: production Drizzle/pg dependencies, committed SQL/journal, and the migration runner; runs as UID/GID 10001.
 - `operations-runtime`: the pinned PostgreSQL 17.6 Alpine runtime plus `age`, `jq`, and the backup/restore entrypoint; runs as UID/GID 10001 and contains no application source or private identity.
 
-Compose runs `edge`, `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, restore, both Staff provisioning services, and both Telegram webhook operations are also profile-gated one-shot tools. None starts during a normal `up`.
+Ordinary Compose startup runs `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. The old `edge` is retained only under the `legacy-staging-edge-migration` profile for a root-controlled shared-ingress handoff or rollback. `migrate` is a profile-gated one-shot tool. Backup, verification, retention, restore, both Staff provisioning services, and both Telegram webhook operations are also profile-gated one-shot tools. None starts during a normal `up`.
 
 The two Staff services reuse the immutable worker image and only the existing `tooling/staff-provisioning` entrypoints. They run as UID/GID 10001 with a read-only root filesystem, private tmpfs, dropped capabilities, bounded resources/PIDs/logging, the internal `backend` network only, and no ports, provider-egress network, provider credentials, or mounts. Their sole secret-bearing input is the existing root-only `app-database.env`, resolved by Compose as `DATABASE_URL` inside the one-shot container without printing it.
 
@@ -66,8 +66,9 @@ docker compose --env-file /opt/yolpol/staging/runtime.env --profile backup run -
 # Copy the encrypted artifact and manifest off-server, verify the copied pair, and confirm remote durability.
 docker compose --env-file /opt/yolpol/staging/runtime.env --profile migration run --rm migrate
 docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d web inquiry-notifications conversation-translation conversation-ai-fallback
-docker compose --env-file /opt/yolpol/staging/runtime.env --no-build up -d edge
 ```
+
+There is intentionally no normal or operator-controlled edge start. Shared ingress lifecycle and the only permitted root migration/rollback use of the legacy profile are documented in `deploy/ingress/README.md`.
 
 On Staging, operators invoke the interactive Staff flows only through the restricted wrapper:
 
@@ -91,14 +92,15 @@ The four explicit `docker build` commands are local validation only and use the 
 
 The migration runner uses the committed Drizzle migrations and holds a PostgreSQL advisory lock for the entire operation. A second migration waits rather than racing. Migration failure exits non-zero; no application service mutates the schema. Readiness remains responsible for rejecting a database older than `0023_telegram_notification_destinations`. Production must treat the backup, verification, off-server durability confirmation, migration, and readiness checks as one explicit release gate; backup is never hidden inside application or migration startup.
 
-Start Caddy only after the host, firewall, DNS, and Staging acceptance prerequisites are ready. The committed Caddyfile activates automatic HTTPS when Caddy is actually started for `staging.yolpol.com`; configuration validation alone does not request a certificate.
+The Staging-local Caddyfile and volumes now exist only for controlled migration/rollback of the listener currently running on the VPS. Never start that profile while shared ingress owns 80/443. Configuration validation alone does not request a certificate.
 
 ## Network, ports, and persistence
 
-- `edge`: non-internal Caddy-to-web network; web can also make the outbound Telegram response needed by onboarding.
+- `ingress`: fixed external `yolpol-staging-ingress`; only web joins with stable alias `staging-web` for shared ingress and Staging Blackbox probes.
+- `edge`: temporary project-local legacy Caddy-to-web network retained only so the current listener remains connected during migration and can be restarted for rollback.
 - `backend`: internal-only PostgreSQL network used by web, workers, migration, and Staff provisioning operations. PostgreSQL has no published port.
 - `provider_egress`: non-internal worker egress for Telegram/Groq. It does not contain PostgreSQL or Caddy.
-- Only Caddy publishes host ports 80 and 443 (TCP, plus UDP 443 for HTTP/3). Web 3000 and PostgreSQL 5432 remain private.
+- In steady state no Staging service publishes a host port. Only the profile-gated legacy edge can publish 80/443 during an explicitly controlled migration/rollback; shared ingress is the sole steady-state owner. Web 3000 and PostgreSQL 5432 remain private.
 - `postgres_data`, `caddy_data`, and `caddy_config` are Compose-project-scoped persistent volumes. They are not shared with Development or Production.
 
 The PostgreSQL volume/database is protected by logical backup tooling; the Docker volume itself is not a backup. Monitoring, alerting, registry promotion, release automation, and cutover automation remain out of scope.
@@ -183,18 +185,18 @@ Each service has overrideable CPU/memory/PID limits and `json-file` rotation (10
 
 ## Safe local validation
 
-Create a disposable directory outside the checkout with synthetic files matching `runtime.env.example`. Use an unshared image tag, bind the edge to high local ports, and use a unique Compose project override only for validation if parallel isolation is needed. Then:
+Create a disposable directory outside the checkout with synthetic files matching `runtime.env.example`. Create uniquely named disposable substitutes for required external networks and use a unique Compose project override only for validation if parallel isolation is needed. Then:
 
 1. Run `docker compose ... config` and inspect resolved resources, logging, ports, secrets, networks, and volumes.
 2. Build the three runtime targets.
 3. Start only PostgreSQL and wait for its health check.
 4. Run the explicit migration profile once.
 5. Start web and the three workers, but not Caddy. Verify live/ready, noindex headers, restrictive robots, non-root identities, empty-queue worker stability, private ports, and network attachments.
-6. Validate Caddy without starting it: `docker compose ... run --rm --no-deps edge caddy validate --config /etc/caddy/Caddyfile`.
+6. Resolve the legacy profile and validate its Caddyfile without publishing ports; do not run the legacy listener concurrently with shared ingress.
 7. Send SIGTERM with `docker compose ... stop` and verify graceful worker logs.
 
 Do not run `down -v`, `docker volume prune`, or any broad cleanup. Report and leave every validation volume in place unless deletion is separately approved.
 
 ## Future first-server sequence
 
-The future manual deployment is: provision and harden Linux/SSH/firewall/operator access; install Docker Engine and Compose; install the root-owned restricted wrapper and narrow sudoers rule; create the documented `/opt/yolpol` ownership hierarchy; copy reviewed repository-managed files; create restricted non-secret and secret files; prepare the dedicated Staging database identity; pull approved immutable images; start PostgreSQL; run the explicit migration; start web/workers; verify live and ready; validate then activate Caddy; point Staging DNS; obtain TLS; and perform manual acceptance. None of the host hardening, DNS, TLS, server access, GitHub environments/secrets, or external credential setup is performed by this feature.
+The current-host path is governed by `deploy/ingress/README.md`: first migrate the legacy active release authority deliberately, install fixed files and networks, attach Staging web to the new ingress network while retaining its old edge-network connection, validate, then hand 80/443 from legacy Caddy to shared ingress in one controlled action with explicit rollback. None of the host hardening, network creation, DNS, TLS, server access, GitHub environments/secrets, or external credential setup is performed by this feature.

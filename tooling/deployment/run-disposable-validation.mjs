@@ -19,13 +19,23 @@ try {
   for (const source of [
     "tooling/deployment/Dockerfile",
     "tooling/deployment/test-wrapper-linux.sh",
+    "tooling/deployment/test-bootstrap-linux.py",
+    "deploy/bootstrap/yolpol-bootstrap.py",
     "deploy/operations/yolpol-deploy",
+    "deploy/operations/yolpol-deploy-policy.py",
     "deploy/operations/sudoers.yolpol-deploy",
+    "deploy/control-plane/sudoers.yolpol-deployment-agent",
   ]) {
     copyFileSync(resolve(source), join(temporaryContext, basename(source)));
   }
   docker(["build", "--file", join(temporaryContext, "Dockerfile"), "--tag", image, temporaryContext]);
-  docker(["run", "--rm", "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev", image]);
+  docker([
+    "run", "--rm", "--read-only",
+    "--tmpfs", "/tmp:rw,nosuid,nodev",
+    "--tmpfs", "/root:rw,nosuid,nodev,mode=0700",
+    "--tmpfs", "/etc/sudoers.d:rw,nosuid,nodev,mode=0755",
+    image,
+  ]);
 } finally {
   try {
     docker(["image", "rm", "--force", image], {stdio: "ignore"});

@@ -8,11 +8,71 @@ The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata,
 
 Localized Inquiry submission, Product preselection, consent linkage, server validation, trusted Product resolution, and transactional PostgreSQL persistence are implemented. Distributed abuse controls and durable notification delivery remain deferred.
 
-The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and deployment automation remain deferred.
+The PostgreSQL persistence foundation is active through the narrow Inquiry route. Cross-client idempotency, distributed abuse prevention, durable notification delivery, operational retention, and authenticated release deployment remain deferred.
 
 ## Export Logistics foundation
 
 The multilingual pallet-only planning page, verified Product packaging boundary, capacity assessment and buyer-arranged operational workflow are implemented. Freight pricing, carrier/customs integrations, axle calculations, partial pallets, saved plans and inquiry submission remain deferred.
+
+## Operational deployment automation
+
+The Production repository foundation, the current VPS's manual shared-ingress migration, the repository-managed Phase B host-bootstrap contract, and the repository-only Phase C1 authenticated deployment contract are complete. Neither Phase B nor Phase C1 was activated on the current VPS. GitHub Environment/App configuration, Production provisioning/public activation, Phase C2 off-server durability, and disaster-recovery validation remain separate work.
+
+### Phase A - Production Deployment Foundation
+
+- Add repository-managed Production Compose and configuration.
+- Isolate Production completely from Staging.
+- Give Production independent databases, volumes, backend/ingress networks, backups, credentials, Telegram bot, and runtime configuration.
+- Deploy only immutable release digest references.
+- Preserve production-safe restricted operations.
+
+### Phase B - Server Bootstrap Automation
+
+Implemented in Task 0065 as one root-only, fail-closed workflow for supported Debian 12 amd64 hosts. The workflow prepares or validates a clean/disposable host, installs only reviewed fixed contracts, consumes runtime/secrets through closed schemas, preserves independent release authorities, and starts no YOLPOL Compose workloads. Installing Docker on a clean host may enable the Docker daemon as a prerequisite.
+
+The implemented repository contract covers:
+
+- operating-system prerequisites
+- Docker Engine and Compose installation and validation
+- operator identity
+- filesystem hierarchy
+- permissions and ACL contract
+- restricted deployment wrapper
+- sudoers configuration
+- audit and logrotate setup
+- deployment directories
+- Monitoring foundation
+- runtime configuration bootstrap
+- secure secret consumption
+- release installation
+- validation
+
+Secrets must never be embedded in Git or generated insecurely. Bootstrap automation must consume them through an explicitly secure mechanism.
+
+### Phase C - Release Deployment Automation
+
+Task 0066 Phase C1 implements the repository path:
+
+```text
+GitHub Release
+-> authenticated manifest verification
+-> automatic Staging deployment
+-> health, readiness, and smoke validation
+-> Production approval gate
+-> exact immutable Production deployment
+-> health verification
+-> deployment record
+```
+
+Normal releases use no interactive SSH. An approved GitHub-hosted Environment job binds exact intent bytes to GitHub OIDC and an explicit Deployment; a repository-scoped read-only GitHub App agent discovers it, and the root controller applies the existing one-lock host contracts. Staging deployment and same-fingerprint, already-provisioned Production promotion are covered. Production migration changes remain fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until Phase C2 adds independently verified off-server durability. VPS activation and GitHub settings are not complete.
+
+### Phase D - Rebuild and Disaster-Recovery Validation
+
+- Prove that a fresh disposable server can be rebuilt from the documented automation.
+- Verify backup and recovery requirements.
+- Verify that ordinary deployment does not depend on undocumented host state.
+
+The final target operating model treats servers as disposable and rebuildable. SSH should eventually be reserved mainly for bootstrap recovery, incidents, debugging, and exceptional recovery operations. Routine deployment should happen through controlled automation rather than manual shell commands.
 
 ## 1. Project Foundation
 
@@ -52,6 +112,12 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 ## 5. Launch Readiness
 
 - [x] Confirm production domain as `https://yolpol.com`
+- [x] Add the isolated repository-side Production deployment contract (not deployed)
+- [x] Implement Task 0064 and complete the manual shared-host-ingress and Staging Monitoring migration on the current VPS
+- [x] Automate the repository-managed server bootstrap contract (not applied to the current VPS)
+- [ ] Automate authenticated release deployment
+- [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
+- [ ] Bootstrap and deploy the real Production environment after explicit approval
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 

@@ -186,16 +186,16 @@ groups:
 
   - name: yolpol-containers
     rules:
-      - alert: YolpolEdgeContainerAbsent
-        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="edge"})
+      - alert: YolpolSharedIngressContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-ingress", container_label_com_docker_compose_service="ingress"})
         for: 5m
         labels:
-          environment: staging
+          environment: shared
           severity: critical
           category: container
-          service: edge
+          service: shared-ingress
         annotations:
-          summary: The expected Staging edge container is absent.
+          summary: The expected shared ingress container is absent.
 
       - alert: YolpolWebContainerAbsent
         expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-staging", container_label_com_docker_compose_service="web"})

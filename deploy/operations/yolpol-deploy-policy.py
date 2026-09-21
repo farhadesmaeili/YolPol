@@ -7,14 +7,20 @@ import hashlib
 import json
 import re
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 YOLPOL_ROOT = Path("/opt/yolpol")
 STAGING_ENV = YOLPOL_ROOT / "staging/runtime.env"
+PRODUCTION_ENV = YOLPOL_ROOT / "production/runtime.env"
+INGRESS_ENV = YOLPOL_ROOT / "ingress/runtime.env"
+INGRESS_CADDYFILE = YOLPOL_ROOT / "ingress/Caddyfile"
 MONITORING_ENV = YOLPOL_ROOT / "monitoring/runtime.env"
-MANIFEST = YOLPOL_ROOT / "releases/active/release-manifest.json"
-MANIFEST_CHECKSUM = YOLPOL_ROOT / "releases/active/release-manifest.sha256"
+STAGING_MANIFEST = YOLPOL_ROOT / "releases/staging/active/release-manifest.json"
+STAGING_MANIFEST_CHECKSUM = YOLPOL_ROOT / "releases/staging/active/release-manifest.sha256"
+PRODUCTION_MANIFEST = YOLPOL_ROOT / "releases/production/active/release-manifest.json"
+PRODUCTION_MANIFEST_CHECKSUM = YOLPOL_ROOT / "releases/production/active/release-manifest.sha256"
 
 EXPECTED_SOURCE_REPOSITORY = "https://github.com/farhadesmaeili/YolPol"
 EXPECTED_IMAGE_REPOSITORIES = {
@@ -73,6 +79,53 @@ STAGING_FIXED_VALUES = {
     "YOLPOL_STAGING_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": "https://staging.yolpol.com",
 }
 
+PRODUCTION_FIXED_VALUES = {
+    "YOLPOL_PRODUCTION_POSTGRES_ENV_FILE": "/opt/yolpol/production/secrets/postgres.env",
+    "YOLPOL_PRODUCTION_DATABASE_ENV_FILE": "/opt/yolpol/production/secrets/app-database.env",
+    "YOLPOL_PRODUCTION_MIGRATION_ENV_FILE": "/opt/yolpol/production/secrets/migration-database.env",
+    "YOLPOL_PRODUCTION_TELEGRAM_BOT_TOKEN_FILE": "/opt/yolpol/production/secrets/telegram-bot-token",
+    "YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_SECRET_FILE": "/opt/yolpol/production/secrets/telegram-webhook-secret",
+    "YOLPOL_PRODUCTION_GROQ_API_KEY_FILE": "/opt/yolpol/production/secrets/groq-api-key",
+    "YOLPOL_PRODUCTION_BACKUP_DIRECTORY": "/opt/yolpol/production/backups",
+    "YOLPOL_PRODUCTION_BACKUP_DATABASE_ENV_FILE": "/opt/yolpol/production/secrets/backup-database.env",
+    "YOLPOL_PRODUCTION_RESTORE_DATABASE_ENV_FILE": "/opt/yolpol/production/secrets/restore-database.env",
+    "YOLPOL_PRODUCTION_BACKUP_AGE_IDENTITY_FILE": "/opt/yolpol/production/secrets/backup-age-identity",
+    "YOLPOL_PRODUCTION_BACKUP_RETENTION_COUNT": "14",
+    "YOLPOL_PRODUCTION_POSTGRES_MEMORY_LIMIT": "1g",
+    "YOLPOL_PRODUCTION_POSTGRES_CPU_LIMIT": "0.75",
+    "YOLPOL_PRODUCTION_WEB_MEMORY_LIMIT": "768m",
+    "YOLPOL_PRODUCTION_WEB_CPU_LIMIT": "0.75",
+    "YOLPOL_PRODUCTION_WORKER_MEMORY_LIMIT": "384m",
+    "YOLPOL_PRODUCTION_WORKER_CPU_LIMIT": "0.25",
+    "YOLPOL_PRODUCTION_MIGRATION_MEMORY_LIMIT": "512m",
+    "YOLPOL_PRODUCTION_MIGRATION_CPU_LIMIT": "0.50",
+    "YOLPOL_PRODUCTION_OPERATIONS_MEMORY_LIMIT": "512m",
+    "YOLPOL_PRODUCTION_OPERATIONS_CPU_LIMIT": "0.50",
+    "YOLPOL_PRODUCTION_LOG_MAX_SIZE": "10m",
+    "YOLPOL_PRODUCTION_LOG_MAX_FILES": "3",
+    "YOLPOL_PRODUCTION_WORKER_STOP_GRACE_PERIOD": "90s",
+    "YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": "https://yolpol.com",
+}
+
+INGRESS_FIXED_VALUES = {
+    "YOLPOL_INGRESS_CADDY_MEMORY_LIMIT": "256m",
+    "YOLPOL_INGRESS_CADDY_CPU_LIMIT": "0.20",
+    "YOLPOL_INGRESS_LOG_MAX_SIZE": "10m",
+    "YOLPOL_INGRESS_LOG_MAX_FILES": "3",
+}
+INGRESS_CADDYFILE_TEXT = """staging.yolpol.com {
+\treverse_proxy staging-web:3000
+}
+
+www.yolpol.com {
+\tredir https://yolpol.com{uri} permanent
+}
+
+yolpol.com {
+\treverse_proxy production-web:3000
+}
+"""
+
 MONITORING_FIXED_VALUES = {
     "YOLPOL_MONITORING_BIND_ADDRESS": "127.0.0.1",
     "YOLPOL_PROMETHEUS_PORT": "9090",
@@ -82,7 +135,7 @@ MONITORING_FIXED_VALUES = {
     "YOLPOL_ALERTMANAGER_RETENTION": "120h",
     "YOLPOL_MONITORING_TELEGRAM_BOT_TOKEN_FILE": "/opt/yolpol/monitoring/secrets/alert-telegram-bot-token",
     "YOLPOL_MONITORING_TELEGRAM_CHAT_ID_FILE": "/opt/yolpol/monitoring/secrets/alert-telegram-chat-id",
-    "YOLPOL_MONITORING_STAGING_EDGE_NETWORK": "yolpol-staging_edge",
+    "YOLPOL_MONITORING_STAGING_INGRESS_NETWORK": "yolpol-staging-ingress",
     "YOLPOL_MONITORING_STAGING_BACKEND_NETWORK": "yolpol-staging_backend",
     "YOLPOL_MONITORING_STAGING_POSTGRES_URI_FILE": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-uri",
     "YOLPOL_MONITORING_STAGING_POSTGRES_USER_FILE": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-user",
@@ -131,6 +184,8 @@ STAGING_SERVICES = {
     "backup-deep-verify",
     "backup-retention",
 }
+PRODUCTION_SERVICES = STAGING_SERVICES - {"edge"}
+INGRESS_SERVICES = {"ingress"}
 MONITORING_SERVICES = {
     "prometheus",
     "alertmanager",
@@ -143,6 +198,7 @@ MONITORING_SERVICES = {
 
 ALLOWED_SERVICE_KEYS = {
     "build",
+    "cap_add",
     "cap_drop",
     "command",
     "cpus",
@@ -174,6 +230,10 @@ ALLOWED_SERVICE_KEYS = {
 STAGING_UPSTREAM_IMAGES = {
     "edge": "caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
     "postgres": "postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+}
+PRODUCTION_UPSTREAM_IMAGES = {"postgres": STAGING_UPSTREAM_IMAGES["postgres"]}
+INGRESS_UPSTREAM_IMAGES = {
+    "ingress": "caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
 }
 MONITORING_UPSTREAM_IMAGES = {
     "prometheus": "quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0",
@@ -301,13 +361,21 @@ def validate_manifest_bytes(manifest_bytes: bytes, checksum_text: str) -> dict[s
     return manifest
 
 
-def load_release_manifest() -> dict[str, Any]:
+def _load_release_manifest(manifest_path: Path, checksum_path: Path) -> dict[str, Any]:
     try:
-        manifest_bytes = MANIFEST.read_bytes()
-        checksum_text = MANIFEST_CHECKSUM.read_text(encoding="ascii")
+        manifest_bytes = manifest_path.read_bytes()
+        checksum_text = checksum_path.read_text(encoding="ascii")
     except (OSError, UnicodeError) as error:
         raise PolicyError("manifest read") from error
     return validate_manifest_bytes(manifest_bytes, checksum_text)
+
+
+def load_staging_release_manifest() -> dict[str, Any]:
+    return _load_release_manifest(STAGING_MANIFEST, STAGING_MANIFEST_CHECKSUM)
+
+
+def load_production_release_manifest() -> dict[str, Any]:
+    return _load_release_manifest(PRODUCTION_MANIFEST, PRODUCTION_MANIFEST_CHECKSUM)
 
 
 def staging_expected_keys() -> set[str]:
@@ -322,8 +390,24 @@ def staging_expected_keys() -> set[str]:
     }
 
 
+def production_expected_keys() -> set[str]:
+    return set(PRODUCTION_FIXED_VALUES) | {
+        "YOLPOL_GIT_REVISION",
+        "YOLPOL_WEB_IMAGE",
+        "YOLPOL_WORKER_IMAGE",
+        "YOLPOL_MIGRATION_IMAGE",
+        "YOLPOL_BACKUP_RESTORE_IMAGE",
+        "YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT",
+        "YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME",
+    }
+
+
 def monitoring_expected_keys() -> set[str]:
     return set(MONITORING_FIXED_VALUES) | {"YOLPOL_OPERATIONS_METRICS_IMAGE", "YOLPOL_ALERTMANAGER_CONFIG_FILE"}
+
+
+def ingress_expected_keys() -> set[str]:
+    return set(INGRESS_FIXED_VALUES)
 
 
 def validate_staging_runtime(values: dict[str, str], manifest: dict[str, Any]) -> None:
@@ -344,6 +428,24 @@ def validate_staging_runtime(values: dict[str, str], manifest: dict[str, Any]) -
     require(TELEGRAM_USERNAME_PATTERN.fullmatch(values["YOLPOL_STAGING_TELEGRAM_BOT_USERNAME"]) is not None, "Telegram username")
 
 
+def validate_production_runtime(values: dict[str, str], manifest: dict[str, Any]) -> None:
+    for key, expected in PRODUCTION_FIXED_VALUES.items():
+        require(values[key] == expected, "production fixed runtime value")
+    require(values["YOLPOL_GIT_REVISION"] == manifest["gitSha"], "production revision")
+    image_keys = {
+        "YOLPOL_WEB_IMAGE": "web",
+        "YOLPOL_WORKER_IMAGE": "worker",
+        "YOLPOL_MIGRATION_IMAGE": "migration",
+        "YOLPOL_BACKUP_RESTORE_IMAGE": "backup-restore",
+    }
+    for key, role in image_keys.items():
+        value = values[key]
+        require(IMAGE_REFERENCE_PATTERN.fullmatch(value) is not None, "production image reference")
+        require(value == manifest["imagesByRole"][role]["immutableRef"], "production manifest image")
+    require(AGE_RECIPIENT_PATTERN.fullmatch(values["YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT"]) is not None, "backup age recipient")
+    require(TELEGRAM_USERNAME_PATTERN.fullmatch(values["YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME"]) is not None, "Telegram username")
+
+
 def validate_monitoring_runtime(values: dict[str, str], manifest: dict[str, Any]) -> None:
     for key, expected in MONITORING_FIXED_VALUES.items():
         require(values[key] == expected, "monitoring fixed runtime value")
@@ -353,8 +455,24 @@ def validate_monitoring_runtime(values: dict[str, str], manifest: dict[str, Any]
     require(image == manifest["imagesByRole"]["operations-metrics"]["immutableRef"], "monitoring manifest image")
 
 
+def validate_ingress_runtime(values: dict[str, str]) -> None:
+    require(values == INGRESS_FIXED_VALUES, "ingress fixed runtime values")
+
+
+def validate_ingress_caddyfile_text(text: str) -> None:
+    require(text == INGRESS_CADDYFILE_TEXT, "ingress Caddy routing contract")
+
+
+def validate_ingress_caddyfile(path: Path) -> None:
+    try:
+        text = path.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as error:
+        raise PolicyError("ingress Caddyfile read") from error
+    validate_ingress_caddyfile_text(text)
+
+
 def load_staging_contract() -> tuple[dict[str, str], dict[str, Any], dict[str, dict[str, str]]]:
-    manifest = load_release_manifest()
+    manifest = load_staging_release_manifest()
     values = parse_runtime_environment(STAGING_ENV, staging_expected_keys())
     validate_staging_runtime(values, manifest)
     secret_environments = {
@@ -365,11 +483,30 @@ def load_staging_contract() -> tuple[dict[str, str], dict[str, Any], dict[str, d
     return values, manifest, secret_environments
 
 
+def load_production_contract() -> tuple[dict[str, str], dict[str, Any], dict[str, dict[str, str]]]:
+    manifest = load_production_release_manifest()
+    values = parse_runtime_environment(PRODUCTION_ENV, production_expected_keys())
+    validate_production_runtime(values, manifest)
+    secret_environments = {
+        "postgres": parse_secret_environment(YOLPOL_ROOT / "production/secrets/postgres.env", {"POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"})
+    }
+    for filename in ("app-database.env", "migration-database.env", "backup-database.env"):
+        secret_environments[filename] = parse_secret_environment(YOLPOL_ROOT / f"production/secrets/{filename}", {"DATABASE_URL"})
+    return values, manifest, secret_environments
+
+
 def load_monitoring_contract() -> tuple[dict[str, str], dict[str, Any]]:
-    manifest = load_release_manifest()
+    manifest = load_staging_release_manifest()
     values = parse_runtime_environment(MONITORING_ENV, monitoring_expected_keys())
     validate_monitoring_runtime(values, manifest)
     return values, manifest
+
+
+def load_ingress_contract() -> dict[str, str]:
+    values = parse_runtime_environment(INGRESS_ENV, ingress_expected_keys())
+    validate_ingress_runtime(values)
+    validate_ingress_caddyfile(INGRESS_CADDYFILE)
+    return values
 
 
 def parse_compose_json(stream: str) -> dict[str, Any]:
@@ -400,11 +537,19 @@ def string_set(value: Any, field: str) -> set[str]:
     return set(value)
 
 
-def validate_generic_service_security(name: str, service: dict[str, Any], allowed_host_pid: bool = False) -> None:
+def validate_generic_service_security(
+    name: str,
+    service: dict[str, Any],
+    allowed_host_pid: bool = False,
+    allowed_capabilities: set[str] | None = None,
+) -> None:
     require(set(service).issubset(ALLOWED_SERVICE_KEYS), f"{name} service keys")
     require(service.get("privileged") in (None, False), f"{name} privileged")
     require(not service.get("devices"), f"{name} devices")
-    require(not service.get("cap_add"), f"{name} capabilities")
+    require(
+        string_set(service.get("cap_add"), f"{name} added capabilities") == (allowed_capabilities or set()),
+        f"{name} capabilities",
+    )
     require(service.get("ipc") is None, f"{name} IPC")
     require(service.get("network_mode") in (None, "none"), f"{name} network mode")
     require(service.get("pid") == ("host" if allowed_host_pid else None), f"{name} PID namespace")
@@ -436,10 +581,10 @@ def validate_service_hardening(
     require(logging == {"driver": "json-file", "options": {"max-file": "3", "max-size": "10m"}}, "Compose logging policy")
 
 
-def validate_environment(service: dict[str, Any], expected: dict[str, str]) -> None:
+def validate_environment(service: dict[str, Any], expected: dict[str, str], service_name: str = "service") -> None:
     environment = service.get("environment", {})
     require(isinstance(environment, dict), "Compose environment")
-    require(environment == expected, "Compose environment values")
+    require(environment == expected, f"{service_name} Compose environment values")
 
 
 def validate_resources(
@@ -558,6 +703,27 @@ def validate_profiles(service: dict[str, Any], expected: set[str]) -> None:
     require(string_set(service.get("profiles"), "Compose profiles") == expected, "Compose profile")
 
 
+def normalized_service_networks(service: dict[str, Any]) -> dict[str, set[str]]:
+    raw_networks = service.get("networks", {})
+    if isinstance(raw_networks, list):
+        require(all(isinstance(network, str) for network in raw_networks), "Compose service networks")
+        return {network: set() for network in raw_networks}
+    require(isinstance(raw_networks, dict), "Compose service networks")
+    result: dict[str, set[str]] = {}
+    for network, options in raw_networks.items():
+        require(isinstance(network, str), "Compose service network name")
+        if options is None:
+            result[network] = set()
+            continue
+        require(isinstance(options, dict), "Compose service network options")
+        exact_keys(options, {"aliases"}, "Compose service network options")
+        aliases = options["aliases"]
+        require(isinstance(aliases, list) and all(isinstance(alias, str) for alias in aliases), "Compose service network aliases")
+        require(len(aliases) == len(set(aliases)), "Compose service network aliases")
+        result[network] = set(aliases)
+    return result
+
+
 def validate_no_build(service: dict[str, Any]) -> None:
     require("build" not in service, "unexpected Compose build")
 
@@ -604,21 +770,21 @@ def validate_staging_compose_model(
         "backup-retention": ["prune"],
     }
     networks = {
-        "edge": {"edge"},
-        "web": {"edge", "backend"},
-        "postgres": {"backend"},
-        "inquiry-notifications": {"backend", "provider_egress"},
-        "conversation-translation": {"backend", "provider_egress"},
-        "conversation-ai-fallback": {"backend", "provider_egress"},
-        "staff-provision": {"backend"},
-        "staff-bootstrap-super-admin": {"backend"},
-        "telegram-webhook-set": {"provider_egress"},
-        "telegram-webhook-info": {"provider_egress"},
-        "migrate": {"backend"},
-        "backup-create": {"backend"},
-        "backup-verify": set(),
-        "backup-deep-verify": set(),
-        "backup-retention": set(),
+        "edge": {"edge": set()},
+        "web": {"ingress": {"staging-web"}, "edge": set(), "backend": set()},
+        "postgres": {"backend": set()},
+        "inquiry-notifications": {"backend": set(), "provider_egress": set()},
+        "conversation-translation": {"backend": set(), "provider_egress": set()},
+        "conversation-ai-fallback": {"backend": set(), "provider_egress": set()},
+        "staff-provision": {"backend": set()},
+        "staff-bootstrap-super-admin": {"backend": set()},
+        "telegram-webhook-set": {"provider_egress": set()},
+        "telegram-webhook-info": {"provider_egress": set()},
+        "migrate": {"backend": set()},
+        "backup-create": {"backend": set()},
+        "backup-verify": {},
+        "backup-deep-verify": {},
+        "backup-retention": {},
     }
     mounts = {
         "edge": {
@@ -733,7 +899,8 @@ def validate_staging_compose_model(
         is_staff_operation = name in {"staff-provision", "staff-bootstrap-super-admin"}
         is_telegram_operation = name in {"telegram-webhook-set", "telegram-webhook-info"}
         expected_profiles = (
-            {"migration"} if name == "migrate"
+            {"legacy-staging-edge-migration"} if name == "edge"
+            else {"migration"} if name == "migrate"
             else {"backup"} if name.startswith("backup-")
             else {"staff-operations"} if is_staff_operation
             else {"telegram-operations"} if is_telegram_operation
@@ -741,10 +908,10 @@ def validate_staging_compose_model(
         )
         validate_profiles(service, expected_profiles)
         validate_no_build(service)
-        require(string_set(service.get("networks"), "Staging service networks") == networks[name], "Staging service network")
+        require(normalized_service_networks(service) == networks[name], "Staging service network")
         require(normalized_mounts(service) == mounts.get(name, set()), "Staging service mount")
         require(normalized_secrets(service) == secrets.get(name, set()), "Staging service secret")
-        validate_environment(service, environments[name])
+        validate_environment(service, environments[name], name)
         is_backup = name.startswith("backup-")
         is_read_only_operation = is_backup or is_staff_operation or is_telegram_operation
         validate_service_hardening(
@@ -767,6 +934,7 @@ def validate_staging_compose_model(
         model,
         {
             "edge": ("yolpol-staging_edge", False, False),
+            "ingress": ("yolpol-staging-ingress", False, True),
             "backend": ("yolpol-staging_backend", True, False),
             "provider_egress": ("yolpol-staging_provider_egress", False, False),
         },
@@ -784,6 +952,253 @@ def validate_staging_compose_model(
     )
 
 
+def _production_model_as_staging(model: dict[str, Any]) -> dict[str, Any]:
+    normalized = deepcopy(model)
+    normalized["name"] = "yolpol-staging"
+    normalized.pop("x-first-party-runtime", None)
+    services = normalized.get("services")
+    require(isinstance(services, dict), "Production Compose services")
+    services["edge"] = {
+        "image": STAGING_UPSTREAM_IMAGES["edge"],
+        "restart": "unless-stopped",
+        "profiles": ["legacy-staging-edge-migration"],
+        "ports": [
+        {"mode": "ingress", "host_ip": "0.0.0.0", "target": 80, "published": "80", "protocol": "tcp"},
+        {"mode": "ingress", "host_ip": "0.0.0.0", "target": 443, "published": "443", "protocol": "tcp"},
+        {"mode": "ingress", "host_ip": "0.0.0.0", "target": 443, "published": "443", "protocol": "udp"},
+        ],
+        "volumes": [
+            {"type": "bind", "source": "/opt/yolpol/staging/Caddyfile", "target": "/etc/caddy/Caddyfile", "read_only": True, "bind": {"create_host_path": False}},
+            {"type": "volume", "source": "caddy_data", "target": "/data"},
+            {"type": "volume", "source": "caddy_config", "target": "/config"},
+        ],
+        "networks": {"edge": None},
+        "mem_limit": "268435456",
+        "cpus": 0.20,
+        "pids_limit": 100,
+        "logging": {"driver": "json-file", "options": {"max-file": "3", "max-size": "10m"}},
+    }
+    volumes = normalized.get("volumes")
+    require(isinstance(volumes, dict), "Production Compose volumes")
+    volumes["caddy_data"] = {"name": "yolpol-staging_caddy_data"}
+    volumes["caddy_config"] = {"name": "yolpol-staging_caddy_config"}
+    networks = normalized.get("networks")
+    require(isinstance(networks, dict), "Production Compose networks")
+    networks["edge"] = {"name": "yolpol-staging_edge"}
+    web = services.get("web")
+    require(isinstance(web, dict), "Production web service")
+    web_networks = web.get("networks")
+    require(isinstance(web_networks, dict), "Production web networks")
+    web_networks["edge"] = None
+    first_party = {
+        "web",
+        "inquiry-notifications",
+        "conversation-translation",
+        "conversation-ai-fallback",
+        "staff-provision",
+        "staff-bootstrap-super-admin",
+        "telegram-webhook-set",
+        "telegram-webhook-info",
+        "migrate",
+        "backup-create",
+        "backup-verify",
+        "backup-deep-verify",
+        "backup-retention",
+    }
+    for name in first_party:
+        service = services.get(name)
+        require(isinstance(service, dict), "Production first-party service")
+        if name not in {"staff-provision", "staff-bootstrap-super-admin", "telegram-webhook-set", "telegram-webhook-info"}:
+            service.pop("user", None)
+        if name in {"web", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback", "migrate"}:
+            service.pop("cap_drop", None)
+            service.pop("security_opt", None)
+
+    def normalize(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: normalize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        if isinstance(value, str):
+            if value.startswith("/opt/yolpol/production"):
+                return value.replace("/opt/yolpol/production", "/opt/yolpol/staging", 1)
+            if value.startswith("yolpol-production_"):
+                return value.replace("yolpol-production_", "yolpol-staging_", 1)
+            if value == "yolpol-production-ingress":
+                return "yolpol-staging-ingress"
+            if value == "production-web":
+                return "staging-web"
+            if value == "https://yolpol.com":
+                return "https://staging.yolpol.com"
+        return value
+
+    normalized = normalize(normalized)
+    normalized_services = normalized.get("services")
+    require(isinstance(normalized_services, dict), "Production Compose services")
+    for service in normalized_services.values():
+        require(isinstance(service, dict), "Production Compose service")
+        environment = service.get("environment")
+        if isinstance(environment, dict) and environment.get("YOLPOL_DEPLOYMENT_ENVIRONMENT") == "production":
+            environment["YOLPOL_DEPLOYMENT_ENVIRONMENT"] = "staging"
+    application_environment = normalized.get("x-application-environment")
+    if isinstance(application_environment, dict) and application_environment.get("YOLPOL_DEPLOYMENT_ENVIRONMENT") == "production":
+        application_environment["YOLPOL_DEPLOYMENT_ENVIRONMENT"] = "staging"
+    return normalized
+
+
+def validate_production_compose_model(
+    model: dict[str, Any],
+    runtime: dict[str, str],
+    secret_environments: dict[str, dict[str, str]],
+) -> None:
+    exact_keys(
+        model,
+        {
+            "name",
+            "networks",
+            "secrets",
+            "services",
+            "volumes",
+            "x-application-environment",
+            "x-backup-operation",
+            "x-first-party-runtime",
+            "x-json-logging",
+            "x-staff-operation",
+            "x-telegram-operation",
+        },
+        "Production Compose model",
+    )
+    require(model.get("name") == "yolpol-production", "Production project name")
+
+    def reject_staging_reference(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                require("YOLPOL_STAGING_" not in key, "Production references Staging key")
+                reject_staging_reference(item)
+        elif isinstance(value, list):
+            for item in value:
+                reject_staging_reference(item)
+        elif isinstance(value, str):
+            require(
+                value != "staging"
+                and "/opt/yolpol/staging" not in value
+                and "yolpol-staging_" not in value
+                and "yolpol-staging-" not in value
+                and "staging.yolpol.com" not in value,
+                "Production references Staging state",
+            )
+
+    reject_staging_reference(model)
+    services = service_map(model, PRODUCTION_SERVICES)
+    first_party = set(PRODUCTION_SERVICES) - {"postgres"}
+    for name in first_party:
+        service = services[name]
+        require(service.get("user") == "10001:10001", "Production first-party user")
+        require(string_set(service.get("cap_drop"), "Production dropped capabilities") == {"ALL"}, "Production dropped capabilities")
+        require(string_set(service.get("security_opt"), "Production security options") == {"no-new-privileges:true"}, "Production security options")
+    require(
+        normalized_service_networks(services["web"])
+        == {"ingress": {"production-web"}, "backend": set()},
+        "Production web ingress identity",
+    )
+    for service in services.values():
+        validate_ports(service, set())
+
+    staging_runtime = {
+        **STAGING_FIXED_VALUES,
+        "YOLPOL_GIT_REVISION": runtime["YOLPOL_GIT_REVISION"],
+        "YOLPOL_WEB_IMAGE": runtime["YOLPOL_WEB_IMAGE"],
+        "YOLPOL_WORKER_IMAGE": runtime["YOLPOL_WORKER_IMAGE"],
+        "YOLPOL_MIGRATION_IMAGE": runtime["YOLPOL_MIGRATION_IMAGE"],
+        "YOLPOL_BACKUP_RESTORE_IMAGE": runtime["YOLPOL_BACKUP_RESTORE_IMAGE"],
+        "YOLPOL_STAGING_BACKUP_AGE_RECIPIENT": runtime["YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT"],
+        "YOLPOL_STAGING_TELEGRAM_BOT_USERNAME": runtime["YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME"],
+    }
+    staging_secrets = {
+        key: value for key, value in secret_environments.items() if key != "restore-database.env"
+    }
+    validate_staging_compose_model(
+        _production_model_as_staging(model),
+        staging_runtime,
+        staging_secrets,
+    )
+
+
+def validate_ingress_compose_model(model: dict[str, Any], runtime: dict[str, str]) -> None:
+    exact_keys(model, {"name", "networks", "services", "volumes", "x-json-logging"}, "Ingress Compose model")
+    require(model.get("name") == "yolpol-ingress", "Ingress project name")
+    services = service_map(model, INGRESS_SERVICES)
+    service = services["ingress"]
+    validate_generic_service_security(
+        "ingress",
+        service,
+        allowed_capabilities={"NET_BIND_SERVICE"},
+    )
+    require(service.get("image") == INGRESS_UPSTREAM_IMAGES["ingress"], "Ingress service image")
+    validate_command(service, None)
+    validate_profiles(service, set())
+    validate_no_build(service)
+    require(
+        normalized_service_networks(service)
+        == {"staging_ingress": set(), "production_ingress": set()},
+        "Ingress service networks",
+    )
+    require(
+        normalized_mounts(service)
+        == {
+            ("bind", "/opt/yolpol/ingress/Caddyfile", "/etc/caddy/Caddyfile", True),
+            ("volume", "caddy_data", "/data", False),
+            ("volume", "caddy_config", "/config", False),
+        },
+        "Ingress service mounts",
+    )
+    require(normalized_secrets(service) == set(), "Ingress service secrets")
+    validate_environment(service, {}, "ingress")
+    validate_service_hardening(
+        service,
+        read_only=True,
+        tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=32m"},
+    )
+    validate_resources(
+        service,
+        memory_bytes="268435456",
+        cpus=0.20,
+        pids=100,
+        restart="unless-stopped",
+    )
+    require(
+        service.get("healthcheck")
+        == {
+            "test": ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"],
+            "interval": "30s",
+            "timeout": "10s",
+            "retries": 3,
+            "start_period": "10s",
+        },
+        "Ingress healthcheck",
+    )
+    validate_ports(
+        service,
+        {
+            ("0.0.0.0", 80, "80", "tcp"),
+            ("0.0.0.0", 443, "443", "tcp"),
+            ("0.0.0.0", 443, "443", "udp"),
+        },
+    )
+    validate_exact_top_level_resources(
+        model,
+        {
+            "staging_ingress": ("yolpol-staging-ingress", False, True),
+            "production_ingress": ("yolpol-production-ingress", False, True),
+        },
+        {
+            "caddy_data": "yolpol-ingress_caddy_data",
+            "caddy_config": "yolpol-ingress_caddy_config",
+        },
+        {},
+    )
+
+
 def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, str]) -> None:
     exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-json-logging", "x-service-security"}, "Monitoring Compose model")
     require(model.get("name") == "yolpol-monitoring", "Monitoring project name")
@@ -795,7 +1210,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         "node-exporter": {"monitoring"},
         "cadvisor": {"monitoring"},
         "postgres-exporter": {"monitoring", "staging_backend"},
-        "blackbox-exporter": {"monitoring", "staging_edge"},
+        "blackbox-exporter": {"monitoring", "staging_ingress"},
         "operations-exporter": {"monitoring", "staging_backend"},
     }
     expected_mounts = {
@@ -914,7 +1329,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         require(string_set(service.get("networks"), "Monitoring service networks") == expected_networks[name], "Monitoring service network")
         require(normalized_mounts(service) == expected_mounts.get(name, set()), "Monitoring service mount")
         require(normalized_secrets(service) == expected_secrets.get(name, set()), "Monitoring service secret")
-        validate_environment(service, environments[name])
+        validate_environment(service, environments[name], name)
         validate_service_hardening(
             service,
             read_only=True,
@@ -932,7 +1347,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         {
             "monitoring": ("yolpol-monitoring_monitoring", True, False),
             "alert_egress": ("yolpol-monitoring_alert_egress", False, False),
-            "staging_edge": ("yolpol-staging_edge", False, True),
+            "staging_ingress": ("yolpol-staging-ingress", False, True),
             "staging_backend": ("yolpol-staging_backend", False, True),
         },
         {
@@ -961,14 +1376,24 @@ def main() -> None:
     command = sys.argv[1] if len(sys.argv) == 2 else ""
     if command == "validate-staging":
         load_staging_contract()
+    elif command == "validate-production":
+        load_production_contract()
     elif command == "validate-monitoring":
         load_monitoring_contract()
+    elif command == "validate-ingress":
+        load_ingress_contract()
     elif command == "validate-staging-compose":
         runtime, _, secret_environments = load_staging_contract()
         validate_staging_compose_model(load_json_from_stdin(), runtime, secret_environments)
+    elif command == "validate-production-compose":
+        runtime, _, secret_environments = load_production_contract()
+        validate_production_compose_model(load_json_from_stdin(), runtime, secret_environments)
     elif command == "validate-monitoring-compose":
         runtime, _ = load_monitoring_contract()
         validate_monitoring_compose_model(load_json_from_stdin(), runtime)
+    elif command == "validate-ingress-compose":
+        runtime = load_ingress_contract()
+        validate_ingress_compose_model(load_json_from_stdin(), runtime)
     else:
         raise PolicyError("command")
 

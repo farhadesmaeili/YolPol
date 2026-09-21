@@ -61,12 +61,12 @@ scrape_configs:
     params:
       module: [http_health]
     static_configs:
-      - targets: ["http://web:3000/api/health/live"]
+      - targets: ["http://staging-web:3000/api/health/live"]
         labels:
           environment: staging
           service: web
           probe: liveness
-      - targets: ["http://web:3000/api/health/ready"]
+      - targets: ["http://staging-web:3000/api/health/ready"]
         labels:
           environment: staging
           service: web

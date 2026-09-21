@@ -1,0 +1,362 @@
+name: yolpol-production
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "${YOLPOL_PRODUCTION_LOG_MAX_SIZE:-10m}"
+    max-file: "${YOLPOL_PRODUCTION_LOG_MAX_FILES:-3}"
+
+x-application-environment: &application-environment
+  NODE_ENV: production
+  YOLPOL_DEPLOYMENT_ENVIRONMENT: production
+  YOLPOL_APP_ORIGIN: https://yolpol.com
+  YOLPOL_GIT_REVISION: "${YOLPOL_GIT_REVISION:?Set YOLPOL_GIT_REVISION from the approved release manifest}"
+  YOLPOL_LOG_LEVEL: info
+
+x-first-party-runtime: &first-party-runtime
+  user: "10001:10001"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+x-backup-operation: &backup-operation
+  <<: *first-party-runtime
+  image: "${YOLPOL_BACKUP_RESTORE_IMAGE:?Set YOLPOL_BACKUP_RESTORE_IMAGE from the approved release manifest}"
+  restart: "no"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  mem_limit: "${YOLPOL_PRODUCTION_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_PRODUCTION_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
+x-staff-operation: &staff-operation
+  <<: *first-party-runtime
+  image: "${YOLPOL_WORKER_IMAGE:?Set YOLPOL_WORKER_IMAGE from the approved release manifest}"
+  profiles: ["staff-operations"]
+  restart: "no"
+  stdin_open: true
+  tty: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  env_file:
+    - "${YOLPOL_PRODUCTION_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_DATABASE_ENV_FILE}"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - backend
+  mem_limit: "${YOLPOL_PRODUCTION_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_PRODUCTION_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
+x-telegram-operation: &telegram-operation
+  <<: *first-party-runtime
+  image: "${YOLPOL_WORKER_IMAGE:?Set YOLPOL_WORKER_IMAGE from the approved release manifest}"
+  profiles: ["telegram-operations"]
+  restart: "no"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  networks:
+    - provider_egress
+  mem_limit: "${YOLPOL_PRODUCTION_OPERATIONS_MEMORY_LIMIT:-512m}"
+  cpus: "${YOLPOL_PRODUCTION_OPERATIONS_CPU_LIMIT:-0.50}"
+  pids_limit: 100
+  logging: *json-logging
+
+services:
+  web:
+    <<: *first-party-runtime
+    image: "${YOLPOL_WEB_IMAGE:?Set YOLPOL_WEB_IMAGE from the approved release manifest}"
+    restart: "on-failure:5"
+    env_file:
+      - "${YOLPOL_PRODUCTION_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_DATABASE_ENV_FILE}"
+    environment:
+      <<: *application-environment
+      NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: "${YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME:?Set YOLPOL_PRODUCTION_TELEGRAM_BOT_USERNAME}"
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret
+    secrets:
+      - telegram_bot_token
+      - telegram_webhook_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 30s
+    networks:
+      ingress:
+        aliases:
+          - production-web
+      backend:
+    mem_limit: "${YOLPOL_PRODUCTION_WEB_MEMORY_LIMIT:-768m}"
+    cpus: "${YOLPOL_PRODUCTION_WEB_CPU_LIMIT:-0.75}"
+    pids_limit: 200
+    logging: *json-logging
+
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    env_file:
+      - "${YOLPOL_PRODUCTION_POSTGRES_ENV_FILE:?Set YOLPOL_PRODUCTION_POSTGRES_ENV_FILE}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    stop_grace_period: 30s
+    networks:
+      - backend
+    mem_limit: "${YOLPOL_PRODUCTION_POSTGRES_MEMORY_LIMIT:-1g}"
+    cpus: "${YOLPOL_PRODUCTION_POSTGRES_CPU_LIMIT:-0.75}"
+    pids_limit: 200
+    logging: *json-logging
+
+  inquiry-notifications:
+    <<: *first-party-runtime
+    image: "${YOLPOL_WORKER_IMAGE:?Set YOLPOL_WORKER_IMAGE from the approved release manifest}"
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/inquiry-notifications.ts"]
+    restart: "on-failure:5"
+    env_file:
+      - "${YOLPOL_PRODUCTION_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_DATABASE_ENV_FILE}"
+    environment:
+      <<: *application-environment
+      INQUIRY_NOTIFICATION_WORKER_POLL_MS: "${INQUIRY_NOTIFICATION_WORKER_POLL_MS:-2000}"
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+    secrets:
+      - telegram_bot_token
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: "${YOLPOL_PRODUCTION_WORKER_STOP_GRACE_PERIOD:-90s}"
+    networks:
+      - backend
+      - provider_egress
+    mem_limit: "${YOLPOL_PRODUCTION_WORKER_MEMORY_LIMIT:-384m}"
+    cpus: "${YOLPOL_PRODUCTION_WORKER_CPU_LIMIT:-0.25}"
+    pids_limit: 150
+    logging: *json-logging
+
+  conversation-translation:
+    <<: *first-party-runtime
+    image: "${YOLPOL_WORKER_IMAGE:?Set YOLPOL_WORKER_IMAGE from the approved release manifest}"
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-translation.ts"]
+    restart: "on-failure:5"
+    env_file:
+      - "${YOLPOL_PRODUCTION_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_DATABASE_ENV_FILE}"
+    environment:
+      <<: *application-environment
+      CONVERSATION_TRANSLATION_WORKER_POLL_MS: "${CONVERSATION_TRANSLATION_WORKER_POLL_MS:-2000}"
+      GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+      YOLPOL_AI_AUTOMATION_EMERGENCY_DISABLED: "${YOLPOL_AI_AUTOMATION_EMERGENCY_DISABLED:-false}"
+    secrets:
+      - groq_api_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: "${YOLPOL_PRODUCTION_WORKER_STOP_GRACE_PERIOD:-90s}"
+    networks:
+      - backend
+      - provider_egress
+    mem_limit: "${YOLPOL_PRODUCTION_WORKER_MEMORY_LIMIT:-384m}"
+    cpus: "${YOLPOL_PRODUCTION_WORKER_CPU_LIMIT:-0.25}"
+    pids_limit: 150
+    logging: *json-logging
+
+  conversation-ai-fallback:
+    <<: *first-party-runtime
+    image: "${YOLPOL_WORKER_IMAGE:?Set YOLPOL_WORKER_IMAGE from the approved release manifest}"
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/workers/conversation-ai-fallback.ts"]
+    restart: "on-failure:5"
+    env_file:
+      - "${YOLPOL_PRODUCTION_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_DATABASE_ENV_FILE}"
+    environment:
+      <<: *application-environment
+      CONVERSATION_AI_FALLBACK_WORKER_POLL_MS: "${CONVERSATION_AI_FALLBACK_WORKER_POLL_MS:-2000}"
+      GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+      YOLPOL_AI_AUTOMATION_EMERGENCY_DISABLED: "${YOLPOL_AI_AUTOMATION_EMERGENCY_DISABLED:-false}"
+    secrets:
+      - groq_api_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: "${YOLPOL_PRODUCTION_WORKER_STOP_GRACE_PERIOD:-90s}"
+    networks:
+      - backend
+      - provider_egress
+    mem_limit: "${YOLPOL_PRODUCTION_WORKER_MEMORY_LIMIT:-384m}"
+    cpus: "${YOLPOL_PRODUCTION_WORKER_CPU_LIMIT:-0.25}"
+    pids_limit: 150
+    logging: *json-logging
+
+  staff-provision:
+    <<: *staff-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/index.ts"]
+
+  staff-bootstrap-super-admin:
+    <<: *staff-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/staff-provisioning/bootstrap-super-admin.ts"]
+
+  telegram-webhook-set:
+    <<: *telegram-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/set-telegram-webhook.ts"]
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "${YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN:?Set YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN}"
+      TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret
+    secrets:
+      - telegram_bot_token
+      - telegram_webhook_secret
+
+  telegram-webhook-info:
+    <<: *telegram-operation
+    command: ["node", "--conditions=react-server", "--import", "tsx", "tooling/telegram/get-telegram-webhook-info.ts"]
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_PUBLIC_ORIGIN: "${YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN:?Set YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN}"
+    secrets:
+      - telegram_bot_token
+
+  migrate:
+    <<: *first-party-runtime
+    profiles: ["migration"]
+    image: "${YOLPOL_MIGRATION_IMAGE:?Set YOLPOL_MIGRATION_IMAGE from the approved release manifest}"
+    restart: "no"
+    env_file:
+      - "${YOLPOL_PRODUCTION_MIGRATION_ENV_FILE:?Set YOLPOL_PRODUCTION_MIGRATION_ENV_FILE}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    mem_limit: "${YOLPOL_PRODUCTION_MIGRATION_MEMORY_LIMIT:-512m}"
+    cpus: "${YOLPOL_PRODUCTION_MIGRATION_CPU_LIMIT:-0.50}"
+    pids_limit: 100
+    logging: *json-logging
+
+  backup-create:
+    <<: *backup-operation
+    profiles: ["backup"]
+    command: ["create"]
+    env_file:
+      - "${YOLPOL_PRODUCTION_BACKUP_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_BACKUP_DATABASE_ENV_FILE}"
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: production
+      YOLPOL_GIT_REVISION: "${YOLPOL_GIT_REVISION:?Set YOLPOL_GIT_REVISION from the approved release manifest}"
+      YOLPOL_BACKUP_AGE_RECIPIENT: "${YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT:?Set YOLPOL_PRODUCTION_BACKUP_AGE_RECIPIENT}"
+    volumes:
+      - type: bind
+        source: "${YOLPOL_PRODUCTION_BACKUP_DIRECTORY:?Set YOLPOL_PRODUCTION_BACKUP_DIRECTORY}"
+        target: /backups
+        bind:
+          create_host_path: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  backup-verify:
+    <<: *backup-operation
+    profiles: ["backup"]
+    command: ["help"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+    volumes:
+      - type: bind
+        source: "${YOLPOL_PRODUCTION_BACKUP_DIRECTORY:?Set YOLPOL_PRODUCTION_BACKUP_DIRECTORY}"
+        target: /backups
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: none
+
+  backup-deep-verify:
+    <<: *backup-operation
+    profiles: ["backup"]
+    command: ["help"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity
+    secrets:
+      - backup_age_identity
+    volumes:
+      - type: bind
+        source: "${YOLPOL_PRODUCTION_BACKUP_DIRECTORY:?Set YOLPOL_PRODUCTION_BACKUP_DIRECTORY}"
+        target: /backups
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: none
+
+  backup-retention:
+    <<: *backup-operation
+    profiles: ["backup"]
+    command: ["prune"]
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: production
+      YOLPOL_BACKUP_RETENTION_COUNT: "${YOLPOL_PRODUCTION_BACKUP_RETENTION_COUNT:-14}"
+    volumes:
+      - type: bind
+        source: "${YOLPOL_PRODUCTION_BACKUP_DIRECTORY:?Set YOLPOL_PRODUCTION_BACKUP_DIRECTORY}"
+        target: /backups
+        bind:
+          create_host_path: false
+    network_mode: none
+
+  restore:
+    <<: *backup-operation
+    profiles: ["restore"]
+    command: ["help"]
+    env_file:
+      - "${YOLPOL_PRODUCTION_RESTORE_DATABASE_ENV_FILE:?Set YOLPOL_PRODUCTION_RESTORE_DATABASE_ENV_FILE}"
+    environment:
+      YOLPOL_BACKUP_DIRECTORY: /backups
+      YOLPOL_BACKUP_AGE_IDENTITY_FILE: /run/secrets/backup_age_identity
+    secrets:
+      - backup_age_identity
+    volumes:
+      - type: bind
+        source: "${YOLPOL_PRODUCTION_BACKUP_DIRECTORY:?Set YOLPOL_PRODUCTION_BACKUP_DIRECTORY}"
+        target: /backups
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - backend
+
+networks:
+  ingress:
+    name: yolpol-production-ingress
+    external: true
+  backend:
+    internal: true
+  provider_egress:
+
+volumes:
+  postgres_data:
+
+secrets:
+  telegram_bot_token:
+    file: "${YOLPOL_PRODUCTION_TELEGRAM_BOT_TOKEN_FILE:?Set YOLPOL_PRODUCTION_TELEGRAM_BOT_TOKEN_FILE}"
+  telegram_webhook_secret:
+    file: "${YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_SECRET_FILE:?Set YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_SECRET_FILE}"
+  groq_api_key:
+    file: "${YOLPOL_PRODUCTION_GROQ_API_KEY_FILE:?Set YOLPOL_PRODUCTION_GROQ_API_KEY_FILE}"
+  backup_age_identity:
+    file: "${YOLPOL_PRODUCTION_BACKUP_AGE_IDENTITY_FILE:?Set YOLPOL_PRODUCTION_BACKUP_AGE_IDENTITY_FILE}"

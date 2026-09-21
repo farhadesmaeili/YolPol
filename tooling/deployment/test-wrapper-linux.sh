@@ -2,6 +2,9 @@
 
 set -eu
 
+/usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deploy.sudoers /etc/sudoers.d/yolpol-deploy
+/usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deployment-agent.sudoers /etc/sudoers.d/yolpol-deployment-agent
+
 WRAPPER=/opt/yolpol/bin/yolpol-deploy
 MARKER=/tmp/yolpol-environment-injection
 
@@ -35,10 +38,17 @@ expect_accepted_grammar() {
 /usr/sbin/visudo -cf /etc/sudoers.d/yolpol-deploy >/dev/null \
   || fail_test 'sudoers syntax validation'
 
-for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers deploy-edge backup-create; do
+for action in validate status health pull-approved-images deploy-database migrate deploy-app deploy-workers \
+  staff-provision staff-bootstrap-super-admin telegram-webhook-set telegram-webhook-info backup-create \
+  production-validate production-status production-health production-pull-approved-images \
+  production-deploy-database production-migrate production-deploy-app production-deploy-workers \
+  production-staff-provision production-staff-bootstrap-super-admin \
+  production-telegram-webhook-set production-telegram-webhook-info production-backup-create \
+  ingress-validate ingress-status ingress-health ingress-health-production; do
   expect_accepted_grammar "$action"
 done
 expect_accepted_grammar backup-verify yolpol-staging-20260913T000000Z-abcdef0
+expect_accepted_grammar production-backup-verify yolpol-production-20260913T000000Z-abcdef0
 
 expect_rejected
 expect_rejected unknown
@@ -54,6 +64,23 @@ expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '\t')evil"
 expect_rejected backup-verify 'yolpol-staging-20260913T000000Z-abcdef0-é'
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-$(printf '%065d' 0)"
+expect_rejected production-status extra
+expect_rejected deploy-edge
+expect_rejected production-deploy-edge
+expect_rejected ingress-deploy
+expect_rejected ingress-status extra
+expect_rejected ingress-status --project-directory /tmp/evil
+expect_rejected ingress-health --network attacker
+expect_rejected deploy-app production
+expect_rejected production-deploy-app staging
+expect_rejected migrate --environment production
+expect_rejected production-migrate --environment staging
+expect_rejected production-backup-verify
+expect_rejected production-backup-verify yolpol-staging-20260913T000000Z-abcdef0
+expect_rejected backup-verify yolpol-production-20260913T000000Z-abcdef0
+expect_rejected production-backup-verify '../../root/.ssh/authorized_keys'
+expect_rejected production-backup-verify 'yolpol-production-20260913T000000Z-$(id)'
+expect_rejected production-backup-verify "yolpol-production-20260913T000000Z-abcdef0$(printf '\n')evil"
 
 printf 'touch %s\n' "$MARKER" > /tmp/poison
 chmod 0644 /tmp/poison
@@ -114,5 +141,8 @@ set -e
 [ "$sudo_status" -ne 0 ] || fail_test 'invalid arbitrary sudo argument unexpectedly succeeded'
 printf '%s' "$sudo_output" | grep -Fq 'not allowed to execute' \
   && fail_test 'sudoers did not match arbitrary wrapper arguments as documented'
+
+/usr/bin/python3 -I -B /usr/local/bin/test-bootstrap-linux.py \
+  || fail_test 'server bootstrap Linux validation'
 
 printf '%s\n' 'deployment disposable Linux adversarial validation passed'

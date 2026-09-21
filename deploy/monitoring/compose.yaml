@@ -205,7 +205,7 @@ services:
           create_host_path: false
     networks:
       - monitoring
-      - staging_edge
+      - staging_ingress
     mem_limit: "${YOLPOL_BLACKBOX_EXPORTER_MEMORY_LIMIT:-128m}"
     cpus: "${YOLPOL_BLACKBOX_EXPORTER_CPU_LIMIT:-0.10}"
     pids_limit: 100
@@ -243,9 +243,9 @@ networks:
   monitoring:
     internal: true
   alert_egress:
-  staging_edge:
+  staging_ingress:
     external: true
-    name: "${YOLPOL_MONITORING_STAGING_EDGE_NETWORK:-yolpol-staging_edge}"
+    name: "${YOLPOL_MONITORING_STAGING_INGRESS_NETWORK:-yolpol-staging-ingress}"
   staging_backend:
     external: true
     name: "${YOLPOL_MONITORING_STAGING_BACKEND_NETWORK:-yolpol-staging_backend}"

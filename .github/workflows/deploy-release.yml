@@ -1,0 +1,80 @@
+name: Authenticated Release Deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Fixed deployment environment selected by a repository-owned caller
+        required: true
+        type: string
+      release_tag:
+        description: Strict published Release tag
+        required: true
+        type: string
+      git_sha:
+        description: Full published Release commit
+        required: true
+        type: string
+      manifest_sha256:
+        description: Published release-manifest.json digest
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-deployment-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    if: inputs.environment == 'staging' || inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: ${{ inputs.environment }}
+      deployment: false
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+      id-token: write
+    steps:
+      - name: Check out authenticated deployment tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.14.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Authenticate Release, create intent, and wait for host result
+        id: deployment
+        run: pnpm exec tsx tooling/deployment/release-deployment.ts request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YOLPOL_DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+          YOLPOL_RELEASE_TAG: ${{ inputs.release_tag }}
+          YOLPOL_EXPECTED_GIT_SHA: ${{ inputs.git_sha }}
+          YOLPOL_EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          YOLPOL_DEPLOYMENT_CAPABILITY_PUBLIC_KEY_B64: ${{ vars.YOLPOL_DEPLOYMENT_CAPABILITY_PUBLIC_KEY_B64 }}
+          YOLPOL_DEPLOYMENT_CAPABILITY_KEY_ID: ${{ vars.YOLPOL_DEPLOYMENT_CAPABILITY_KEY_ID }}
+          YOLPOL_WORKFLOW_REF: ${{ github.workflow_ref }}
+          YOLPOL_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          YOLPOL_JOB_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/deploy-release.yml@${{ github.ref }}
+          YOLPOL_JOB_WORKFLOW_SHA: ${{ github.sha }}
