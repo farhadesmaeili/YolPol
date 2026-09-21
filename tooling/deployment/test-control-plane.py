@@ -204,6 +204,43 @@ class ProtocolTests(unittest.TestCase):
             )
 
 
+class JsonParsingBoundaryTests(unittest.TestCase):
+    @staticmethod
+    def github_response(body: bytes) -> dict[str, object]:
+        return control._json_response(
+            control.HttpResponse(200, {}, body),
+            expected_status=200,
+            label="GitHub test response",
+        )
+
+    def test_github_json_response_with_trailing_newline_succeeds(self) -> None:
+        self.assertEqual(self.github_response(b'{"value":1}\n'), {"value": 1})
+
+    def test_github_json_response_with_standard_whitespace_succeeds(self) -> None:
+        self.assertEqual(
+            self.github_response(b' \t\r\n{\n  "value": 1\n}\r\n\t '),
+            {"value": 1},
+        )
+
+    def test_external_json_rejects_invalid_json_and_non_object_values(self) -> None:
+        for value in (b'{"value":}', b'{"value":1} trailing', b'[]'):
+            with self.subTest(value=value), self.assertRaises(control.ControlPlaneError):
+                self.github_response(value)
+
+    def test_external_json_rejects_duplicate_keys(self) -> None:
+        with self.assertRaises(control.ControlPlaneError):
+            self.github_response(b'{"value":1,"value":2}')
+
+    def test_external_json_preserves_maximum_size_limit(self) -> None:
+        with self.assertRaises(control.ControlPlaneError):
+            self.github_response(b"{" + b"x" * control.MAX_HTTP_BYTES + b"}")
+
+    def test_internal_strict_json_still_rejects_forbidden_whitespace(self) -> None:
+        for value in (b' {"value":1}', b'{"value":1} ', b'{"value":1}\n'):
+            with self.subTest(value=value), self.assertRaises(control.ControlPlaneError):
+                control.strict_json(value, maximum=1_024, label="trusted local JSON")
+
+
 class OidcTests(unittest.TestCase):
     def verify(self, value: control.Envelope, now: int = 1_780_000_010) -> dict[str, object]:
         return control.verify_oidc(
