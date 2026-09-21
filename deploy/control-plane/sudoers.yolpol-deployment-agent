@@ -1,5 +1,4 @@
-Defaults!/opt/yolpol/bin/yolpol-deploy apply-staging-intent env_reset, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
-Defaults!/opt/yolpol/bin/yolpol-deploy apply-production-intent env_reset, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
-Defaults!/opt/yolpol/bin/yolpol-deploy apply-staging-intent use_pty
-Defaults!/opt/yolpol/bin/yolpol-deploy apply-production-intent use_pty
+Defaults!/opt/yolpol/bin/yolpol-deploy env_reset, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+Defaults!/opt/yolpol/bin/yolpol-deploy use_pty
+
 yolpol-deployment-agent ALL=(root) NOPASSWD:NOSETENV: /opt/yolpol/bin/yolpol-deploy apply-staging-intent, /opt/yolpol/bin/yolpol-deploy apply-production-intent
