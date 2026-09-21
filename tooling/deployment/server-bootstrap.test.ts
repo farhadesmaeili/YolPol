@@ -39,10 +39,15 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).not.toMatch(/eval\(|shell=True|os\.system|subprocess\.(?:call|Popen).*shell/u);
   });
 
-  it("supports only Debian 12 amd64 and preserves the operator/container identity split", () => {
-    expect(bootstrap).toContain('SUPPORTED_OS_ID = "debian"');
-    expect(bootstrap).toContain('SUPPORTED_OS_VERSION = "12"');
+  it("supports exactly Debian 12/bookworm and Ubuntu 24.04/noble on Linux x86_64 / Docker amd64", () => {
+    expect(bootstrap).toContain('SupportedHost("debian", "12", "bookworm", "https://download.docker.com/linux/debian")');
+    expect(bootstrap).toContain('SupportedHost("ubuntu", "24.04", "noble", "https://download.docker.com/linux/ubuntu")');
+    expect(bootstrap.match(/SupportedHost\(/gu)).toHaveLength(2);
     expect(bootstrap).toContain('SUPPORTED_ARCHITECTURE = "x86_64"');
+    expect(bootstrap).not.toMatch(/ID_LIKE/u);
+  });
+
+  it("preserves the operator/container identity split", () => {
     expect(bootstrap).toContain("OPERATOR_UID = 1001");
     expect(bootstrap).toContain("OPERATOR_GID = 1001");
     expect(bootstrap).toContain("CONTAINER_UID = 10001");

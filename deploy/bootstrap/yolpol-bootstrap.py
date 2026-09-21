@@ -34,8 +34,6 @@ HOST_ROOT = Path("/opt/yolpol")
 BOOTSTRAP_LOCK = Path("/run/lock/yolpol-bootstrap.lock")
 TRUSTED_SOURCE_ROOT = Path("/root/yolpol-bootstrap-source")
 TRUSTED_SOURCE_SCRIPT = TRUSTED_SOURCE_ROOT / "deploy/bootstrap/yolpol-bootstrap.py"
-SUPPORTED_OS_ID = "debian"
-SUPPORTED_OS_VERSION = "12"
 SUPPORTED_ARCHITECTURE = "x86_64"
 OPERATOR_NAME = "yolpol-operator"
 OPERATOR_UID = 1001
@@ -65,6 +63,20 @@ class SafeArgumentParser(argparse.ArgumentParser):
         del message
         self.print_usage(sys.stderr)
         self.exit(2, "yolpol-bootstrap: invalid arguments\n")
+
+
+@dataclass(frozen=True)
+class SupportedHost:
+    os_id: str
+    version_id: str
+    version_codename: str
+    docker_repository_base: str
+
+
+SUPPORTED_HOSTS = (
+    SupportedHost("debian", "12", "bookworm", "https://download.docker.com/linux/debian"),
+    SupportedHost("ubuntu", "24.04", "noble", "https://download.docker.com/linux/ubuntu"),
+)
 
 
 @dataclass(frozen=True)
@@ -226,12 +238,22 @@ def read_os_release() -> dict[str, str]:
     return values
 
 
-def validate_supported_host() -> None:
+def validate_supported_host() -> SupportedHost:
     values = read_os_release()
-    if values.get("ID") != SUPPORTED_OS_ID or values.get("VERSION_ID") != SUPPORTED_OS_VERSION:
-        fail("unsupported host; Debian 12 is required")
+    host = next((
+        candidate
+        for candidate in SUPPORTED_HOSTS
+        if (
+            values.get("ID") == candidate.os_id
+            and values.get("VERSION_ID") == candidate.version_id
+            and values.get("VERSION_CODENAME") == candidate.version_codename
+        )
+    ), None)
+    if host is None:
+        fail("unsupported host; Debian 12/bookworm or Ubuntu 24.04/noble is required")
     if platform.machine() != SUPPORTED_ARCHITECTURE:
         fail("unsupported architecture; x86_64 is required")
+    return host
 
 
 def command_exists(path: str | Path) -> bool:
@@ -239,7 +261,7 @@ def command_exists(path: str | Path) -> bool:
     return candidate.is_file() and os.access(candidate, os.X_OK)
 
 
-def install_prerequisites() -> None:
+def install_prerequisites(host: SupportedHost) -> None:
     base = ["/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/bin/jq", "/usr/bin/openssl", "/usr/sbin/visudo"]
     if not all(command_exists(path) for path in base):
         run(["/usr/bin/apt-get", "update"])
@@ -248,11 +270,32 @@ def install_prerequisites() -> None:
             "python3", "acl", "curl", "ca-certificates", "gnupg", "jq", "openssl", "sudo",
         ])
     if not command_exists("/usr/bin/docker") or not command_exists(COMPOSE_PATH):
-        install_docker_packages()
+        install_docker_packages(host)
     validate_prerequisites()
 
 
-def install_docker_packages() -> None:
+def render_docker_repository_source(host: SupportedHost) -> bytes:
+    if host not in SUPPORTED_HOSTS:
+        fail("unsupported host configuration")
+    return (
+        "Types: deb\n"
+        f"URIs: {host.docker_repository_base}\n"
+        f"Suites: {host.version_codename}\n"
+        "Components: stable\n"
+        "Architectures: amd64\n"
+        "Signed-By: /etc/apt/keyrings/docker.asc\n"
+    ).encode("ascii")
+
+
+def docker_signing_key_url(host: SupportedHost) -> str:
+    if host not in SUPPORTED_HOSTS:
+        fail("unsupported host configuration")
+    return f"{host.docker_repository_base}/gpg"
+
+
+def install_docker_packages(host: SupportedHost) -> None:
+    if host not in SUPPORTED_HOSTS:
+        fail("unsupported host configuration")
     keyring_directory = Path("/etc/apt/keyrings")
     keyring_directory.mkdir(mode=0o755, parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(prefix="docker-key-", dir=keyring_directory, delete=False) as temporary:
@@ -260,7 +303,7 @@ def install_docker_packages() -> None:
     try:
         run([
             "/usr/bin/curl", "--proto", "=https", "--tlsv1.2", "--fail", "--silent", "--show-error",
-            "--location", "https://download.docker.com/linux/debian/gpg", "--output", str(temporary_path),
+            "--location", docker_signing_key_url(host), "--output", str(temporary_path),
         ])
         fingerprint = run(
             ["/usr/bin/gpg", "--batch", "--show-keys", "--with-colons", str(temporary_path)],
@@ -272,14 +315,7 @@ def install_docker_packages() -> None:
         atomic_write(keyring, temporary_path.read_bytes(), 0, 0, 0o644, replace=False)
     finally:
         temporary_path.unlink(missing_ok=True)
-    source = (
-        "Types: deb\n"
-        "URIs: https://download.docker.com/linux/debian\n"
-        "Suites: bookworm\n"
-        "Components: stable\n"
-        "Architectures: amd64\n"
-        "Signed-By: /etc/apt/keyrings/docker.asc\n"
-    ).encode("ascii")
+    source = render_docker_repository_source(host)
     atomic_write(Path("/etc/apt/sources.list.d/docker.sources"), source, 0, 0, 0o644, replace=False)
     run(["/usr/bin/apt-get", "update"])
     run([
@@ -838,8 +874,8 @@ def validate_networks() -> None:
 
 def bootstrap_apply(*, replace_contracts: bool) -> None:
     validate_all_source_material()
-    validate_supported_host()
-    install_prerequisites()
+    host = validate_supported_host()
+    install_prerequisites(host)
     ensure_operator()
     ensure_deployment_agent()
     for contract in DIRECTORIES:
