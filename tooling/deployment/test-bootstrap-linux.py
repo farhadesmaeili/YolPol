@@ -75,17 +75,84 @@ class BootstrapTests(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.temporary)
 
-    def test_supported_host_and_root_requirement(self) -> None:
-        bootstrap.validate_supported_host()
-        with mock.patch.object(bootstrap, "read_os_release", return_value={"ID": "ubuntu", "VERSION_ID": "24.04"}):
-            with self.assertRaisesRegex(bootstrap.BootstrapError, "unsupported host"):
-                bootstrap.validate_supported_host()
-        with mock.patch.object(bootstrap.platform, "machine", return_value="aarch64"):
+    def test_supported_host_matrix_and_root_requirement(self) -> None:
+        real_host = bootstrap.validate_supported_host()
+        self.assertEqual((real_host.os_id, real_host.version_id, real_host.version_codename), (
+            "debian", "12", "bookworm",
+        ))
+
+        supported = (
+            ({"ID": "debian", "VERSION_ID": "12", "VERSION_CODENAME": "bookworm"}, "debian"),
+            ({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble"}, "ubuntu"),
+        )
+        for os_release, expected_id in supported:
+            with self.subTest(os_release=os_release):
+                with mock.patch.object(bootstrap, "read_os_release", return_value=os_release), mock.patch.object(
+                    bootstrap.platform,
+                    "machine",
+                    return_value="x86_64",
+                ):
+                    self.assertEqual(bootstrap.validate_supported_host().os_id, expected_id)
+
+        unsupported = (
+            {"ID": "ubuntu", "VERSION_ID": "22.04", "VERSION_CODENAME": "jammy"},
+            {"ID": "ubuntu", "VERSION_ID": "26.04", "VERSION_CODENAME": "resolute"},
+            {"ID": "debian", "VERSION_ID": "11", "VERSION_CODENAME": "bullseye"},
+            {"ID": "debian", "VERSION_ID": "13", "VERSION_CODENAME": "trixie"},
+            {"ID": "linuxmint", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "ID_LIKE": "ubuntu debian"},
+            {"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "caller-controlled"},
+        )
+        for os_release in unsupported:
+            with self.subTest(os_release=os_release):
+                with mock.patch.object(bootstrap, "read_os_release", return_value=os_release), mock.patch.object(
+                    bootstrap.platform,
+                    "machine",
+                    return_value="x86_64",
+                ):
+                    with self.assertRaisesRegex(bootstrap.BootstrapError, "unsupported host"):
+                        bootstrap.validate_supported_host()
+
+        debian = bootstrap.SUPPORTED_HOSTS[0]
+        with mock.patch.object(bootstrap, "read_os_release", return_value={
+            "ID": debian.os_id,
+            "VERSION_ID": debian.version_id,
+            "VERSION_CODENAME": debian.version_codename,
+        }), mock.patch.object(bootstrap.platform, "machine", return_value="aarch64"):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "unsupported architecture"):
                 bootstrap.validate_supported_host()
         with mock.patch.object(bootstrap.os, "geteuid", return_value=1001):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "must run as root"):
                 bootstrap.require_root()
+
+    def test_docker_repository_source_is_selected_from_the_supported_host_contract(self) -> None:
+        expected = {
+            "debian": ("https://download.docker.com/linux/debian", "bookworm"),
+            "ubuntu": ("https://download.docker.com/linux/ubuntu", "noble"),
+        }
+        self.assertEqual({host.os_id for host in bootstrap.SUPPORTED_HOSTS}, set(expected))
+        for host in bootstrap.SUPPORTED_HOSTS:
+            with self.subTest(host=host.os_id):
+                repository, suite = expected[host.os_id]
+                self.assertEqual(bootstrap.docker_signing_key_url(host), f"{repository}/gpg")
+                self.assertEqual(
+                    bootstrap.render_docker_repository_source(host),
+                    (
+                        "Types: deb\n"
+                        f"URIs: {repository}\n"
+                        f"Suites: {suite}\n"
+                        "Components: stable\n"
+                        "Architectures: amd64\n"
+                        "Signed-By: /etc/apt/keyrings/docker.asc\n"
+                    ).encode("ascii"),
+                )
+
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "unsupported host configuration"):
+            unsupported = bootstrap.SupportedHost(
+                "ubuntu", "22.04", "jammy", "https://download.docker.com/linux/ubuntu",
+            )
+            bootstrap.render_docker_repository_source(unsupported)
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "unsupported host configuration"):
+            bootstrap.docker_signing_key_url(unsupported)
 
     def test_deployment_agent_identity_and_exact_sudo_are_enforced(self) -> None:
         with mock.patch.object(bootstrap, "validate_docker_socket"):

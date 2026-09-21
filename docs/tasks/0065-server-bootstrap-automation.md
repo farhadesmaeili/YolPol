@@ -2,13 +2,13 @@
 
 ## Status
 
-Implemented as a repository-managed Phase B contract and validated locally/disposably. No current VPS, SSH, SCP, Cloudflare, DNS, provider, real secret, database, Production deployment, service activation, commit, or push operation is part of this task.
+Implemented as a repository-managed Phase B contract and validated locally/disposably. The original Task 0065 implementation performed no current VPS, SSH, SCP, Cloudflare, DNS, provider, real secret, database, Production deployment, service activation, commit, or push operation. A later live-VPS attempt established the trusted source and executed `apply`; source validation passed, then the Debian-12-only `validate_supported_host()` gate rejected Ubuntu 24.04/noble before prerequisite, user, directory, or managed-contract installation. Phase B did not converge or activate.
 
 ## Decision
 
 Add one root-only Python standard-library bootstrap at `deploy/bootstrap/yolpol-bootstrap.py`. It installs and verifies the existing deployment architecture rather than creating a second deployment path. The unprivileged `yolpol-operator` still has only `/opt/yolpol/bin/yolpol-deploy` through unchanged sudoers. Bootstrap is never delegated through unattended sudo.
 
-The first supported platform is Debian 12 on `x86_64`. This reflects the current Debian/glibc image and Linux VPS assumptions without claiming arbitrary-distribution support. Bootstrap uses Debian's package manager and Docker's official signed APT repository, verifies the repository key fingerprint, and requires the Compose plugin at `/usr/libexec/docker/cli-plugins/docker-compose`.
+The original Task 0065 supported platform was Debian 12 on `x86_64`. This reflected the Debian/glibc image and Linux VPS assumptions without claiming arbitrary-distribution support. Task 0067 later expanded the explicit allow-list to Ubuntu 24.04 LTS/noble on `x86_64` after the real VPS operating system was audited. Both host contracts use APT and their matching Docker official signed repository, verify the repository key fingerprint, and require the Compose plugin at `/usr/libexec/docker/cli-plugins/docker-compose`.
 
 ## Stages
 
@@ -45,6 +45,8 @@ Bootstrap creates no application/database/Monitoring volumes and starts no Compo
 Phase C remains responsible for authenticated release retrieval, automatic Staging deployment, health/readiness/smoke gates, Production approval, exact same-digest promotion, migration/backup gates, and deployment records. Phase D remains responsible for actual disposable rebuild and backup-recovery proof.
 
 Task 0066 later extended this bootstrap inventory with an isolated deployment-agent account, control-plane contracts, systemd units, strict credential-path metadata, ledger/journal directories, and an exact two-command agent sudo rule. The extension does not enable/start the timer or generate credentials; the original Phase B activation boundary remains intact.
+
+Task 0067 later expanded only the supported-host and Docker-repository-selection contract. It did not change the identity, sudo, filesystem, source-trust, secret, release, or activation boundaries recorded here.
 
 ## Validation
 

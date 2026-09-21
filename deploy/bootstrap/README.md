@@ -1,24 +1,27 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap and the narrow Task 0066 extension that installs, but does not activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface.
+This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, and the narrow Task 0066 extension that installs, but does not activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface.
 
 Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the inactive Phase C1 control-plane contract.
 
 ## Supported host
 
-The first supported host contract is intentionally narrow:
+The supported-host contract is an explicit allow-list and is intentionally narrow:
 
-- Debian 12 (`bookworm`)
+- Debian 12 (`bookworm`) with Docker's official `https://download.docker.com/linux/debian` repository
+- Ubuntu 24.04 LTS (`noble`) with Docker's official `https://download.docker.com/linux/ubuntu` repository
 - Linux `x86_64` / Docker `amd64`
 - a root session for every bootstrap command
 - systemd when Docker must be enabled
-- outbound HTTPS access to Debian and Docker's official authenticated APT repositories during prerequisite installation
+- outbound HTTPS access to the operating-system and Docker official authenticated APT repositories during prerequisite installation
 
-Any other distribution, release, or architecture fails closed. The implementation installs Python 3, ACL tools, curl, CA certificates, GnuPG, sudo, Docker Engine, Buildx, and Docker Compose from Docker's official signed APT repository. It verifies the Docker signing-key fingerprint and preserves the required Compose executable path:
+Any other distribution, release, codename, or architecture fails closed; `ID_LIKE` does not grant support. The implementation installs Python 3, ACL tools, curl, CA certificates, GnuPG, sudo, Docker Engine, Buildx, and Docker Compose from the Docker repository fixed by the matched host contract. It does not derive the repository or suite from arbitrary host metadata. It verifies the existing Docker signing-key fingerprint and preserves the required Compose executable path:
 
 ```text
 /usr/libexec/docker/cli-plugins/docker-compose
 ```
+
+On the live VPS, the trusted source was established manually and the pre-Task-0067 `apply` command was attempted. Source validation passed, but the command failed closed at `validate_supported_host()` because that contract supported only Debian 12 while the VPS runs Ubuntu 24.04/noble. It did not proceed into prerequisite, user, directory, or managed-contract installation; Phase B did not converge or activate. Reapplying the updated bootstrap remains a separate controlled VPS operation.
 
 ## Trust boundary
 
@@ -206,6 +209,6 @@ That future workflow must avoid command arguments and process environment for se
 
 ## Rebuild and deferred activation
 
-For a disposable rebuild, start from supported Debian 12, establish the fixed trusted source manually, run `apply`, and pass base `check`. Install authenticated release/runtime/secret inputs only for each environment in scope and run its named readiness check. Repeat source-only `apply` plus base `check` to prove foundation convergence. Actual backup restore and end-to-end disaster-recovery proof remain Phase D.
+For a disposable rebuild, start from a supported YOLPOL host—currently Debian 12/bookworm `x86_64` or Ubuntu 24.04/noble `x86_64`—establish the fixed trusted source manually, run `apply`, and pass base `check`. Install authenticated release/runtime/secret inputs only for each environment in scope and run its named readiness check. Repeat source-only `apply` plus base `check` to prove foundation convergence. The disposable repository validation image remains Debian-based; Ubuntu selection is covered deterministically by mocked host-validation and repository-rendering tests. Actual backup restore and end-to-end disaster-recovery proof remain Phase D.
 
 Service startup, shared-ingress listener handoff, Monitoring activation, database initialization/migrations, release health gates, Production approval/promotion, Cloudflare redirect removal, DNS cutover, certificate behavior, Telegram registration, legacy rollback cleanup, and Production monitoring are intentionally not automated here.
