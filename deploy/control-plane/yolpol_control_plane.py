@@ -131,6 +131,23 @@ def strict_json(data: bytes, *, maximum: int, label: str) -> dict[str, Any]:
     return value
 
 
+def external_http_json(data: bytes, *, maximum: int, label: str) -> dict[str, Any]:
+    if not data or len(data) > maximum or data.startswith(b"\xef\xbb\xbf"):
+        fail(f"{label} size or encoding rejected")
+    try:
+        text = data.decode("utf-8", "strict")
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicates,
+            parse_constant=lambda constant: fail(f"invalid JSON constant: {constant}"),
+        )
+    except (UnicodeError, json.JSONDecodeError, ControlPlaneError) as error:
+        raise ControlPlaneError(f"{label} JSON rejected") from error
+    if not isinstance(value, dict):
+        fail(f"{label} type rejected")
+    return value
+
+
 def require_exact_keys(value: dict[str, Any], expected: tuple[str, ...], label: str) -> None:
     if tuple(value.keys()) != expected:
         fail(f"{label} keys or order rejected")
@@ -422,7 +439,7 @@ def default_transport(method: str, url: str, headers: dict[str, str], body: byte
 def _json_response(response: HttpResponse, *, expected_status: int, label: str) -> dict[str, Any]:
     if response.status != expected_status:
         fail(f"{label} request rejected")
-    return strict_json(response.body, maximum=MAX_HTTP_BYTES, label=label)
+    return external_http_json(response.body, maximum=MAX_HTTP_BYTES, label=label)
 
 
 def _retryable_json_response(response: HttpResponse, *, expected_status: int, label: str) -> dict[str, Any]:
