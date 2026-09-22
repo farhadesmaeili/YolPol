@@ -87,6 +87,7 @@ describe("Phase C1 workflow contract", () => {
   const agent = readFileSync(resolve(root, "deploy/control-plane/yolpol-deployment-agent.py"), "utf8");
   const protocol = readFileSync(resolve(root, "deploy/control-plane/yolpol_control_plane.py"), "utf8");
   const bootstrap = readFileSync(resolve(root, "deploy/bootstrap/yolpol-bootstrap.py"), "utf8");
+  const operatorSudoers = readFileSync(resolve(root, "deploy/operations/sudoers.yolpol-deploy"), "utf8");
   const agentSudoers = readFileSync(resolve(root, "deploy/control-plane/sudoers.yolpol-deployment-agent"), "utf8");
   const agentService = readFileSync(resolve(root, "deploy/control-plane/yolpol-deployment-agent.service"), "utf8");
 
@@ -171,6 +172,24 @@ describe("Phase C1 workflow contract", () => {
     expect(controller).toContain("requires_manual_database_review(record) for record in environment_records");
     expect(controller).toContain("requires_manual_deployment_reconciliation(record) for record in environment_records");
     expect(controller).toContain("MANUAL_DEPLOYMENT_RECONCILIATION_REQUIRED");
+  });
+
+  it("exposes only root-actor Staging pre-mutation reconciliation", () => {
+    expect(wrapper).toContain("reconcile-staging-pre-mutation <deployment-id>");
+    expect(wrapper).toContain("validate_deployment_id()");
+    expect(wrapper).toContain("ROOT_INCIDENT_ONLY=true");
+    expect(wrapper).toContain('[ "$ROOT_INCIDENT_ONLY" = true ] && [ "$ACTOR" != root ]');
+    expect(wrapper).toContain(
+      'reconcile-staging-pre-mutation) /usr/bin/python3 -B "$RELEASE_CONTROLLER" reconcile-pre-mutation staging "$DEPLOYMENT_ID"',
+    );
+    expect(controller).toContain('["reconcile-pre-mutation", "staging"]');
+    expect(controller).toContain("PRE_MUTATION_CRASH_RECONCILED");
+    expect(controller).toContain("os.path.lexists(journal)");
+    expect(agent).not.toContain("reconcile-pre-mutation");
+    expect(operatorSudoers.split(/\r?\n/u).filter((line) => line.includes("NOPASSWD"))).toEqual([
+      "yolpol-operator ALL=(root) NOPASSWD:NOSETENV: /opt/yolpol/bin/yolpol-deploy",
+    ]);
+    expect(agentSudoers).not.toContain("reconcile");
   });
 
   it("runs the complete local backup gate before changed Staging migration", () => {

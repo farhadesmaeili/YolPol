@@ -678,6 +678,187 @@ class LedgerAndRollbackTests(unittest.TestCase):
         identity["manifestSha256"] = manifest
         return identity
 
+    def stale_pre_mutation_record(self, **updates: object) -> dict[str, object]:
+        record = {
+            **self.identity(),
+            "previousAuthoritySha256": "a" * 64,
+            "currentMigrationFingerprint": f"0023:{'d' * 64}",
+            "targetMigrationFingerprint": None,
+            "migrationState": "never-started",
+            "phase": "accepted",
+            "localOutcome": "in-progress",
+            "result": None,
+            "statusSynchronization": "in-progress-synced",
+            "createdAtUnix": 1_780_000_000,
+            "updatedAtUnix": 1_780_000_001,
+        }
+        record.update(updates)
+        return record
+
+    def active_authority(self, **updates: object) -> dict[str, object]:
+        authority = {
+            "sha256": "a" * 64,
+            "migrationFingerprint": f"0023:{'d' * 64}",
+        }
+        authority.update(updates)
+        return authority
+
+    def assert_reconciliation_rejected(
+        self,
+        record: dict[str, object],
+        *,
+        current: dict[str, object] | None = None,
+        extra_records: list[dict[str, object]] | None = None,
+        journal: bool = False,
+        deployment_id: str = "123",
+        environment: str = "staging",
+    ) -> None:
+        ledger = {"schemaVersion": 1, "records": [record, *(extra_records or [])]}
+        with tempfile.TemporaryDirectory() as directory:
+            journal_path = Path(directory) / deployment_id
+            if journal:
+                journal_path.mkdir()
+                (journal_path / "evidence").write_text("preserve\n", encoding="ascii")
+            with (
+                patch.object(controller, "JOURNAL_ROOT", Path(directory)),
+                patch.object(controller, "current_authority", return_value=current or self.active_authority()),
+                patch.object(controller, "persist_ledger") as persist,
+            ):
+                with self.assertRaises(control.ControlPlaneError):
+                    controller.reconcile_pre_mutation(ledger, environment, deployment_id, Mock())
+            persist.assert_not_called()
+            if journal:
+                self.assertTrue((journal_path / "evidence").is_file())
+
+    def test_successful_pre_mutation_reconciliation_is_terminal_and_unblocks_environment(self) -> None:
+        stale = self.stale_pre_mutation_record()
+        immutable = {
+            key: stale[key]
+            for key in (
+                "deploymentId", "intentSha256", "jti", "nonce", "workflowRunId",
+                "workflowRunAttempt", "environment", "releaseTag", "gitSha", "manifestSha256",
+                "previousAuthoritySha256", "currentMigrationFingerprint",
+            )
+        }
+        ledger: dict[str, object] = {"schemaVersion": 1, "records": [stale]}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(controller, "JOURNAL_ROOT", Path(directory)),
+            patch.object(controller, "current_authority", return_value=self.active_authority()),
+            patch.object(controller, "persist_ledger") as persist,
+            patch.object(controller.time, "time", return_value=1_780_000_100),
+        ):
+            reconciled = controller.reconcile_pre_mutation(ledger, "staging", "123", Mock())
+
+        self.assertIs(reconciled, stale)
+        self.assertEqual(reconciled["phase"], "reconciled-pre-mutation")
+        self.assertEqual(reconciled["localOutcome"], "failure")
+        self.assertEqual(reconciled["migrationState"], "never-started")
+        self.assertEqual(reconciled["result"], controller.PRE_MUTATION_CRASH_RECONCILED_RESULT)
+        self.assertEqual(reconciled["statusSynchronization"], "in-progress-synced")
+        self.assertEqual(reconciled["updatedAtUnix"], 1_780_000_100)
+        self.assertEqual({key: reconciled[key] for key in immutable}, immutable)
+        self.assertFalse(controller.requires_manual_deployment_reconciliation(reconciled))
+        persist.assert_called_once_with(ledger)
+
+        candidate = self.identity(deployment_id="124", manifest="c" * 64)
+        candidate.update({"jti": "new-jti", "nonce": "e" * 43, "intentSha256": "c" * 64})
+        with patch.object(controller, "persist_ledger"):
+            _, mode = controller.begin_record(ledger, candidate, self.active_authority())
+        self.assertEqual(mode, "new")
+
+    def test_pre_mutation_reconciliation_rejects_later_phases(self) -> None:
+        for phase in ("release-authenticated", "backup-verified", "authority-changing", "migration-starting"):
+            with self.subTest(phase=phase):
+                self.assert_reconciliation_rejected(self.stale_pre_mutation_record(phase=phase))
+
+    def test_pre_mutation_reconciliation_requires_every_exact_stale_field(self) -> None:
+        for updates in (
+            {"environment": "production"},
+            {"localOutcome": "failure"},
+            {"result": "deployment transaction failed"},
+        ):
+            with self.subTest(updates=updates):
+                self.assert_reconciliation_rejected(self.stale_pre_mutation_record(**updates))
+        for missing in ("targetMigrationFingerprint", "result"):
+            record = self.stale_pre_mutation_record()
+            del record[missing]
+            with self.subTest(missing=missing):
+                self.assert_reconciliation_rejected(record)
+
+    def test_pre_mutation_reconciliation_rejects_migration_state_or_target_fingerprint(self) -> None:
+        for state in ("started", "completed", "failed"):
+            with self.subTest(state=state):
+                self.assert_reconciliation_rejected(self.stale_pre_mutation_record(migrationState=state))
+        self.assert_reconciliation_rejected(
+            self.stale_pre_mutation_record(targetMigrationFingerprint=f"0024:{'e' * 64}"),
+        )
+
+    def test_pre_mutation_reconciliation_rejects_changed_or_missing_authority(self) -> None:
+        self.assert_reconciliation_rejected(
+            self.stale_pre_mutation_record(), current=self.active_authority(sha256="f" * 64),
+        )
+        self.assert_reconciliation_rejected(
+            self.stale_pre_mutation_record(),
+            current=self.active_authority(migrationFingerprint=f"0024:{'f' * 64}"),
+        )
+        ledger = {"schemaVersion": 1, "records": [self.stale_pre_mutation_record()]}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(controller, "JOURNAL_ROOT", Path(directory)),
+            patch.object(controller, "current_authority", return_value=None),
+            patch.object(controller, "persist_ledger") as persist,
+        ):
+            with self.assertRaises(control.ControlPlaneError):
+                controller.reconcile_pre_mutation(ledger, "staging", "123", Mock())
+        persist.assert_not_called()
+
+    def test_pre_mutation_reconciliation_rejects_and_preserves_existing_journal(self) -> None:
+        self.assert_reconciliation_rejected(self.stale_pre_mutation_record(), journal=True)
+
+    def test_pre_mutation_reconciliation_rejects_other_environment_blockers(self) -> None:
+        database_blocker = self.stale_pre_mutation_record(
+            deploymentId="124", phase="manual-review", migrationState="failed", localOutcome="failure",
+        )
+        deployment_blocker = self.stale_pre_mutation_record(deploymentId="124")
+        for blocker in (database_blocker, deployment_blocker):
+            with self.subTest(result=blocker.get("result"), phase=blocker["phase"]):
+                self.assert_reconciliation_rejected(
+                    self.stale_pre_mutation_record(), extra_records=[blocker],
+                )
+
+    def test_pre_mutation_reconciliation_rejects_unknown_duplicate_or_malformed_identity(self) -> None:
+        self.assert_reconciliation_rejected(self.stale_pre_mutation_record(), deployment_id="999")
+        duplicate = self.stale_pre_mutation_record()
+        self.assert_reconciliation_rejected(
+            self.stale_pre_mutation_record(), extra_records=[duplicate],
+        )
+        for deployment_id in ("", "0", "+1", " 1", "1 ", "01", "1/2", "1" * 33):
+            with self.subTest(deployment_id=deployment_id):
+                self.assert_reconciliation_rejected(
+                    self.stale_pre_mutation_record(), deployment_id=deployment_id,
+                )
+
+    def test_root_controller_reconciliation_path_uses_no_github_capability(self) -> None:
+        ledger = {"schemaVersion": 1, "records": [self.stale_pre_mutation_record()]}
+        policy = Mock()
+        with (
+            patch.object(controller, "require_root_and_lock"),
+            patch.object(controller, "load_python", return_value=policy) as load_python,
+            patch.object(controller, "load_ledger", return_value=ledger),
+            patch.object(controller, "reconcile_pre_mutation") as reconcile,
+            patch.object(controller, "load_host_config") as load_config,
+            patch.object(controller, "GitHubAppClient") as github,
+            patch.object(sys, "argv", [
+                "yolpol-release-controller", "reconcile-pre-mutation", "staging", "123",
+            ]),
+        ):
+            controller.main()
+        load_python.assert_called_once_with(controller.POLICY, "yolpol_deploy_policy_reconciliation")
+        reconcile.assert_called_once_with(ledger, "staging", "123", policy)
+        load_config.assert_not_called()
+        github.assert_not_called()
+
     def test_exact_retry_conflict_success_and_in_progress_are_distinct(self) -> None:
         ledger: dict[str, object] = {"schemaVersion": 1, "records": []}
         with patch.object(controller, "persist_ledger"):
