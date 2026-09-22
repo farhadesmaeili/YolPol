@@ -71,7 +71,17 @@ def load_python(path: Path, name: str) -> ModuleType:
     if specification is None:
         controller_fail("host module loading failed")
     module = importlib.util.module_from_spec(specification)
-    loader.exec_module(module)
+    had_previous = name in sys.modules
+    previous = sys.modules.get(name)
+    sys.modules[name] = module
+    try:
+        loader.exec_module(module)
+    except BaseException:
+        if had_previous:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
+        raise
     return module
 
 
