@@ -64,6 +64,7 @@ usage() {
     'Usage: yolpol-deploy <command>' \
     '       yolpol-deploy backup-verify <backup-id>' \
     '       yolpol-deploy production-backup-verify <backup-id>' \
+    '       yolpol-deploy reconcile-staging-pre-mutation <deployment-id>' \
     '' \
     'Commands:' \
     '  validate' \
@@ -102,7 +103,8 @@ usage() {
     '  ingress-health-production' \
     '  deploy-operations-exporter' \
     '  apply-staging-intent' \
-    '  apply-production-intent' >&2
+    '  apply-production-intent' \
+    '  reconcile-staging-pre-mutation <deployment-id> (direct root incident recovery only)' >&2
 }
 
 fail() {
@@ -118,7 +120,9 @@ esac
 ACTION=invalid
 BACKUP_ID=''
 BACKUP_AUDIT_ID=none
+DEPLOYMENT_ID=''
 MUTATING=false
+ROOT_INCIDENT_ONLY=false
 REQUEST_VALID=false
 REQUEST_ERROR='invalid request'
 
@@ -140,6 +144,16 @@ validate_production_backup_id() {
     *[!A-Za-z0-9-]*) return 1 ;;
   esac
   printf '%s' "$candidate" | /usr/bin/grep -Eq '^yolpol-production-[0-9]{8}T[0-9]{6}Z(-[0-9a-f]{7,64})?$'
+}
+
+validate_deployment_id() {
+  candidate=$1
+  [ -n "$candidate" ] || return 1
+  [ "${#candidate}" -le 32 ] || return 1
+  case "$candidate" in
+    *[!0-9]*|0) return 1 ;;
+  esac
+  printf '%s' "$candidate" | /usr/bin/grep -Eq '^[1-9][0-9]*$'
 }
 
 if [ "$#" -ge 1 ]; then
@@ -176,6 +190,19 @@ if [ "$#" -ge 1 ]; then
         REQUEST_VALID=true
       else
         REQUEST_ERROR='invalid Production backup ID'
+      fi
+      ;;
+    reconcile-staging-pre-mutation)
+      if [ "$#" -ne 1 ]; then
+        REQUEST_ERROR='reconcile-staging-pre-mutation requires exactly one deployment ID'
+      elif validate_deployment_id "$1"; then
+        ACTION=reconcile-staging-pre-mutation
+        DEPLOYMENT_ID=$1
+        MUTATING=true
+        ROOT_INCIDENT_ONLY=true
+        REQUEST_VALID=true
+      else
+        REQUEST_ERROR='invalid deployment ID'
       fi
       ;;
     *) REQUEST_ERROR='unknown command' ;;
@@ -571,6 +598,7 @@ run_mutating_action() {
     production-telegram-webhook-set) internal telegram-webhook-set-production ;;
     apply-staging-intent) /usr/bin/python3 -B "$RELEASE_CONTROLLER" apply staging ;;
     apply-production-intent) /usr/bin/python3 -B "$RELEASE_CONTROLLER" apply production ;;
+    reconcile-staging-pre-mutation) /usr/bin/python3 -B "$RELEASE_CONTROLLER" reconcile-pre-mutation staging "$DEPLOYMENT_ID" ;;
   esac
 }
 
@@ -586,6 +614,12 @@ fi
 
 require_root
 require_base_contract
+
+if [ "$ROOT_INCIDENT_ONLY" = true ] && [ "$ACTOR" != root ]; then
+  if ! audit denied 77; then fail 'audit preflight failed for denied incident-recovery invocation'; fi
+  printf '%s\n' 'yolpol-deploy: pre-mutation reconciliation requires a direct root incident-recovery session' >&2
+  exit 77
+fi
 
 if [ "$REQUEST_VALID" != true ]; then
   ACTION=invalid

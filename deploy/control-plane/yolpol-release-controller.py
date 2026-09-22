@@ -38,6 +38,7 @@ from yolpol_control_plane import (
     load_host_config,
     parse_submission,
     require_actor,
+    require_decimal,
     validate_deployment_object,
     validate_private_key_file,
     verify_oidc,
@@ -59,6 +60,7 @@ SAFE_TOKEN = re.compile(rb"^[\x21-\x7e]{1,1024}$")
 PHASE_C2_RESULT = "PHASE_C2_OFFSERVER_BACKUP_REQUIRED"
 MANUAL_DATABASE_REVIEW_RESULT = "MANUAL_DATABASE_REVIEW_REQUIRED"
 MANUAL_DEPLOYMENT_RECONCILIATION_RESULT = "MANUAL_DEPLOYMENT_RECONCILIATION_REQUIRED"
+PRE_MUTATION_CRASH_RECONCILED_RESULT = "PRE_MUTATION_CRASH_RECONCILED"
 
 
 def controller_fail(message: str) -> NoReturn:
@@ -235,6 +237,63 @@ def requires_manual_deployment_reconciliation(record: dict[str, Any]) -> bool:
         or record.get("phase") == "rollback-failed"
         or record.get("result") == MANUAL_DEPLOYMENT_RECONCILIATION_RESULT
     )
+
+
+def reconcile_pre_mutation(
+    ledger: dict[str, Any], environment: str, deployment_id: str, policy: ModuleType,
+) -> dict[str, Any]:
+    require_decimal(deployment_id, "deployment ID")
+    if deployment_id == "0" or environment != "staging":
+        controller_fail("pre-mutation reconciliation request rejected")
+
+    records = ledger["records"]
+    if any(not isinstance(record, dict) for record in records):
+        controller_fail("deployment ledger record rejected")
+    matching = [record for record in records if record.get("deploymentId") == deployment_id]
+    if len(matching) != 1:
+        controller_fail("pre-mutation reconciliation record rejected")
+    record = matching[0]
+    required = {
+        "environment": environment,
+        "localOutcome": "in-progress",
+        "phase": "accepted",
+        "migrationState": "never-started",
+        "targetMigrationFingerprint": None,
+        "result": None,
+    }
+    if any(key not in record or record[key] != value for key, value in required.items()):
+        controller_fail("pre-mutation reconciliation state rejected")
+
+    environment_records = [
+        candidate for candidate in records
+        if candidate is not record and candidate.get("environment") == environment
+    ]
+    if any(requires_manual_database_review(candidate) for candidate in environment_records):
+        controller_fail("another database review blocker exists")
+    if any(requires_manual_deployment_reconciliation(candidate) for candidate in environment_records):
+        controller_fail("another deployment reconciliation blocker exists")
+
+    current = current_authority(environment, policy)
+    if current is None:
+        controller_fail("current release authority is not provisioned")
+    if current["sha256"] != record.get("previousAuthoritySha256"):
+        controller_fail("pre-mutation reconciliation authority changed")
+    if current["migrationFingerprint"] != record.get("currentMigrationFingerprint"):
+        controller_fail("pre-mutation reconciliation migration fingerprint changed")
+
+    journal = JOURNAL_ROOT / deployment_id
+    if os.path.lexists(journal):
+        controller_fail("pre-mutation reconciliation journal exists")
+
+    transition(
+        ledger,
+        record,
+        "reconciled-pre-mutation",
+        localOutcome="failure",
+        migrationState="never-started",
+        result=PRE_MUTATION_CRASH_RECONCILED_RESULT,
+    )
+    return record
 
 
 def transition(ledger: dict[str, Any], record: dict[str, Any], phase: str, **updates: Any) -> None:
@@ -662,6 +721,10 @@ def execute_transaction(
 def main() -> None:
     os.umask(0o077)
     require_root_and_lock()
+    if len(sys.argv) == 4 and sys.argv[1:3] == ["reconcile-pre-mutation", "staging"]:
+        policy = load_python(POLICY, "yolpol_deploy_policy_reconciliation")
+        reconcile_pre_mutation(load_ledger(), "staging", sys.argv[3], policy)
+        return
     if len(sys.argv) != 3 or sys.argv[1] != "apply" or sys.argv[2] not in {"staging", "production"}:
         controller_fail("controller arguments rejected")
     environment = sys.argv[2]

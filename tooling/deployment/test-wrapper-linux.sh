@@ -49,6 +49,7 @@ for action in validate status health pull-approved-images deploy-database migrat
 done
 expect_accepted_grammar backup-verify yolpol-staging-20260913T000000Z-abcdef0
 expect_accepted_grammar production-backup-verify yolpol-production-20260913T000000Z-abcdef0
+expect_accepted_grammar reconcile-staging-pre-mutation 123456789
 
 expect_rejected
 expect_rejected unknown
@@ -81,6 +82,18 @@ expect_rejected backup-verify yolpol-production-20260913T000000Z-abcdef0
 expect_rejected production-backup-verify '../../root/.ssh/authorized_keys'
 expect_rejected production-backup-verify 'yolpol-production-20260913T000000Z-$(id)'
 expect_rejected production-backup-verify "yolpol-production-20260913T000000Z-abcdef0$(printf '\n')evil"
+expect_rejected reconcile-staging-pre-mutation
+expect_rejected reconcile-staging-pre-mutation ''
+expect_rejected reconcile-staging-pre-mutation 0
+expect_rejected reconcile-staging-pre-mutation +1
+expect_rejected reconcile-staging-pre-mutation -1
+expect_rejected reconcile-staging-pre-mutation 01
+expect_rejected reconcile-staging-pre-mutation '1/../../root'
+expect_rejected reconcile-staging-pre-mutation '1 2'
+expect_rejected reconcile-staging-pre-mutation 1 extra
+newline_deployment_id=$(printf '1\n2')
+expect_rejected reconcile-staging-pre-mutation "$newline_deployment_id"
+expect_rejected reconcile-staging-pre-mutation 111111111111111111111111111111111
 
 printf 'touch %s\n' "$MARKER" > /tmp/poison
 chmod 0644 /tmp/poison
@@ -141,6 +154,21 @@ set -e
 [ "$sudo_status" -ne 0 ] || fail_test 'invalid arbitrary sudo argument unexpectedly succeeded'
 printf '%s' "$sudo_output" | grep -Fq 'not allowed to execute' \
   && fail_test 'sudoers did not match arbitrary wrapper arguments as documented'
+
+set +e
+root_only_output=$(/usr/sbin/runuser -u yolpol-operator -- /usr/bin/sudo -n \
+  "$WRAPPER" reconcile-staging-pre-mutation 123456789 2>&1)
+root_only_status=$?
+set -e
+[ "$root_only_status" -ne 0 ] \
+  || fail_test 'operator unexpectedly reconciled a ledger record'
+
+set +e
+agent_recovery_output=$(/usr/sbin/runuser -u yolpol-deployment-agent -- /usr/bin/sudo -n -l -- \
+  "$WRAPPER" reconcile-staging-pre-mutation 123456789 2>&1)
+agent_recovery_status=$?
+set -e
+[ "$agent_recovery_status" -ne 0 ] || fail_test 'deployment agent unexpectedly reconciled a ledger record'
 
 /usr/bin/python3 -I -B /usr/local/bin/test-bootstrap-linux.py \
   || fail_test 'server bootstrap Linux validation'
