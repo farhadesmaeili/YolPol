@@ -172,6 +172,59 @@ def oidc_transport(method: str, url: str, headers: dict[str, str], data: bytes |
     raise AssertionError(url)
 
 
+class ModuleLoadingTests(unittest.TestCase):
+    def test_real_bootstrap_dataclasses_load_successfully(self) -> None:
+        module_name = "yolpol_test_bootstrap_module"
+        self.assertNotIn(module_name, sys.modules)
+        fcntl_stub = types.ModuleType("fcntl")
+        grp_stub = types.ModuleType("grp")
+        pwd_stub = types.ModuleType("pwd")
+
+        with patch.dict(sys.modules, {"fcntl": fcntl_stub, "grp": grp_stub, "pwd": pwd_stub}):
+            try:
+                bootstrap = controller.load_python(
+                    ROOT / "deploy/bootstrap/yolpol-bootstrap.py",
+                    module_name,
+                )
+                self.assertIs(sys.modules[module_name], bootstrap)
+                self.assertEqual(bootstrap.SupportedHost.__module__, module_name)
+                self.assertEqual(
+                    tuple(bootstrap.SupportedHost.__dataclass_fields__),
+                    ("os_id", "version_id", "version_codename", "docker_repository_base"),
+                )
+                self.assertIsInstance(bootstrap.SUPPORTED_HOSTS[0], bootstrap.SupportedHost)
+            finally:
+                sys.modules.pop(module_name, None)
+
+    def test_failed_execution_does_not_leak_partial_module(self) -> None:
+        module_name = "yolpol_test_failed_module"
+        self.assertNotIn(module_name, sys.modules)
+        self.addCleanup(sys.modules.pop, module_name, None)
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "failed-module.py"
+            source.write_text("raise RuntimeError('expected loader failure')\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "expected loader failure"):
+                controller.load_python(source, module_name)
+
+        self.assertNotIn(module_name, sys.modules)
+
+    def test_failed_execution_restores_prior_module(self) -> None:
+        module_name = "yolpol_test_existing_module"
+        self.assertNotIn(module_name, sys.modules)
+        previous = types.ModuleType(module_name)
+        sys.modules[module_name] = previous
+        self.addCleanup(sys.modules.pop, module_name, None)
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "failed-module.py"
+            source.write_text("raise RuntimeError('expected loader failure')\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "expected loader failure"):
+                controller.load_python(source, module_name)
+
+        self.assertIs(sys.modules[module_name], previous)
+
+
 class ProtocolTests(unittest.TestCase):
     def test_exact_bytes_are_hashed_without_reserialization(self) -> None:
         raw = body()
