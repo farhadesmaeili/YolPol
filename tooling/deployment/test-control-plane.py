@@ -11,7 +11,7 @@ import time
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -903,6 +903,181 @@ class LedgerAndRollbackTests(unittest.TestCase):
         with self.assertRaises(control.ControlPlaneError):
             controller.rollback_disposition(True, "unknown")
 
+    def test_journal_stores_target_at_root_and_previous_authority_separately(self) -> None:
+        staging_runtime = Path("/opt/yolpol/staging/runtime.env")
+        monitoring_runtime = Path("/opt/yolpol/monitoring/runtime.env")
+        target_runtimes = {
+            staging_runtime: b"YOLPOL_GIT_REVISION=target\n",
+            monitoring_runtime: b"YOLPOL_OPERATIONS_METRICS_IMAGE=target\n",
+        }
+        previous_runtimes = {
+            staging_runtime: b"YOLPOL_GIT_REVISION=previous\n",
+            monitoring_runtime: b"YOLPOL_OPERATIONS_METRICS_IMAGE=previous\n",
+        }
+        previous_authority = {
+            "manifestBytes": b"previous-manifest",
+            "checksumBytes": b"previous-checksum",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            journal_root = Path(directory)
+            with (
+                patch.object(controller, "JOURNAL_ROOT", journal_root),
+                patch.object(controller.os, "chown", create=True) as chown,
+                patch.object(controller.os, "chmod") as chmod,
+                patch.object(controller, "_fsync_directory", create=True) as fsync_directory,
+            ):
+                def observe_fsync(path: Path) -> None:
+                    if path == journal_root:
+                        self.assertTrue((journal_root / "123").is_dir())
+
+                fsync_directory.side_effect = observe_fsync
+                journal = controller.journal_snapshot(
+                    "123",
+                    "staging",
+                    target_manifest_bytes=b"target-manifest",
+                    target_checksum_bytes=b"target-checksum",
+                    target_runtimes=target_runtimes,
+                    previous_authority=previous_authority,
+                    previous_runtimes=previous_runtimes,
+                )
+
+            previous = journal / "previous"
+            self.assertEqual((journal / "journal-version").read_bytes(), b"2\n")
+            self.assertEqual((journal / "environment").read_bytes(), b"staging\n")
+            self.assertEqual((journal / "release-manifest.json").read_bytes(), b"target-manifest")
+            self.assertEqual((journal / "release-manifest.sha256").read_bytes(), b"target-checksum")
+            self.assertEqual((journal / "runtime.env").read_bytes(), target_runtimes[staging_runtime])
+            self.assertEqual(
+                (journal / "monitoring-runtime.env").read_bytes(),
+                target_runtimes[monitoring_runtime],
+            )
+            self.assertEqual((previous / "release-manifest.json").read_bytes(), b"previous-manifest")
+            self.assertEqual((previous / "release-manifest.sha256").read_bytes(), b"previous-checksum")
+            self.assertEqual((previous / "runtime.env").read_bytes(), previous_runtimes[staging_runtime])
+            self.assertEqual(
+                (previous / "monitoring-runtime.env").read_bytes(),
+                previous_runtimes[monitoring_runtime],
+            )
+
+            expected_files = {
+                journal / "journal-version",
+                journal / "environment",
+                journal / "release-manifest.json",
+                journal / "release-manifest.sha256",
+                journal / "runtime.env",
+                journal / "monitoring-runtime.env",
+                previous / "release-manifest.json",
+                previous / "release-manifest.sha256",
+                previous / "runtime.env",
+                previous / "monitoring-runtime.env",
+            }
+            self.assertEqual(
+                {entry.args[0] for entry in chown.call_args_list},
+                {journal, previous, *expected_files},
+            )
+            chmod.assert_has_calls([
+                call(journal, 0o700),
+                call(previous, 0o700),
+                *(call(path, 0o600) for path in expected_files),
+            ], any_order=True)
+            self.assertEqual(
+                fsync_directory.call_args_list,
+                [call(journal_root), call(previous), call(journal)],
+            )
+
+    def test_restore_previous_uses_only_previous_journal_material(self) -> None:
+        staging_runtime = Path("/opt/yolpol/staging/runtime.env")
+        monitoring_runtime = Path("/opt/yolpol/monitoring/runtime.env")
+        bootstrap = Mock()
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "123"
+            previous = journal / "previous"
+            previous.mkdir(parents=True)
+            files = {
+                journal / "journal-version": b"2\n",
+                journal / "environment": b"staging\n",
+                journal / "release-manifest.json": b"target-manifest",
+                journal / "release-manifest.sha256": b"target-checksum",
+                journal / "runtime.env": b"target-runtime",
+                journal / "monitoring-runtime.env": b"target-monitoring-runtime",
+                previous / "release-manifest.json": b"previous-manifest",
+                previous / "release-manifest.sha256": b"previous-checksum",
+                previous / "runtime.env": b"previous-runtime",
+                previous / "monitoring-runtime.env": b"previous-monitoring-runtime",
+            }
+            for path, content in files.items():
+                path.write_bytes(content)
+
+            controller.restore_previous(bootstrap, "staging", journal)
+
+        bootstrap.activate_release_pair.assert_called_once_with(
+            "staging", b"previous-manifest", b"previous-checksum",
+        )
+        bootstrap.atomic_write.assert_has_calls([
+            call(staging_runtime, b"previous-runtime", 0, 0, 0o600, replace=True),
+            call(
+                monitoring_runtime,
+                b"previous-monitoring-runtime",
+                0,
+                0,
+                0o600,
+                replace=True,
+            ),
+        ], any_order=True)
+
+    def test_restore_previous_rejects_legacy_and_incomplete_journals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / "legacy"
+            legacy.mkdir()
+            (legacy / "environment").write_text("staging\n", encoding="ascii")
+            (legacy / "release-manifest.json").write_bytes(b"previous-manifest")
+            (legacy / "release-manifest.sha256").write_bytes(b"previous-checksum")
+            (legacy / "runtime.env").write_bytes(b"previous-runtime")
+
+            incomplete = root / "incomplete"
+            previous = incomplete / "previous"
+            previous.mkdir(parents=True)
+            (incomplete / "journal-version").write_text("2\n", encoding="ascii")
+            (incomplete / "environment").write_text("staging\n", encoding="ascii")
+            (incomplete / "release-manifest.json").write_bytes(b"target-manifest")
+            (incomplete / "release-manifest.sha256").write_bytes(b"target-checksum")
+            (incomplete / "runtime.env").write_bytes(b"target-runtime")
+            (incomplete / "monitoring-runtime.env").write_bytes(b"target-monitoring-runtime")
+            (previous / "release-manifest.json").write_bytes(b"previous-manifest")
+            (previous / "runtime.env").write_bytes(b"previous-runtime")
+            (previous / "monitoring-runtime.env").write_bytes(b"previous-monitoring-runtime")
+
+            for journal in (legacy, incomplete):
+                bootstrap = Mock()
+                with self.subTest(journal=journal.name), self.assertRaises(control.ControlPlaneError):
+                    controller.restore_previous(bootstrap, "staging", journal)
+                bootstrap.activate_release_pair.assert_not_called()
+                bootstrap.atomic_write.assert_not_called()
+
+    def test_activate_uses_authenticated_target_material(self) -> None:
+        bootstrap = Mock()
+        runtimes = {
+            Path("/opt/yolpol/staging/runtime.env"): b"target-runtime",
+            Path("/opt/yolpol/monitoring/runtime.env"): b"target-monitoring-runtime",
+        }
+
+        controller.activate(
+            bootstrap,
+            "staging",
+            b"target-manifest",
+            b"target-checksum",
+            runtimes,
+        )
+
+        bootstrap.activate_release_pair.assert_called_once_with(
+            "staging", b"target-manifest", b"target-checksum",
+        )
+        bootstrap.atomic_write.assert_has_calls([
+            call(path, content, 0, 0, 0o600, replace=True)
+            for path, content in runtimes.items()
+        ], any_order=True)
+
     def test_failed_changed_migration_blocks_a_different_manifest_request(self) -> None:
         ledger: dict[str, object] = {"schemaVersion": 1, "records": []}
         with patch.object(controller, "persist_ledger"):
@@ -946,6 +1121,14 @@ class LedgerAndRollbackTests(unittest.TestCase):
             "sha256": "b" * 64,
             "migrationFingerprint": f"0023:{'d' * 64}",
         }
+        target_runtimes = {
+            Path("/opt/yolpol/staging/runtime.env"): b"target-runtime",
+            Path("/opt/yolpol/monitoring/runtime.env"): b"target-monitoring-runtime",
+        }
+        previous_runtimes = {
+            Path("/opt/yolpol/staging/runtime.env"): b"previous-runtime",
+            Path("/opt/yolpol/monitoring/runtime.env"): b"previous-monitoring-runtime",
+        }
         actions: list[str] = []
 
         def run_internal(action: str, **kwargs: object) -> bytes:
@@ -958,9 +1141,10 @@ class LedgerAndRollbackTests(unittest.TestCase):
             patch.object(controller, "load_python", return_value=Mock()),
             patch.object(controller, "current_authority", return_value=current),
             patch.object(controller, "authenticate_release", return_value=(b"target-manifest", b"target-checksum", target)),
-            patch.object(controller, "target_runtimes", return_value={}),
-            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")),
-            patch.object(controller, "activate"),
+            patch.object(controller, "target_runtimes", return_value=target_runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=previous_runtimes),
+            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")) as journal_snapshot,
+            patch.object(controller, "activate") as activate,
             patch.object(controller, "docker_auth", return_value=(Path("/tmp/request"), Path("/tmp/docker"))),
             patch.object(controller, "internal", side_effect=run_internal),
             patch.object(controller.shutil, "rmtree"),
@@ -973,6 +1157,22 @@ class LedgerAndRollbackTests(unittest.TestCase):
         self.assertNotIn("migrate-staging", actions)
         self.assertIn("deploy-app-staging", actions)
         self.assertIn("deploy-workers-staging", actions)
+        journal_snapshot.assert_called_once_with(
+            "124",
+            "staging",
+            target_manifest_bytes=b"target-manifest",
+            target_checksum_bytes=b"target-checksum",
+            target_runtimes=target_runtimes,
+            previous_authority=current,
+            previous_runtimes=previous_runtimes,
+        )
+        activate.assert_called_once_with(
+            unittest.mock.ANY,
+            "staging",
+            b"target-manifest",
+            b"target-checksum",
+            target_runtimes,
+        )
 
     def test_same_fingerprint_pre_migration_failure_is_retryable(self) -> None:
         ledger: dict[str, object] = {"schemaVersion": 1, "records": []}

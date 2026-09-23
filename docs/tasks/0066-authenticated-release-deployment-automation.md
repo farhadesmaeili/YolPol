@@ -43,6 +43,8 @@ Automatic stale-record handling remains fail-closed. Exceptional SSH/root recove
 
 The public wrapper obtains the single existing global lock once. Root-only internal primitives accept only fixed action names and require the inherited lock descriptor for mutations; they are not in sudoers and never call the public wrapper recursively.
 
+Each transaction uses an explicit version-2 deployment journal. The journal root is target evidence: the authenticated incoming manifest and checksum plus rendered target runtime files. `previous/` is a separate rollback namespace containing only the previously active authority and its runtime files. Both directories and every file are root-owned with closed permissions and are fsynced; the version marker is written last. Rollback restores exclusively from `previous/`, while activation continues to use the authenticated target inputs directly. Legacy, incomplete, unexpected, symlinked, or environment-mismatched journals are rejected before restoration.
+
 A changed Staging fingerprint requires the composite encrypted backup gate: capacity/throttle check, create, exactly one strict internal backup ID, integrity verify, deep decrypt plus archive-list verify, then throttle success. Failure prevents migration. Only bounded nonsecret JSON leaves the gate; detailed output remains in the root operation log.
 
 Before changed migration starts, the previous manifest/runtime and application services can be restored. From migration start onward, old application rollback is prohibited and failures require target-compatible repair/manual review. Same-fingerprint failures restore and redeploy the previous authority. Automatic down migration, restore, database switch, and data deletion are absent.
