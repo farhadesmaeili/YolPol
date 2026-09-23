@@ -11,6 +11,7 @@ import time
 import types
 import unittest
 from pathlib import Path
+from typing import NoReturn
 from unittest.mock import MagicMock, Mock, call, patch
 
 
@@ -1078,6 +1079,138 @@ class LedgerAndRollbackTests(unittest.TestCase):
             for path, content in runtimes.items()
         ], any_order=True)
 
+    def test_transaction_failure_preserves_original_stage_across_rollback(self) -> None:
+        ledger: dict[str, object] = {"schemaVersion": 1, "records": []}
+        with patch.object(controller, "persist_ledger"):
+            record, mode = controller.begin_record(ledger, self.identity(), None)
+        target = {
+            "database": {"latestMigration": "0023", "migrationSetSha256": "d" * 64},
+        }
+        current = {
+            "manifest": target,
+            "manifestBytes": b"current-manifest",
+            "checksumBytes": b"current-checksum",
+            "sha256": "b" * 64,
+            "migrationFingerprint": f"0023:{'d' * 64}",
+        }
+        target_runtimes = {
+            Path("/opt/yolpol/staging/runtime.env"): b"target-runtime",
+            Path("/opt/yolpol/monitoring/runtime.env"): b"target-monitoring-runtime",
+        }
+        actions: list[str] = []
+
+        def run_internal(action: str, **kwargs: object) -> bytes:
+            del kwargs
+            actions.append(action)
+            if action == "health-staging":
+                raise control.ControlPlaneError("sensitive child detail must not escape")
+            return b""
+
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(
+                controller, "authenticate_release",
+                return_value=(b"target-manifest", b"target-checksum", target),
+            ),
+            patch.object(controller, "target_runtimes", return_value=target_runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=target_runtimes),
+            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")),
+            patch.object(controller, "activate"),
+            patch.object(controller, "restore_previous"),
+            patch.object(
+                controller, "docker_auth",
+                return_value=(Path("/tmp/request"), Path("/tmp/docker")),
+            ),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(controller.shutil, "rmtree"),
+        ):
+            with self.assertRaises(controller.DeploymentTransactionError) as captured:
+                controller.execute_transaction(
+                    config(), "123", envelope(), {"jti": "unique-jti", "actor": "farhadesmaeili"},
+                    b"token", ledger, record, mode,
+                )
+
+        self.assertEqual(captured.exception.stage, "health-staging")
+        self.assertEqual(captured.exception.disposition, "previous-runtime-restored")
+        self.assertEqual(
+            str(captured.exception),
+            "deployment failed at health-staging; previous runtime restored",
+        )
+        self.assertNotIn("sensitive child detail", str(captured.exception))
+        self.assertEqual(record["phase"], "rolled-back")
+        self.assertEqual(record["failureStage"], "health-staging")
+        self.assertEqual(record["failureDisposition"], "previous-runtime-restored")
+        self.assertGreater(actions.count("deploy-app-staging"), 1)
+
+    def test_transaction_diagnostic_rejects_unknown_stage_or_disposition(self) -> None:
+        with self.assertRaisesRegex(control.ControlPlaneError, "diagnostic rejected"):
+            controller.DeploymentTransactionError(
+                "credential-shaped-value", "failed-before-activation",
+            )
+        with self.assertRaisesRegex(control.ControlPlaneError, "diagnostic rejected"):
+            controller.DeploymentTransactionError("health-staging", "unexpected")
+
+    def test_terminal_status_description_never_replays_an_untrusted_result(self) -> None:
+        unsafe = {
+            "result": "credential or internal payload",
+            "failureStage": "credential-shaped-value",
+            "failureDisposition": "failed-before-activation",
+        }
+        self.assertEqual(
+            controller.terminal_status_description("staging", "failure", unsafe),
+            "staging deployment failed",
+        )
+        self.assertEqual(
+            controller.terminal_status_description("staging", "success", unsafe),
+            "staging deployment succeeded",
+        )
+        self.assertEqual(
+            controller.terminal_status_description("staging", "failure", {
+                "result": {"internal": "payload"},
+                "failureStage": ["health-staging"],
+                "failureDisposition": {"value": "previous-runtime-restored"},
+            }),
+            "staging deployment failed",
+        )
+        self.assertEqual(
+            controller.terminal_status_description("production", "failure", {
+                "result": controller.PHASE_C2_RESULT,
+            }),
+            controller.PHASE_C2_RESULT,
+        )
+        self.assertEqual(
+            controller.terminal_status_description("staging", "failure", {
+                "result": "ignored raw detail",
+                "failureStage": "health-staging",
+                "failureDisposition": "previous-runtime-restored",
+            }),
+            "staging deployment failed at health-staging; previous runtime restored",
+        )
+
+    def test_pre_activation_failure_reports_closed_stage_without_rollback(self) -> None:
+        ledger: dict[str, object] = {"schemaVersion": 1, "records": []}
+        with patch.object(controller, "persist_ledger"):
+            record, mode = controller.begin_record(ledger, self.identity(), None)
+        with (
+            patch.object(
+                controller, "load_python",
+                side_effect=control.ControlPlaneError("sensitive module detail must not escape"),
+            ),
+            patch.object(controller, "restore_previous") as restore_previous,
+        ):
+            with self.assertRaises(controller.DeploymentTransactionError) as captured:
+                controller.execute_transaction(
+                    config(), "123", envelope(), {"jti": "unique-jti", "actor": "farhadesmaeili"},
+                    b"token", ledger, record, mode,
+                )
+
+        self.assertEqual(captured.exception.stage, "policy-loading")
+        self.assertEqual(captured.exception.disposition, "failed-before-activation")
+        self.assertNotIn("sensitive module detail", str(captured.exception))
+        restore_previous.assert_not_called()
+
     def test_failed_changed_migration_blocks_a_different_manifest_request(self) -> None:
         ledger: dict[str, object] = {"schemaVersion": 1, "records": []}
         with patch.object(controller, "persist_ledger"):
@@ -1293,6 +1426,127 @@ class LedgerAndRollbackTests(unittest.TestCase):
             config(), b"token", "124", "staging", "error", result,
         )
         execute.assert_not_called()
+
+    def test_main_publishes_closed_transaction_diagnostic(self) -> None:
+        record = {
+            "phase": "accepted",
+            "localOutcome": "in-progress",
+            "result": None,
+        }
+        failure = controller.DeploymentTransactionError(
+            "health-staging", "previous-runtime-restored",
+        )
+
+        def apply_transition(
+            _ledger: dict[str, object], target: dict[str, object], phase: str, **updates: object,
+        ) -> None:
+            target.update({"phase": phase, **updates})
+
+        app = Mock()
+        app.get_deployment.return_value = {}
+        with (
+            patch.object(controller, "require_root_and_lock"),
+            patch.object(controller, "load_host_config", return_value=config()),
+            patch.object(controller, "read_stdin", return_value=b"submission"),
+            patch.object(controller, "parse_submission", return_value=("124", envelope())),
+            patch.object(controller, "verify_oidc", return_value={
+                "jti": "new-jti", "actor": "farhadesmaeili", "actor_id": "24680",
+            }),
+            patch.object(controller, "GitHubAppClient", return_value=app),
+            patch.object(controller, "validate_deployment_object"),
+            patch.object(controller, "decrypt_capability", return_value=b"token"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=None),
+            patch.object(controller, "load_ledger", return_value={"schemaVersion": 1, "records": []}),
+            patch.object(controller, "begin_record", return_value=(record, "new")),
+            patch.object(controller, "post_status") as post_status,
+            patch.object(controller, "transition", side_effect=apply_transition) as transition,
+            patch.object(controller, "execute_transaction", side_effect=failure),
+            patch.object(sys, "argv", ["yolpol-release-controller", "apply", "staging"]),
+        ):
+            controller.main()
+
+        self.assertEqual(post_status.call_args_list, [
+            call(config(), b"token", "124", "staging", "in_progress", "staging deployment in progress"),
+            call(
+                config(), b"token", "124", "staging", "failure",
+                "staging deployment failed at health-staging; previous runtime restored",
+            ),
+        ])
+        self.assertIn(
+            call(
+                unittest.mock.ANY,
+                record,
+                "accepted",
+                localOutcome="failure",
+                result="deployment failed at health-staging; previous runtime restored",
+                failureStage="health-staging",
+                failureDisposition="previous-runtime-restored",
+            ),
+            transition.call_args_list,
+        )
+
+    def test_main_preserves_phase_c2_policy_result_and_persists_diagnostic(self) -> None:
+        record = {
+            "phase": "accepted",
+            "localOutcome": "in-progress",
+            "result": None,
+        }
+
+        def require_phase_c2(*_args: object) -> NoReturn:
+            record.update({
+                "phase": "phase-c2-required",
+                "localOutcome": "failure",
+                "result": controller.PHASE_C2_RESULT,
+            })
+            raise controller.DeploymentTransactionError(
+                "phase-c2-approval", "failed-before-activation",
+            )
+
+        app = Mock()
+        app.get_deployment.return_value = {}
+        with (
+            patch.object(controller, "require_root_and_lock"),
+            patch.object(controller, "load_host_config", return_value=config()),
+            patch.object(controller, "read_stdin", return_value=b"submission"),
+            patch.object(controller, "parse_submission", return_value=("124", envelope())),
+            patch.object(controller, "verify_oidc", return_value={
+                "jti": "new-jti", "actor": "farhadesmaeili", "actor_id": "24680",
+            }),
+            patch.object(controller, "GitHubAppClient", return_value=app),
+            patch.object(controller, "validate_deployment_object"),
+            patch.object(controller, "decrypt_capability", return_value=b"token"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=None),
+            patch.object(controller, "load_ledger", return_value={"schemaVersion": 1, "records": []}),
+            patch.object(controller, "begin_record", return_value=(record, "new")),
+            patch.object(controller, "post_status") as post_status,
+            patch.object(controller, "transition") as transition,
+            patch.object(controller, "execute_transaction", side_effect=require_phase_c2),
+            patch.object(sys, "argv", ["yolpol-release-controller", "apply", "production"]),
+        ):
+            controller.main()
+
+        self.assertEqual(post_status.call_args_list, [
+            call(
+                config(), b"token", "124", "production", "in_progress",
+                "production deployment in progress",
+            ),
+            call(
+                config(), b"token", "124", "production", "failure",
+                controller.PHASE_C2_RESULT,
+            ),
+        ])
+        self.assertIn(
+            call(
+                unittest.mock.ANY,
+                record,
+                "phase-c2-required",
+                failureStage="phase-c2-approval",
+                failureDisposition="failed-before-activation",
+            ),
+            transition.call_args_list,
+        )
 
     def test_expired_authorization_is_terminal_before_any_mutation(self) -> None:
         app = Mock()

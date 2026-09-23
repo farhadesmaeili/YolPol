@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 
-import {describe, expect, it} from "vitest";
+import {afterEach, describe, expect, it, vi} from "vitest";
 
 import {
   createEnvelope,
@@ -9,6 +9,7 @@ import {
   deploymentAudiencePrefix,
   intentDigest,
   maximumIntentBytes,
+  waitForDeployment,
   type IntentInput,
 } from "./release-deployment";
 
@@ -74,6 +75,57 @@ describe("authenticated deployment intent", () => {
     expect(() => createIntentBody({...input(), expiresAtUnix: input().issuedAtUnix + 301})).toThrow(/lifetime/u);
     expect(() => createIntentBody({...input(), nonce: "short"})).toThrow(/nonce/u);
     expect(() => createIntentBody({...input(), capability: {...input().capability, keyId: "space rejected"}})).toThrow(/keyId/u);
+  });
+});
+
+describe("deployment result diagnostics", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reports the deployment ID and bounded host failure description", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      state: "failure",
+      description: "staging deployment failed at health-staging; previous runtime restored",
+    }]), {status: 200})));
+
+    await expect(waitForDeployment("farhadesmaeili/YolPol", "token", 6619957147)).rejects.toThrow(
+      "Host deployment 6619957147 ended with failure: "
+      + "staging deployment failed at health-staging; previous runtime restored.",
+    );
+  });
+
+  it("reports an exact whitelisted host policy result", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      state: "error",
+      description: "PHASE_C2_OFFSERVER_BACKUP_REQUIRED",
+    }]), {status: 200})));
+
+    await expect(waitForDeployment("farhadesmaeili/YolPol", "token", 6619957147)).rejects.toThrow(
+      "Host deployment 6619957147 ended with error: PHASE_C2_OFFSERVER_BACKUP_REQUIRED.",
+    );
+  });
+
+  it("does not echo malformed status descriptions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      state: "failure",
+      description: "untrusted printable workflow output",
+    }]), {status: 200})));
+
+    await expect(waitForDeployment("farhadesmaeili/YolPol", "token", 123)).rejects.toThrow(
+      "Host deployment 123 ended with failure.",
+    );
+  });
+
+  it("does not echo a valid-shaped transaction description with an unknown stage", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([{
+      state: "failure",
+      description: "deployment failed at credential-shaped-value; failed before activation",
+    }]), {status: 200})));
+
+    await expect(waitForDeployment("farhadesmaeili/YolPol", "token", 124)).rejects.toThrow(
+      "Host deployment 124 ended with failure.",
+    );
   });
 });
 
