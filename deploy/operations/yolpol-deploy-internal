@@ -226,7 +226,9 @@ public_staging_smoke() {
     /usr/bin/curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 15 \
       --output /dev/null --dump-header "$headers" "https://staging.yolpol.com$route"
   done
-  /usr/bin/grep -Eiq '^x-robots-tag: noindex, nofollow, noarchive\r?$' "$headers" || fail 'Staging noindex header missing'
+  /usr/bin/tr -d '\r' < "$headers" \
+    | /usr/bin/grep -Fxiq 'x-robots-tag: noindex, nofollow, noarchive' \
+    || fail 'Staging noindex header missing'
   /usr/bin/rm -f -- "$headers"
   trap - EXIT HUP INT TERM
 }
