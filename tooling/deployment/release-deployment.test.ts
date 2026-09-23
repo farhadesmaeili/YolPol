@@ -86,12 +86,12 @@ describe("deployment result diagnostics", () => {
   it("reports the deployment ID and bounded host failure description", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([{
       state: "failure",
-      description: "staging deployment failed at health-staging; previous runtime restored",
+      description: "staging deployment failed at public-smoke-staging; previous runtime restored",
     }]), {status: 200})));
 
     await expect(waitForDeployment("farhadesmaeili/YolPol", "token", 6619957147)).rejects.toThrow(
       "Host deployment 6619957147 ended with failure: "
-      + "staging deployment failed at health-staging; previous runtime restored.",
+      + "staging deployment failed at public-smoke-staging; previous runtime restored.",
     );
   });
 
@@ -182,6 +182,9 @@ describe("Phase C1 workflow contract", () => {
     expect(internal).toContain("/api/health/live /api/health/ready /en");
     expect(internal).toContain("https://staging.yolpol.com$route");
     expect(internal).toContain("x-robots-tag: noindex, nofollow, noarchive");
+    expect(internal).toContain("/usr/bin/tr -d '\\r'");
+    expect(internal).toContain("/usr/bin/grep -Fxiq 'x-robots-tag: noindex, nofollow, noarchive'");
+    expect(internal).not.toContain("noarchive\\r?$");
   });
 
   it("keeps GitHub App polling read-only, conditional, fixed, and PAT-free", () => {

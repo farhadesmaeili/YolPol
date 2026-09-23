@@ -18,10 +18,12 @@ function docker(args, options = {}) {
 try {
   for (const source of [
     "tooling/deployment/Dockerfile",
+    "tooling/deployment/fake-public-smoke-curl.sh",
     "tooling/deployment/test-wrapper-linux.sh",
     "tooling/deployment/test-bootstrap-linux.py",
     "deploy/bootstrap/yolpol-bootstrap.py",
     "deploy/operations/yolpol-deploy",
+    "deploy/operations/yolpol-deploy-internal",
     "deploy/operations/yolpol-deploy-policy.py",
     "deploy/operations/sudoers.yolpol-deploy",
     "deploy/control-plane/sudoers.yolpol-deployment-agent",
@@ -34,6 +36,7 @@ try {
     "--tmpfs", "/tmp:rw,nosuid,nodev",
     "--tmpfs", "/root:rw,nosuid,nodev,mode=0700",
     "--tmpfs", "/etc/sudoers.d:rw,nosuid,nodev,mode=0755",
+    "--tmpfs", "/opt/yolpol/runtime:rw,nosuid,nodev,mode=0700",
     image,
   ]);
 } finally {
