@@ -61,6 +61,7 @@ PHASE_C2_RESULT = "PHASE_C2_OFFSERVER_BACKUP_REQUIRED"
 MANUAL_DATABASE_REVIEW_RESULT = "MANUAL_DATABASE_REVIEW_REQUIRED"
 MANUAL_DEPLOYMENT_RECONCILIATION_RESULT = "MANUAL_DEPLOYMENT_RECONCILIATION_REQUIRED"
 PRE_MUTATION_CRASH_RECONCILED_RESULT = "PRE_MUTATION_CRASH_RECONCILED"
+JOURNAL_VERSION = b"2\n"
 
 
 def controller_fail(message: str) -> NoReturn:
@@ -511,27 +512,170 @@ def target_runtimes(environment: str, manifest: dict[str, Any], policy: ModuleTy
     return result
 
 
-def journal_snapshot(deployment_id: str, environment: str, current: dict[str, Any], runtime_paths: list[Path]) -> Path:
-    journal = JOURNAL_ROOT / deployment_id
-    if journal.exists():
-        return journal
-    journal.mkdir(mode=0o700)
-    (journal / "environment").write_text(environment + "\n", encoding="ascii")
-    (journal / "release-manifest.json").write_bytes(current["manifestBytes"])
-    (journal / "release-manifest.sha256").write_bytes(current["checksumBytes"])
-    for path in runtime_paths:
-        (journal / ("monitoring-runtime.env" if "monitoring" in path.parts else "runtime.env")).write_bytes(path.read_bytes())
-    for path in journal.iterdir():
+def journal_runtime_paths(environment: str) -> dict[Path, str]:
+    if environment == "staging":
+        return {
+            Path("/opt/yolpol/staging/runtime.env"): "runtime.env",
+            Path("/opt/yolpol/monitoring/runtime.env"): "monitoring-runtime.env",
+        }
+    if environment == "production":
+        return {Path("/opt/yolpol/production/runtime.env"): "runtime.env"}
+    controller_fail("deployment journal environment rejected")
+
+
+def validated_runtime_snapshot(
+    environment: str, runtimes: dict[Path, bytes], label: str,
+) -> dict[str, bytes]:
+    names = journal_runtime_paths(environment)
+    if set(runtimes) != set(names):
+        controller_fail(f"{label} runtime snapshot rejected")
+    result: dict[str, bytes] = {}
+    for path, name in names.items():
+        content = runtimes[path]
+        if not isinstance(content, bytes) or not content:
+            controller_fail(f"{label} runtime snapshot rejected")
+        result[name] = content
+    return result
+
+
+def read_previous_runtimes(environment: str, target_runtimes: dict[Path, bytes]) -> dict[Path, bytes]:
+    paths = journal_runtime_paths(environment)
+    if set(target_runtimes) != set(paths):
+        controller_fail("target runtime snapshot rejected")
+    try:
+        return {path: path.read_bytes() for path in paths}
+    except OSError as error:
+        raise ControlPlaneError("previous runtime snapshot rejected") from error
+
+
+def _write_journal_file(path: Path, content: bytes) -> None:
+    with path.open("xb") as stream:
+        stream.write(content)
         os.chown(path, 0, 0)
         os.chmod(path, 0o600)
-        with path.open("rb") as stream:
-            os.fsync(stream.fileno())
-    directory = os.open(journal, os.O_RDONLY | os.O_DIRECTORY)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
-        os.fsync(directory)
+        os.fsync(descriptor)
     finally:
-        os.close(directory)
+        os.close(descriptor)
+
+
+def journal_snapshot(
+    deployment_id: str,
+    environment: str,
+    *,
+    target_manifest_bytes: bytes,
+    target_checksum_bytes: bytes,
+    target_runtimes: dict[Path, bytes],
+    previous_authority: dict[str, Any],
+    previous_runtimes: dict[Path, bytes],
+) -> Path:
+    if not isinstance(target_manifest_bytes, bytes) or not target_manifest_bytes:
+        controller_fail("target manifest journal snapshot rejected")
+    if not isinstance(target_checksum_bytes, bytes) or not target_checksum_bytes:
+        controller_fail("target checksum journal snapshot rejected")
+    previous_manifest = previous_authority.get("manifestBytes")
+    previous_checksum = previous_authority.get("checksumBytes")
+    if not isinstance(previous_manifest, bytes) or not previous_manifest:
+        controller_fail("previous manifest journal snapshot rejected")
+    if not isinstance(previous_checksum, bytes) or not previous_checksum:
+        controller_fail("previous checksum journal snapshot rejected")
+    target_runtime_files = validated_runtime_snapshot(environment, target_runtimes, "target")
+    previous_runtime_files = validated_runtime_snapshot(environment, previous_runtimes, "previous")
+
+    journal = JOURNAL_ROOT / deployment_id
+    if os.path.lexists(journal):
+        controller_fail("deployment journal already exists")
+    journal.mkdir(mode=0o700)
+    os.chown(journal, 0, 0)
+    os.chmod(journal, 0o700)
+    _fsync_directory(JOURNAL_ROOT)
+    previous = journal / "previous"
+    previous.mkdir(mode=0o700)
+    os.chown(previous, 0, 0)
+    os.chmod(previous, 0o700)
+
+    _write_journal_file(journal / "environment", (environment + "\n").encode("ascii"))
+    _write_journal_file(journal / "release-manifest.json", target_manifest_bytes)
+    _write_journal_file(journal / "release-manifest.sha256", target_checksum_bytes)
+    for name, content in target_runtime_files.items():
+        _write_journal_file(journal / name, content)
+
+    _write_journal_file(previous / "release-manifest.json", previous_manifest)
+    _write_journal_file(previous / "release-manifest.sha256", previous_checksum)
+    for name, content in previous_runtime_files.items():
+        _write_journal_file(previous / name, content)
+    _fsync_directory(previous)
+
+    # The version marker is written last so an interrupted snapshot is never
+    # mistaken for a complete journal.
+    _write_journal_file(journal / "journal-version", JOURNAL_VERSION)
+    _fsync_directory(journal)
     return journal
+
+
+def _journal_directory_entries(path: Path) -> set[str]:
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISDIR(metadata.st_mode):
+            controller_fail("deployment journal rejected")
+        return {entry.name for entry in path.iterdir()}
+    except OSError as error:
+        raise ControlPlaneError("deployment journal rejected") from error
+
+
+def _journal_file_bytes(path: Path) -> bytes:
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            controller_fail("deployment journal rejected")
+        content = path.read_bytes()
+        if not content:
+            controller_fail("deployment journal rejected")
+        return content
+    except OSError as error:
+        raise ControlPlaneError("deployment journal rejected") from error
+
+
+def previous_journal_material(
+    journal: Path, environment: str,
+) -> tuple[bytes, bytes, dict[Path, bytes]]:
+    runtime_paths = journal_runtime_paths(environment)
+    runtime_names = set(runtime_paths.values())
+    expected_root = {
+        "journal-version", "environment", "release-manifest.json",
+        "release-manifest.sha256", "previous", *runtime_names,
+    }
+    if _journal_directory_entries(journal) != expected_root:
+        controller_fail("deployment journal rejected")
+    previous = journal / "previous"
+    expected_previous = {"release-manifest.json", "release-manifest.sha256", *runtime_names}
+    if _journal_directory_entries(previous) != expected_previous:
+        controller_fail("deployment journal rejected")
+    if _journal_file_bytes(journal / "journal-version") != JOURNAL_VERSION:
+        controller_fail("deployment journal version rejected")
+    if _journal_file_bytes(journal / "environment") != (environment + "\n").encode("ascii"):
+        controller_fail("deployment journal environment rejected")
+
+    # Validate the complete target evidence even though rollback consumes only
+    # the previous authority namespace.
+    _journal_file_bytes(journal / "release-manifest.json")
+    _journal_file_bytes(journal / "release-manifest.sha256")
+    for name in runtime_names:
+        _journal_file_bytes(journal / name)
+
+    previous_manifest = _journal_file_bytes(previous / "release-manifest.json")
+    previous_checksum = _journal_file_bytes(previous / "release-manifest.sha256")
+    previous_runtime_files = {
+        path: _journal_file_bytes(previous / name)
+        for path, name in runtime_paths.items()
+    }
+    return previous_manifest, previous_checksum, previous_runtime_files
 
 
 def activate(bootstrap: ModuleType, environment: str, manifest_bytes: bytes, checksum_bytes: bytes, runtimes: dict[Path, bytes]) -> None:
@@ -541,16 +685,14 @@ def activate(bootstrap: ModuleType, environment: str, manifest_bytes: bytes, che
 
 
 def restore_previous(bootstrap: ModuleType, environment: str, journal: Path) -> None:
+    manifest_bytes, checksum_bytes, runtimes = previous_journal_material(journal, environment)
     bootstrap.activate_release_pair(
         environment,
-        (journal / "release-manifest.json").read_bytes(),
-        (journal / "release-manifest.sha256").read_bytes(),
+        manifest_bytes,
+        checksum_bytes,
     )
-    runtime_path = Path(f"/opt/yolpol/{environment}/runtime.env")
-    bootstrap.atomic_write(runtime_path, (journal / "runtime.env").read_bytes(), 0, 0, 0o600, replace=True)
-    monitoring = journal / "monitoring-runtime.env"
-    if monitoring.exists():
-        bootstrap.atomic_write(Path("/opt/yolpol/monitoring/runtime.env"), monitoring.read_bytes(), 0, 0, 0o600, replace=True)
+    for path, content in runtimes.items():
+        bootstrap.atomic_write(path, content, 0, 0, 0o600, replace=True)
 
 
 def internal(action: str, *, docker_config: Path | None = None, deadline: float | None = None) -> bytes:
@@ -663,7 +805,16 @@ def execute_transaction(
             run("backup-create-verify-deep-staging")
             transition(ledger, record, "backup-verified")
     runtimes = target_runtimes(environment, target, policy)
-    journal = journal_snapshot(deployment_id, environment, current, list(runtimes))
+    previous_runtime_files = read_previous_runtimes(environment, runtimes)
+    journal = journal_snapshot(
+        deployment_id,
+        environment,
+        target_manifest_bytes=manifest_bytes,
+        target_checksum_bytes=checksum_bytes,
+        target_runtimes=runtimes,
+        previous_authority=current,
+        previous_runtimes=previous_runtime_files,
+    )
     authority_mutation_started = False
     request_root: Path | None = None
     docker_config: Path | None = None
