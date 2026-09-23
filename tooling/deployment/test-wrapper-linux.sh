@@ -6,6 +6,7 @@ set -eu
 /usr/bin/install -o root -g root -m 0440 /usr/local/share/yolpol-deployment-agent.sudoers /etc/sudoers.d/yolpol-deployment-agent
 
 WRAPPER=/opt/yolpol/bin/yolpol-deploy
+INTERNAL=/opt/yolpol/bin/yolpol-deploy-internal
 MARKER=/tmp/yolpol-environment-injection
 
 fail_test() {
@@ -154,6 +155,24 @@ set -e
 [ "$sudo_status" -ne 0 ] || fail_test 'invalid arbitrary sudo argument unexpectedly succeeded'
 printf '%s' "$sudo_output" | grep -Fq 'not allowed to execute' \
   && fail_test 'sudoers did not match arbitrary wrapper arguments as documented'
+
+mkdir -p /opt/yolpol/runtime/tmp
+chmod 0700 /opt/yolpol/runtime /opt/yolpol/runtime/tmp
+: > /opt/yolpol/runtime/deployment.lock
+chmod 0600 /opt/yolpol/runtime/deployment.lock
+exec 9>>/opt/yolpol/runtime/deployment.lock
+/usr/bin/flock -x 9
+YOLPOL_INTERNAL_LOCK_FD=9 "$INTERNAL" public-smoke-staging \
+  || fail_test 'CRLF noindex response header was rejected'
+set +e
+invalid_header_output=$(YOLPOL_TEST_CURL_HEADER='x-robots-tag: noindex, nofollow' \
+  YOLPOL_INTERNAL_LOCK_FD=9 "$INTERNAL" public-smoke-staging 2>&1)
+invalid_header_status=$?
+set -e
+[ "$invalid_header_status" -eq 1 ] || fail_test 'invalid noindex response header was accepted'
+printf '%s' "$invalid_header_output" | grep -Fq 'Staging noindex header missing' \
+  || fail_test 'invalid noindex response header failed without the closed diagnostic'
+exec 9>&-
 
 set +e
 root_only_output=$(/usr/sbin/runuser -u yolpol-operator -- /usr/bin/sudo -n \
