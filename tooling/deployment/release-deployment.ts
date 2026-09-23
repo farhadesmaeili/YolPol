@@ -252,7 +252,49 @@ async function createDeployment(
   return deployment.id;
 }
 
-async function waitForDeployment(repository: string, token: string, deploymentId: number): Promise<void> {
+const safeDeploymentFailureStages = new Set([
+  "transaction-initialization",
+  "policy-loading",
+  "current-authority-validation",
+  "release-authentication",
+  "validate-production",
+  "staging-success-verification",
+  "phase-c2-approval",
+  "validate-staging",
+  "backup-create-verify-deep-staging",
+  "target-runtime-rendering",
+  "previous-runtime-snapshot",
+  "journal-creation",
+  "authority-activation",
+  "registry-authentication",
+  "pull-staging",
+  "pull-production",
+  "deploy-database-staging",
+  "deploy-database-production",
+  "migrate-staging",
+  "deploy-app-staging",
+  "deploy-app-production",
+  "deploy-workers-staging",
+  "deploy-workers-production",
+  "deploy-operations-exporter",
+  "health-staging",
+  "health-production",
+  "ingress-health-staging",
+  "ingress-health-production",
+  "public-smoke-staging",
+]);
+
+function safeStatusDescription(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || Buffer.byteLength(value, "utf8") > 140) return null;
+  const transactionFailure = /^(?:(?:staging|production) )?deployment failed at ([a-z0-9][a-z0-9-]{0,63}); (?:failed before activation|manual review required|previous runtime restored|rollback failed)$/u.exec(value);
+  const policyFailure = /^(?:MANUAL_DATABASE_REVIEW_REQUIRED|MANUAL_DEPLOYMENT_RECONCILIATION_REQUIRED|PHASE_C2_OFFSERVER_BACKUP_REQUIRED)$/u;
+  const safeTransactionFailure = transactionFailure !== null
+    && transactionFailure[1] !== undefined
+    && safeDeploymentFailureStages.has(transactionFailure[1]);
+  return safeTransactionFailure || policyFailure.test(value) ? value : null;
+}
+
+export async function waitForDeployment(repository: string, token: string, deploymentId: number): Promise<void> {
   const deadline = Date.now() + 80 * 60 * 1_000;
   while (Date.now() < deadline) {
     const response = await fetch(`https://api.github.com/repos/${repository}/deployments/${deploymentId}/statuses?per_page=1`, {
@@ -265,7 +307,11 @@ async function waitForDeployment(repository: string, token: string, deploymentId
     if (typeof latest === "object" && latest !== null && !Array.isArray(latest)) {
       const state = (latest as Record<string, unknown>).state;
       if (state === "success") return;
-      if (state === "failure" || state === "error" || state === "inactive") fail(`Host deployment ended with ${state}.`);
+      if (state === "failure" || state === "error" || state === "inactive") {
+        const description = safeStatusDescription((latest as Record<string, unknown>).description);
+        const detail = description === null ? "" : `: ${description}`;
+        fail(`Host deployment ${deploymentId} ended with ${state}${detail}.`);
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 15_000));
   }

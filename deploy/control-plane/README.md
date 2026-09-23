@@ -36,6 +36,8 @@ For a changed Staging migration fingerprint, the controller requires local encry
 
 Before a changed migration starts, failure restores the previous manifest/runtime and redeploys the previous application services. Once a changed migration starts, an older application is never deployed automatically; the ledger enters manual review. No down migration, automatic restore, or automatic database switch exists.
 
+Transaction failures retain a closed, non-secret `failureStage` and `failureDisposition` in the ledger even when rollback changes the phase. The controller publishes the same bounded diagnostic in the terminal GitHub Deployment status, and the waiting workflow reports the Deployment ID plus that validated one-line description. Raw subprocess output, stderr, credentials, provider responses, paths selected by a caller, and release payloads are never published to GitHub Actions.
+
 Production is dispatch-only and also requires an existing provisioned Production contract, an exact successful Staging ledger record, and an unchanged migration fingerprint before any mutation. A changed fingerprint fails with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`. A successful Phase C1 result is `deployed-not-publicly-activated`; it does not alter ingress, DNS, Cloudflare, monitoring, secrets, or public activation.
 
 ## Activation prerequisites

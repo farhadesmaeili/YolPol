@@ -62,10 +62,88 @@ MANUAL_DATABASE_REVIEW_RESULT = "MANUAL_DATABASE_REVIEW_REQUIRED"
 MANUAL_DEPLOYMENT_RECONCILIATION_RESULT = "MANUAL_DEPLOYMENT_RECONCILIATION_REQUIRED"
 PRE_MUTATION_CRASH_RECONCILED_RESULT = "PRE_MUTATION_CRASH_RECONCILED"
 JOURNAL_VERSION = b"2\n"
+FAILURE_STAGES = frozenset({
+    "transaction-initialization",
+    "policy-loading",
+    "current-authority-validation",
+    "release-authentication",
+    "validate-production",
+    "staging-success-verification",
+    "phase-c2-approval",
+    "validate-staging",
+    "backup-create-verify-deep-staging",
+    "target-runtime-rendering",
+    "previous-runtime-snapshot",
+    "journal-creation",
+    "authority-activation",
+    "registry-authentication",
+    "pull-staging",
+    "pull-production",
+    "deploy-database-staging",
+    "deploy-database-production",
+    "migrate-staging",
+    "deploy-app-staging",
+    "deploy-app-production",
+    "deploy-workers-staging",
+    "deploy-workers-production",
+    "deploy-operations-exporter",
+    "health-staging",
+    "health-production",
+    "ingress-health-staging",
+    "ingress-health-production",
+    "public-smoke-staging",
+})
+FAILURE_DISPOSITIONS = {
+    "failed-before-activation": "failed before activation",
+    "manual-review-required": "manual review required",
+    "previous-runtime-restored": "previous runtime restored",
+    "rollback-failed": "rollback failed",
+}
+SAFE_POLICY_RESULTS = frozenset({
+    MANUAL_DATABASE_REVIEW_RESULT,
+    MANUAL_DEPLOYMENT_RECONCILIATION_RESULT,
+    PHASE_C2_RESULT,
+})
+SAFE_SUCCESS_RESULTS = frozenset({"deployed", "deployed-not-publicly-activated"})
+
+
+class DeploymentTransactionError(ControlPlaneError):
+    """A closed, non-secret deployment failure safe for durable reporting."""
+
+    def __init__(self, stage: str, disposition: str) -> None:
+        if stage not in FAILURE_STAGES or disposition not in FAILURE_DISPOSITIONS:
+            controller_fail("deployment failure diagnostic rejected")
+        self.stage = stage
+        self.disposition = disposition
+        super().__init__(f"deployment failed at {stage}; {FAILURE_DISPOSITIONS[disposition]}")
 
 
 def controller_fail(message: str) -> NoReturn:
     raise ControlPlaneError(message)
+
+
+def terminal_status_description(
+    environment: str, state: str, record: dict[str, Any],
+) -> str:
+    if environment not in {"staging", "production"} or state not in {"success", "failure"}:
+        controller_fail("terminal status description rejected")
+    result = record.get("result")
+    if state == "success":
+        return (
+            f"{environment}: {result}"
+            if isinstance(result, str) and result in SAFE_SUCCESS_RESULTS
+            else f"{environment} deployment succeeded"
+        )
+    if isinstance(result, str) and result in SAFE_POLICY_RESULTS:
+        return str(result)
+    stage = record.get("failureStage")
+    disposition = record.get("failureDisposition")
+    if (
+        isinstance(stage, str) and stage in FAILURE_STAGES
+        and isinstance(disposition, str) and disposition in FAILURE_DISPOSITIONS
+    ):
+        return f"{environment} deployment failed at {stage}; {FAILURE_DISPOSITIONS[disposition]}"
+    return f"{environment} deployment failed"
 
 
 def load_python(path: Path, name: str) -> ModuleType:
@@ -773,56 +851,78 @@ def execute_transaction(
     ledger: dict[str, Any], record: dict[str, Any], mode: str,
 ) -> str:
     deadline = time.monotonic() + MAX_TRANSACTION_SECONDS
+    stage = "transaction-initialization"
 
     def run(action: str, *, docker_config: Path | None = None) -> bytes:
+        nonlocal stage
+        stage = action
         return internal(action, docker_config=docker_config, deadline=deadline)
 
-    policy = load_python(POLICY, "yolpol_deploy_policy_controller")
-    bootstrap = load_python(BOOTSTRAP, "yolpol_bootstrap_controller")
-    environment = envelope.intent.environment
-    intent = envelope.intent.value
-    current = current_authority(environment, policy)
-    if current is None:
-        controller_fail("Production or Staging authority is not provisioned")
-    manifest_bytes, checksum_bytes, target = authenticate_release(config, token, intent, policy)
-    current_fingerprint = f"{current['manifest']['database']['latestMigration']}:{current['manifest']['database']['migrationSetSha256']}"
-    target_fingerprint = f"{target['database']['latestMigration']}:{target['database']['migrationSetSha256']}"
-    changed = current_fingerprint != target_fingerprint
-    transition(
-        ledger, record, "release-authenticated", currentMigrationFingerprint=current_fingerprint,
-        targetMigrationFingerprint=target_fingerprint,
-    )
-    if environment == "production":
-        run("validate-production")
-        if not staging_success_exists(ledger, intent["manifestSha256"]):
-            controller_fail("exact Release has not succeeded on Staging")
-        if changed:
-            transition(ledger, record, "phase-c2-required", localOutcome="failure", result=PHASE_C2_RESULT)
-            controller_fail(PHASE_C2_RESULT)
-    else:
-        run("validate-staging")
-        if changed:
-            run("backup-create-verify-deep-staging")
-            transition(ledger, record, "backup-verified")
-    runtimes = target_runtimes(environment, target, policy)
-    previous_runtime_files = read_previous_runtimes(environment, runtimes)
-    journal = journal_snapshot(
-        deployment_id,
-        environment,
-        target_manifest_bytes=manifest_bytes,
-        target_checksum_bytes=checksum_bytes,
-        target_runtimes=runtimes,
-        previous_authority=current,
-        previous_runtimes=previous_runtime_files,
-    )
     authority_mutation_started = False
     request_root: Path | None = None
     docker_config: Path | None = None
     try:
+        stage = "policy-loading"
+        policy = load_python(POLICY, "yolpol_deploy_policy_controller")
+        bootstrap = load_python(BOOTSTRAP, "yolpol_bootstrap_controller")
+        environment = envelope.intent.environment
+        intent = envelope.intent.value
+        stage = "current-authority-validation"
+        current = current_authority(environment, policy)
+        if current is None:
+            controller_fail("Production or Staging authority is not provisioned")
+        stage = "release-authentication"
+        manifest_bytes, checksum_bytes, target = authenticate_release(config, token, intent, policy)
+        current_fingerprint = (
+            f"{current['manifest']['database']['latestMigration']}:"
+            f"{current['manifest']['database']['migrationSetSha256']}"
+        )
+        target_fingerprint = (
+            f"{target['database']['latestMigration']}:"
+            f"{target['database']['migrationSetSha256']}"
+        )
+        changed = current_fingerprint != target_fingerprint
+        transition(
+            ledger, record, "release-authenticated", currentMigrationFingerprint=current_fingerprint,
+            targetMigrationFingerprint=target_fingerprint,
+        )
+        if environment == "production":
+            run("validate-production")
+            if not staging_success_exists(ledger, intent["manifestSha256"]):
+                stage = "staging-success-verification"
+                controller_fail("exact Release has not succeeded on Staging")
+            if changed:
+                stage = "phase-c2-approval"
+                transition(
+                    ledger, record, "phase-c2-required",
+                    localOutcome="failure", result=PHASE_C2_RESULT,
+                )
+                controller_fail(PHASE_C2_RESULT)
+        else:
+            run("validate-staging")
+            if changed:
+                run("backup-create-verify-deep-staging")
+                transition(ledger, record, "backup-verified")
+        stage = "target-runtime-rendering"
+        runtimes = target_runtimes(environment, target, policy)
+        stage = "previous-runtime-snapshot"
+        previous_runtime_files = read_previous_runtimes(environment, runtimes)
+        stage = "journal-creation"
+        journal = journal_snapshot(
+            deployment_id,
+            environment,
+            target_manifest_bytes=manifest_bytes,
+            target_checksum_bytes=checksum_bytes,
+            target_runtimes=runtimes,
+            previous_authority=current,
+            previous_runtimes=previous_runtime_files,
+        )
+        stage = "authority-activation"
         transition(ledger, record, "authority-changing")
         authority_mutation_started = True
         activate(bootstrap, environment, manifest_bytes, checksum_bytes, runtimes)
         transition(ledger, record, "authority-active")
+        stage = "registry-authentication"
         request_root, docker_config = docker_auth(token, str(claims["actor"]))
         run(f"pull-{environment}", docker_config=docker_config)
         transition(ledger, record, "images-pulled")
@@ -846,24 +946,36 @@ def execute_transaction(
         transition(ledger, record, "verified")
         return "deployed-not-publicly-activated" if environment == "production" else "deployed"
     except (ControlPlaneError, OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        failed_stage = stage
         if not authority_mutation_started:
-            raise ControlPlaneError("deployment transaction failed") from error
+            raise DeploymentTransactionError(failed_stage, "failed-before-activation") from error
         disposition = rollback_disposition(changed, str(record.get("migrationState")))
         if disposition == "manual-review":
             if record.get("migrationState") == "started":
-                transition(ledger, record, "manual-review", migrationState="failed")
-            raise ControlPlaneError("migration or post-migration deployment failed; manual review required") from error
+                transition(
+                    ledger, record, "manual-review", migrationState="failed",
+                    failureStage=failed_stage, failureDisposition="manual-review-required",
+                )
+            raise DeploymentTransactionError(failed_stage, "manual-review-required") from error
         try:
+            stage = "rollback-restore"
             restore_previous(bootstrap, environment, journal)
             run(f"deploy-app-{environment}", docker_config=docker_config)
             run(f"deploy-workers-{environment}", docker_config=docker_config)
             if environment == "staging":
                 run("deploy-operations-exporter", docker_config=docker_config)
-            transition(ledger, record, "rolled-back")
+            transition(
+                ledger, record, "rolled-back",
+                failureStage=failed_stage, failureDisposition="previous-runtime-restored",
+            )
         except Exception as rollback_error:
-            transition(ledger, record, "rollback-failed", result="manual-review-required")
-            raise ControlPlaneError("deployment and rollback failed") from rollback_error
-        raise ControlPlaneError("deployment failed and previous runtime was restored") from error
+            transition(
+                ledger, record, "rollback-failed", result="manual-review-required",
+                failureStage=failed_stage, failureDisposition="rollback-failed",
+                rollbackFailureStage=stage,
+            )
+            raise DeploymentTransactionError(failed_stage, "rollback-failed") from rollback_error
+        raise DeploymentTransactionError(failed_stage, "previous-runtime-restored") from error
     finally:
         if request_root is not None:
             shutil.rmtree(request_root, ignore_errors=True)
@@ -906,7 +1018,10 @@ def main() -> None:
     if mode in {"already-successful", "replay"} and record.get("localOutcome") in {"success", "failure"}:
         state = "success" if record.get("localOutcome") == "success" else "failure"
         try:
-            post_status(config, token, deployment_id, environment, state, str(record.get("result") or state))
+            post_status(
+                config, token, deployment_id, environment, state,
+                terminal_status_description(environment, state, record),
+            )
             transition(ledger, record, record.get("phase", "terminal"), statusSynchronization="synced")
         except ControlPlaneError:
             transition(ledger, record, record.get("phase", "terminal"), statusSynchronization="pending")
@@ -937,10 +1052,22 @@ def main() -> None:
     try:
         result = execute_transaction(config, deployment_id, envelope, claims, token, ledger, record, mode)
     except ControlPlaneError as error:
+        updates: dict[str, Any] = {"localOutcome": "failure", "result": str(error)}
+        if isinstance(error, DeploymentTransactionError):
+            updates.update({
+                "failureStage": error.stage,
+                "failureDisposition": error.disposition,
+            })
         if record.get("localOutcome") == "in-progress":
-            transition(ledger, record, record.get("phase", "failed"), localOutcome="failure", result=str(error))
+            transition(ledger, record, record.get("phase", "failed"), **updates)
+        elif isinstance(error, DeploymentTransactionError):
+            transition(
+                ledger, record, record.get("phase", "failed"),
+                failureStage=error.stage, failureDisposition=error.disposition,
+            )
         try:
-            post_status(config, token, deployment_id, environment, "failure", f"{environment} deployment failed")
+            description = terminal_status_description(environment, "failure", record)
+            post_status(config, token, deployment_id, environment, "failure", description)
             transition(ledger, record, record.get("phase", "failed"), statusSynchronization="synced")
         except ControlPlaneError:
             transition(ledger, record, record.get("phase", "failed"), statusSynchronization="pending")
@@ -948,7 +1075,10 @@ def main() -> None:
         return
     transition(ledger, record, "completed", localOutcome="success", result=result)
     try:
-        post_status(config, token, deployment_id, environment, "success", f"{environment}: {result}")
+        post_status(
+            config, token, deployment_id, environment, "success",
+            terminal_status_description(environment, "success", record),
+        )
         transition(ledger, record, "completed", statusSynchronization="synced")
     except ControlPlaneError:
         transition(ledger, record, "completed", statusSynchronization="pending")
