@@ -22,6 +22,8 @@ The validated final image is 24,490,797 bytes uncompressed. Its client reports `
 pg_dump --format=custom --no-owner --no-privileges | age recipient encryption
 ```
 
+Migration-state resolution explicitly checks whether `drizzle.__drizzle_migrations` exists. When it exists, creation reads and validates the current non-negative latest migration timestamp as before. When it is absent, creation uses the same non-system user-relation definition as the empty restore-target guard and accepts only a database with zero such relations; that genuinely pristine pre-first-migration state is recorded as `latestMigrationTimestamp=0`. A database with any user relation but no Drizzle migration table is inconsistent/untracked and fails closed. Detection is read-only and never creates migration metadata, runs migrations, drops objects, or repairs state.
+
 No plaintext archive is written to persistent storage. Output is created with `umask 077` under a same-directory process-specific `.partial` name. A per-backup-ID directory lock prevents a same-name race. The encrypted bytes are checked, measured, and SHA-256 hashed; the partial manifest is generated and parsed; the manifest is renamed first; and the encrypted artifact is atomically renamed into its final name last. Failure and signal cleanup targets only the exact partials/lock owned by that invocation. A partial or incomplete pair is never accepted by verification.
 
 The path-safe name is:
@@ -66,6 +68,8 @@ Backup creation receives the public `YOLPOL_BACKUP_AGE_RECIPIENT`. Deep verifica
 - a successful target connection with zero non-system relations
 
 The target guard does not infer safety from its database name. Restore uses `pg_restore --exit-on-error --no-owner --no-privileges --single-transaction`; it does not use `--clean`, drop a database/schema, delete a volume, or infer the active Staging database as its target. Post-restore validation checks connectivity, the Drizzle migration timestamp at or beyond `0022`, and the presence of `inquiries`, `conversation_messages`, and `staff_accounts` without reading customer rows.
+
+The pristine backup checkpoint does not weaken recovery validation. A pre-first-migration archive can be integrity-verified and deep-verified, but normal restore post-validation still requires the tracked migration timestamp and required application tables described above.
 
 Backup restore and forward migration remain separate. If an older valid backup is below the current schema requirement, it remains isolated and unavailable to cutover until the normal explicit migration job is deliberately run against that recovery database and readiness is revalidated.
 
@@ -122,7 +126,7 @@ All five operation services are one-shot and profile-gated. Normal `docker compo
 Executed locally with synthetic credentials and no provider/network integration:
 
 - `pnpm test:backup-restore`: PASS; naming/schema, credential-field exclusion, missing/corrupt/unsupported artifacts, path escape, restore confirmation, dry-run, strict pairing, symlink escape, deletion acknowledgement, keep count, and newest-pair protection.
-- `pnpm test:backup-restore:disposable`: PASS against two distinct PostgreSQL 17.6 containers using tmpfs. The source alone received all committed migrations plus one synthetic marker. Encrypted create, manifest/SHA-256 verification, decrypt/archive listing, restore to the empty destination, migration-state check, critical-table check, and marker check passed.
+- `pnpm test:backup-restore:disposable`: PASS against isolated PostgreSQL 17.6 containers using tmpfs. A pristine source produced an encrypted, integrity-verified, deep-verified backup with `latestMigrationTimestamp=0` without creating migration tracking. The same source then rejected backup creation after a synthetic untracked relation was added, leaving no final or partial artifacts. A separate migrated source received all committed migrations plus one synthetic marker; encrypted create, manifest/SHA-256 verification, decrypt/archive listing, restore to the empty destination, migration-state check, critical-table check, and marker check passed.
 - Negative disposable checks: checksum corruption, missing identity, wrong identity, and a second restore into the now non-empty destination all failed non-zero as required.
 - Retention dry-run preserved the newest artifact. Focused tests also exercised actual deletion only inside a synthetic temporary directory.
 - Image inspection: 24,490,797 bytes; UID/GID `1001:1001`; PostgreSQL client `17.6`; `age 1.2.1`; expected entrypoint present; `.env.local`, `.git`, and private identity absent; validation transcript contained neither the synthetic password nor private-key material.
