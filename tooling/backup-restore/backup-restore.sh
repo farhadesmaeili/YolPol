@@ -177,6 +177,38 @@ require_identity_file() {
   readonly IDENTITY_FILE
 }
 
+inspect_user_relation_count() {
+  query_failure_stage="$1"
+  result_failure_stage="$2"
+  inspection_backup_id="$3"
+  USER_RELATION_COUNT="$(psql --dbname "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 2>/dev/null -c \
+    "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r','p','v','m','S','f') and n.nspname not in ('pg_catalog','information_schema') and n.nspname !~ '^pg_toast';")" \
+    || fail "$query_failure_stage" "$inspection_backup_id"
+  case "$USER_RELATION_COUNT" in (*[!0-9]*|'') fail "$result_failure_stage" "$inspection_backup_id" ;; esac
+}
+
+resolve_migration_timestamp() {
+  migration_backup_id="$1"
+  migration_table_exists="$(psql --dbname "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 2>/dev/null \
+    -c "select to_regclass('drizzle.__drizzle_migrations') is not null;")" \
+    || fail "migration_state" "$migration_backup_id"
+
+  case "$migration_table_exists" in
+    t)
+      MIGRATION_TIMESTAMP="$(psql --dbname "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 \
+        -c 'select coalesce(max(created_at), 0) from drizzle.__drizzle_migrations' 2>/dev/null)" \
+        || fail "migration_state" "$migration_backup_id"
+      case "$MIGRATION_TIMESTAMP" in (*[!0-9]*|'') fail "migration_state" "$migration_backup_id" ;; esac
+      ;;
+    f)
+      inspect_user_relation_count "migration_state" "migration_state" "$migration_backup_id"
+      [ "$USER_RELATION_COUNT" = "0" ] || fail "migration_state" "$migration_backup_id"
+      MIGRATION_TIMESTAMP=0
+      ;;
+    *) fail "migration_state" "$migration_backup_id" ;;
+  esac
+}
+
 create_backup() {
   require_command pg_dump
   require_command psql
@@ -223,10 +255,8 @@ create_backup() {
   [ "$server_major" = "17" ] && [ "$client_major" = "$server_major" ] \
     || fail "postgresql_major_version_mismatch" "$backup_id"
 
-  migration_timestamp="$(psql --dbname "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 \
-    -c 'select coalesce(max(created_at), 0) from drizzle.__drizzle_migrations' 2>/dev/null)" \
-    || fail "migration_state" "$backup_id"
-  case "$migration_timestamp" in (*[!0-9]*|'') fail "migration_state" "$backup_id" ;; esac
+  resolve_migration_timestamp "$backup_id"
+  migration_timestamp="$MIGRATION_TIMESTAMP"
 
   if ! pg_dump --dbname "$DATABASE_URL" --format=custom --no-owner --no-privileges 2>/dev/null \
     | age --encrypt --recipient "$recipient" --output "$PARTIAL_ARTIFACT" 2>/dev/null; then
@@ -311,11 +341,8 @@ deep_verify_backup() {
 }
 
 assert_empty_restore_target() {
-  relation_count="$(psql --dbname "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 2>/dev/null -c \
-    "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r','p','v','m','S','f') and n.nspname not in ('pg_catalog','information_schema') and n.nspname !~ '^pg_toast';")" \
-    || fail "restore_target_connection" "$1"
-  case "$relation_count" in (*[!0-9]*|'') fail "restore_target_inspection" "$1" ;; esac
-  [ "$relation_count" = "0" ] || fail "restore_target_not_empty" "$1"
+  inspect_user_relation_count "restore_target_connection" "restore_target_inspection" "$1"
+  [ "$USER_RELATION_COUNT" = "0" ] || fail "restore_target_not_empty" "$1"
 }
 
 validate_restored_database() {

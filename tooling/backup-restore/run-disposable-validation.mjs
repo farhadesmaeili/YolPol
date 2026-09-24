@@ -9,14 +9,19 @@ const validationUser = "yolpol_restore_validation";
 const validationDatabase = "yolpol_restore_validation";
 const unique = `${process.pid}-${Date.now()}`;
 const network = `yolpol-backup-restore-${unique}`;
+const bootstrapSource = `yolpol-backup-bootstrap-source-${unique}`;
 const source = `yolpol-backup-source-${unique}`;
 const destination = `yolpol-backup-destination-${unique}`;
 const operationsImage = `yolpol-operations-validation:${unique}`;
 const migrationImage = `yolpol-migration-validation:${unique}`;
 const temporaryRoot = await mkdtemp(join(tmpdir(), "yolpol-backup-restore-"));
 const backupDirectory = join(temporaryRoot, "backups");
+const pristineBackupDirectory = join(temporaryRoot, "pristine-backups");
+const untrackedBackupDirectory = join(temporaryRoot, "untracked-backups");
 const keyDirectory = join(temporaryRoot, "keys");
 await mkdir(backupDirectory);
+await mkdir(pristineBackupDirectory);
+await mkdir(untrackedBackupDirectory);
 await mkdir(keyDirectory);
 const transcript = [];
 const startedContainers = [];
@@ -63,16 +68,46 @@ async function waitForDatabase(container) {
   throw new Error(`Disposable PostgreSQL ${container} did not become ready.`);
 }
 
-async function runOperation(command, backupId, environment = {}) {
+async function runOperation(command, backupId, environment = {}, {
+  directory = backupDirectory,
+  expectFailure = false,
+  label = `operations ${command}`,
+} = {}) {
   const args = [
     "run", "--rm", "--network", network,
-    "--mount", bind(backupDirectory, "/backups", command !== "create" && command !== "prune"),
+    "--mount", bind(directory, "/backups", command !== "create" && command !== "prune"),
     "-e", "YOLPOL_BACKUP_DIRECTORY=/backups",
   ];
   for (const [name, value] of Object.entries(environment)) args.push("-e", `${name}=${value}`);
   args.push(operationsImage, command);
   if (backupId) args.push(backupId);
-  return run(args, {label: `operations ${command}`});
+  return run(args, {expectFailure, label});
+}
+
+async function getSingleBackupId(directory, label) {
+  const files = await readdir(directory);
+  const manifests = files.filter((file) => file.endsWith(".manifest.json"));
+  const artifacts = files.filter((file) => file.endsWith(".dump.age"));
+  if (manifests.length !== 1 || artifacts.length !== 1) {
+    throw new Error(`${label} expected exactly one final backup pair.`);
+  }
+  const backupId = manifests[0].slice(0, -".manifest.json".length);
+  if (artifacts[0] !== `${backupId}.dump.age`) throw new Error(`${label} backup pair did not match.`);
+  if (files.some((file) => file.includes("partial") || file.endsWith(".dump") || file.endsWith(".lock"))) {
+    throw new Error(`${label} left a plaintext, partial, or lock artifact.`);
+  }
+  return backupId;
+}
+
+async function runDeepVerify(backupId, directory, label) {
+  await run([
+    "run", "--rm", "--network", "none",
+    "--mount", bind(directory, "/backups", true),
+    "--mount", bind(keyDirectory, "/keys", true),
+    "-e", "YOLPOL_BACKUP_DIRECTORY=/backups",
+    "-e", "YOLPOL_BACKUP_AGE_IDENTITY_FILE=/keys/identity",
+    operationsImage, "deep-verify", backupId,
+  ], {label});
 }
 
 async function cleanup() {
@@ -95,7 +130,7 @@ try {
   await run(["network", "create", network], {label: "create isolated validation network"});
   networkCreated = true;
 
-  for (const container of [source, destination]) {
+  for (const container of [bootstrapSource, source, destination]) {
     await run([
       "run", "--detach", "--rm", "--name", container, "--network", network,
       "--tmpfs", "/var/lib/postgresql/data:rw,nosuid,nodev,size=512m",
@@ -103,11 +138,58 @@ try {
       "-e", `POSTGRES_PASSWORD=${validationPassword}`,
       "-e", `POSTGRES_DB=${validationDatabase}`,
       postgresImage,
-    ], {label: `start ${container === source ? "source" : "destination"} tmpfs PostgreSQL`});
+    ], {label: `start ${container} tmpfs PostgreSQL`});
     startedContainers.push(container);
   }
-  await Promise.all([waitForDatabase(source), waitForDatabase(destination)]);
-  process.stdout.write("source and destination readiness: passed\n");
+  await Promise.all([waitForDatabase(bootstrapSource), waitForDatabase(source), waitForDatabase(destination)]);
+  process.stdout.write("bootstrap source, migrated source, and destination readiness: passed\n");
+
+  await run([
+    "run", "--rm", "--network", network,
+    "--entrypoint", "psql",
+    operationsImage, "--dbname", databaseUrl(bootstrapSource), "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", "show server_version_num",
+  ], {label: "operations database connection preflight"});
+
+  await run(["run", "--rm", "--entrypoint", "age-keygen", "--mount", bind(keyDirectory, "/keys"), operationsImage, "-o", "/keys/identity"], {label: "generate disposable restore identity"});
+  const recipient = await run(["run", "--rm", "--entrypoint", "age-keygen", "--mount", bind(keyDirectory, "/keys", true), operationsImage, "-y", "/keys/identity"], {label: "derive disposable public recipient"});
+
+  await runOperation("create", undefined, {
+    DATABASE_URL: databaseUrl(bootstrapSource),
+    YOLPOL_DEPLOYMENT_ENVIRONMENT: "production",
+    YOLPOL_GIT_REVISION: "abcde01",
+    YOLPOL_BACKUP_AGE_RECIPIENT: recipient,
+  }, {directory: pristineBackupDirectory, label: "pristine database backup creation"});
+  const pristineBackupId = await getSingleBackupId(pristineBackupDirectory, "Pristine backup");
+  const pristineManifest = JSON.parse(await readFile(join(pristineBackupDirectory, `${pristineBackupId}.manifest.json`), "utf8"));
+  if (pristineManifest.schema?.latestMigrationTimestamp !== 0) {
+    throw new Error("Pristine backup manifest did not record latestMigrationTimestamp=0.");
+  }
+  const migrationTableStillAbsent = await run([
+    "exec", bootstrapSource, "psql", "-X", "-A", "-t", "-U", validationUser, "-d", validationDatabase,
+    "-v", "ON_ERROR_STOP=1", "-c", "select to_regclass('drizzle.__drizzle_migrations') is null;",
+  ], {label: "pristine migration-table non-mutation verification"});
+  if (migrationTableStillAbsent !== "t") throw new Error("Pristine backup detection mutated migration tracking state.");
+  await runOperation("verify", pristineBackupId, {}, {directory: pristineBackupDirectory, label: "pristine backup integrity verification"});
+  await runDeepVerify(pristineBackupId, pristineBackupDirectory, "pristine backup deep verification");
+
+  await run([
+    "exec", bootstrapSource, "psql", "-X", "-U", validationUser, "-d", validationDatabase,
+    "-v", "ON_ERROR_STOP=1", "-c", "create table untracked_bootstrap_relation (id integer primary key);",
+  ], {label: "create untracked bootstrap relation"});
+  await runOperation("create", undefined, {
+    DATABASE_URL: databaseUrl(bootstrapSource),
+    YOLPOL_DEPLOYMENT_ENVIRONMENT: "production",
+    YOLPOL_GIT_REVISION: "badcafe",
+    YOLPOL_BACKUP_AGE_RECIPIENT: recipient,
+  }, {
+    directory: untrackedBackupDirectory,
+    expectFailure: true,
+    label: "untracked database backup creation",
+  });
+  const untrackedFiles = await readdir(untrackedBackupDirectory);
+  if (untrackedFiles.length !== 0) {
+    throw new Error("Rejected untracked backup left a final, plaintext, partial, or lock artifact.");
+  }
 
   await run([
     "run", "--rm", "--network", network,
@@ -119,15 +201,6 @@ try {
     "-v", "ON_ERROR_STOP=1", "-c",
     "create table backup_restore_validation_marker (value text primary key); insert into backup_restore_validation_marker values ('synthetic-restore-marker');",
   ], {label: "insert synthetic source marker"});
-
-  await run([
-    "run", "--rm", "--network", network,
-    "--entrypoint", "psql",
-    operationsImage, "--dbname", databaseUrl(source), "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", "show server_version_num",
-  ], {label: "operations database connection preflight"});
-
-  await run(["run", "--rm", "--entrypoint", "age-keygen", "--mount", bind(keyDirectory, "/keys"), operationsImage, "-o", "/keys/identity"], {label: "generate disposable restore identity"});
-  const recipient = await run(["run", "--rm", "--entrypoint", "age-keygen", "--mount", bind(keyDirectory, "/keys", true), operationsImage, "-y", "/keys/identity"], {label: "derive disposable public recipient"});
 
   await runOperation("create", undefined, {
     DATABASE_URL: databaseUrl(source),
@@ -150,14 +223,7 @@ try {
     "set -o pipefail; age --decrypt --identity /keys/identity \"/backups/$1.dump.age\" | pg_restore --list >/dev/null",
     "validation-archive", backupId,
   ], {label: "direct decrypt/archive pipeline preflight"});
-  await run([
-    "run", "--rm", "--network", "none",
-    "--mount", bind(backupDirectory, "/backups", true),
-    "--mount", bind(keyDirectory, "/keys", true),
-    "-e", "YOLPOL_BACKUP_DIRECTORY=/backups",
-    "-e", "YOLPOL_BACKUP_AGE_IDENTITY_FILE=/keys/identity",
-    operationsImage, "deep-verify", backupId,
-  ], {label: "deep archive verification"});
+  await runDeepVerify(backupId, backupDirectory, "deep archive verification");
 
   await run([
     "run", "--rm", "--network", network,
@@ -244,6 +310,8 @@ try {
   process.stdout.write(`${JSON.stringify({
     result: "PASS",
     backupId,
+    pristineBackupId,
+    bootstrapSourceContainer: bootstrapSource,
     sourceContainer: source,
     destinationContainer: destination,
     distinctDatabases: source !== destination,

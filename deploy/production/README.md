@@ -78,6 +78,8 @@ authenticated release and exact manifest promotion
 
 Backups are `yolpol-production-...dump.age` plus adjacent manifests under the Production-only directory. Creation streams a PostgreSQL custom archive through age encryption without persistent plaintext. The age recipient is Production-specific. The private recovery identity is never committed and must have a separately protected off-server copy; keeping the only copy on the active application server is prohibited.
 
+Before the first migration, backup creation accepts a genuinely pristine database with zero non-system user relations and records `schema.latestMigrationTimestamp=0`. Absence of `drizzle.__drizzle_migrations` alone is not evidence of a pristine database: if any user relation exists without that migration table, creation fails closed without publishing a backup pair. Once migration tracking exists, backup creation retains the normal latest-timestamp query. This bootstrap allowance does not relax the strict post-restore migration and required-schema validation for normal recovery.
+
 The restricted operator surface permits Production backup creation and identity-free verification only. Deep verification, restore, retention deletion, recovery cutover, and private-identity access remain root-only. Restore requires a separate explicit empty target and the existing exact confirmation guard; it never drops a database or performs automatic rollback. Application rollback and database recovery are separate decisions: only an equal migration fingerprint permits automatic application-only rollback planning; otherwise stop for manual schema review.
 
 ## Telegram, providers, and Staff
