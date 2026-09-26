@@ -51,7 +51,7 @@ BACKUP_ID=${2:-}
 
 case "$ACTION" in
   validate-staging|validate-production|status-staging|status-production|health-staging|health-production|ingress-validate|ingress-status|ingress-health-staging|ingress-health-production|telegram-webhook-info-staging|telegram-webhook-info-production) MUTATING=false ;;
-  pull-staging|pull-production|deploy-database-staging|deploy-database-production|migrate-staging|migrate-production|deploy-app-staging|deploy-app-production|deploy-workers-staging|deploy-workers-production|deploy-operations-exporter|staff-provision-staging|staff-provision-production|staff-bootstrap-super-admin-staging|staff-bootstrap-super-admin-production|telegram-webhook-set-staging|telegram-webhook-set-production|backup-create-staging|backup-create-production|backup-create-verify-deep-staging|backup-create-verify-deep-production|backup-verify-staging|backup-verify-production|public-smoke-staging) MUTATING=true ;;
+  pull-staging|pull-production|deploy-database-staging|deploy-database-production|migrate-staging|migrate-production|deploy-app-staging|deploy-app-production|deploy-workers-staging|deploy-workers-production|deploy-operations-exporter|staff-provision-staging|staff-provision-production|staff-bootstrap-super-admin-staging|staff-bootstrap-super-admin-production|telegram-webhook-set-staging|telegram-webhook-set-production|indexnow-submit-production|backup-create-staging|backup-create-production|backup-create-verify-deep-staging|backup-create-verify-deep-production|backup-verify-staging|backup-verify-production|public-smoke-staging) MUTATING=true ;;
   *) fail 'internal action rejected' ;;
 esac
 
@@ -114,7 +114,7 @@ validate_staging() {
 
 validate_production() {
   /usr/bin/python3 -I -B "$POLICY" validate-production
-  production_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations config --format json \
+  production_compose --profile migration --profile backup --profile staff-operations --profile telegram-operations --profile seo-operations config --format json \
     | /usr/bin/python3 -I -B "$POLICY" validate-production-compose
 }
 
@@ -241,7 +241,7 @@ case "$ACTION" in
   health-staging) health_staging ;;
   health-production) health_production ;;
   pull-staging) validate_staging; validate_monitoring; staging_compose --profile migration --profile backup pull; monitoring_compose pull operations-exporter ;;
-  pull-production) validate_production; production_compose --profile migration --profile backup pull ;;
+  pull-production) validate_production; production_compose --profile migration --profile backup --profile seo-operations pull ;;
   deploy-database-staging) validate_staging; staging_compose up -d --no-build --no-deps postgres ;;
   deploy-database-production) validate_production; production_compose up -d --no-build --no-deps postgres ;;
   migrate-staging) validate_staging; run_sensitive staging_compose --profile migration run --rm --no-deps --interactive=false --no-TTY migrate ;;
@@ -265,6 +265,7 @@ case "$ACTION" in
   telegram-webhook-set-production) validate_production; production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-set ;;
   telegram-webhook-info-staging) validate_staging; staging_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;
   telegram-webhook-info-production) validate_production; production_compose --profile telegram-operations run --rm --no-deps --interactive=false --no-TTY telegram-webhook-info ;;
+  indexnow-submit-production) validate_production; production_compose --profile seo-operations run --rm --no-deps --interactive=false --no-TTY indexnow-submit ;;
   ingress-validate) validate_ingress ;;
   ingress-status) validate_ingress; ingress_compose ps ;;
   ingress-health-staging) validate_ingress; ingress_compose ps --status running --services | /usr/bin/grep -Fxq ingress; ingress_compose exec -T ingress caddy validate --config /etc/caddy/Caddyfile; ingress_compose exec -T ingress wget -q -O /dev/null http://staging-web:3000/api/health/ready ;;

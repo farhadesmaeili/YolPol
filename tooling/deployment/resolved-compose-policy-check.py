@@ -69,6 +69,7 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             "telegram_webhook_secret": "/opt/yolpol/production/secrets/telegram-webhook-secret",
             "groq_api_key": "/opt/yolpol/production/secrets/groq-api-key",
             "backup_age_identity": "/opt/yolpol/production/secrets/backup-age-identity",
+            "indexnow_key": "/opt/yolpol/production/secrets/indexnow-key",
         },
         "ingress": {},
         "monitoring": {
