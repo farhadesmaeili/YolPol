@@ -73,7 +73,7 @@ describe("Production Compose deployment contract", () => {
     for (const service of [
       "web", "postgres", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback",
       "staff-provision", "staff-bootstrap-super-admin", "telegram-webhook-set", "telegram-webhook-info",
-      "migrate", "backup-create", "backup-verify", "backup-deep-verify", "backup-retention", "restore",
+      "indexnow-submit", "migrate", "backup-create", "backup-verify", "backup-deep-verify", "backup-retention", "restore",
     ]) expect(serviceBlock(service)).toBeTruthy();
     expect(serviceBlock("migrate")).toContain('profiles: ["migration"]');
     expect(serviceBlock("restore")).toContain('profiles: ["restore"]');
@@ -107,6 +107,18 @@ describe("Production Compose deployment contract", () => {
     expect(serviceBlock("staff-provision")).not.toContain("provider_egress");
     expect(serviceBlock("telegram-webhook-info")).not.toContain("DATABASE_URL");
     expect(serviceBlock("telegram-webhook-info")).not.toContain("GROQ_API_KEY");
+    const indexNow = serviceBlock("indexnow-submit");
+    expect(indexNow).toContain('profiles: ["seo-operations"]');
+    expect(indexNow).toContain("- provider_egress");
+    expect(indexNow).not.toMatch(/DATABASE_URL|TELEGRAM_|GROQ_|BACKUP_|ports:/u);
+    expect(serviceBlock("web")).toContain("INDEXNOW_KEY_FILE: /run/secrets/indexnow_key");
+    for (const service of [
+      "postgres", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback",
+      "staff-provision", "staff-bootstrap-super-admin", "telegram-webhook-set", "telegram-webhook-info",
+      "migrate", "backup-create", "backup-verify", "backup-deep-verify", "backup-retention", "restore",
+    ]) {
+      expect(serviceBlock(service)).not.toMatch(/INDEXNOW|indexnow_key/u);
+    }
   });
 
   it("pins every first-party service to the dedicated non-root identity and restricted privilege set", () => {
@@ -126,7 +138,7 @@ describe("Production Compose deployment contract", () => {
       "production-validate", "production-status", "production-health", "production-pull-approved-images",
       "production-deploy-database", "production-migrate", "production-deploy-app", "production-deploy-workers",
       "production-staff-provision", "production-staff-bootstrap-super-admin",
-      "production-telegram-webhook-set", "production-telegram-webhook-info", "production-backup-create",
+      "production-telegram-webhook-set", "production-telegram-webhook-info", "production-indexnow-submit", "production-backup-create",
     ]) {
       const result = runShell(shellPath(wrapperPath), action, "unexpected");
       expect(result.status, `${action}: ${result.stderr}`).toBe(64);
@@ -179,6 +191,7 @@ describe("Production Compose deployment contract", () => {
     expect(internal).toContain("production_compose --profile staff-operations run --rm --no-deps staff-bootstrap-super-admin");
     expect(wrapper).toContain("production-staff-provision) run_interactive internal staff-provision-production");
     expect(wrapper).toContain("production-staff-bootstrap-super-admin) run_interactive internal staff-bootstrap-super-admin-production");
+    expect(internal).toContain("production_compose --profile seo-operations run --rm --no-deps --interactive=false --no-TTY indexnow-submit");
   });
 
   dockerIt("resolves and passes the closed Production policy while rejecting adversarial mutations", () => {
@@ -199,6 +212,7 @@ describe("Production Compose deployment contract", () => {
         telegramWebhook: join(secrets, "telegram-webhook-secret"),
         groq: join(secrets, "groq-api-key"),
         ageIdentity: join(secrets, "backup-age-identity"),
+        indexNow: join(secrets, "indexnow-key"),
       };
       writeFileSync(paths.postgres, "POSTGRES_DB=yolpol_production\nPOSTGRES_USER=yolpol_production\nPOSTGRES_PASSWORD=synthetic-production-password\n");
       writeFileSync(paths.app, `DATABASE_URL=${databaseUrl}\n`);
@@ -206,6 +220,7 @@ describe("Production Compose deployment contract", () => {
       writeFileSync(paths.backup, "DATABASE_URL=postgresql://yolpol_backup:synthetic-production-password@postgres:5432/yolpol_production\n");
       writeFileSync(paths.restore, "DATABASE_URL=postgresql://yolpol_restore:synthetic-production-password@recovery-postgres:5432/yolpol_recovery\n");
       for (const path of [paths.telegramToken, paths.telegramWebhook, paths.groq, paths.ageIdentity]) writeFileSync(path, "synthetic-not-a-real-secret\n");
+      writeFileSync(paths.indexNow, "synthetic-key-123\n");
 
       const composeEnvironment = {
         ...process.env,
@@ -219,6 +234,7 @@ describe("Production Compose deployment contract", () => {
         YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_SECRET_FILE: paths.telegramWebhook,
         YOLPOL_PRODUCTION_GROQ_API_KEY_FILE: paths.groq,
         YOLPOL_PRODUCTION_BACKUP_AGE_IDENTITY_FILE: paths.ageIdentity,
+        YOLPOL_PRODUCTION_INDEXNOW_KEY_FILE: paths.indexNow,
         INQUIRY_NOTIFICATION_WORKER_POLL_MS: "2000",
         CONVERSATION_TRANSLATION_WORKER_POLL_MS: "2000",
         CONVERSATION_AI_FALLBACK_WORKER_POLL_MS: "2000",
@@ -228,14 +244,14 @@ describe("Production Compose deployment contract", () => {
         "compose", "-p", "yolpol-production", "--project-directory", productionDirectory,
         "--env-file", runtimePath, "-f", composePath,
         "--profile", "migration", "--profile", "backup", "--profile", "restore",
-        "--profile", "staff-operations", "--profile", "telegram-operations", "config", "--quiet",
+        "--profile", "staff-operations", "--profile", "telegram-operations", "--profile", "seo-operations", "config", "--quiet",
       ], {cwd: repositoryRoot, encoding: "utf8", timeout: 20_000, env: composeEnvironment});
       expect(fullResolution.status, fullResolution.stderr).toBe(0);
 
       const result = spawnSync("docker", [
         "compose", "-p", "yolpol-production", "--project-directory", productionDirectory,
         "--env-file", runtimePath, "-f", composePath,
-        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations",
+        "--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations", "--profile", "seo-operations",
         "config", "--format", "json",
       ], {
         cwd: repositoryRoot,
@@ -260,6 +276,11 @@ describe("Production Compose deployment contract", () => {
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://attacker.example"}; },
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://staging.yolpol.com"}; },
         (value) => { requireObject(requireObject(value.services)["staff-provision"]).networks = {backend: null, provider_egress: null}; },
+        (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).command = ["sh"]; },
+        (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).networks = {backend: null}; },
+        (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).environment = {...requireObject(requireObject(requireObject(value.services)["indexnow-submit"]).environment), DATABASE_URL: databaseUrl}; },
+        (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).secrets = [{source: "groq_api_key", target: "/run/secrets/groq_api_key"}]; },
+        (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).ports = [{mode: "ingress", host_ip: "0.0.0.0", target: 3000, published: "3000", protocol: "tcp"}]; },
         (value) => { requireObject(requireObject(value.volumes).postgres_data).name = "yolpol-staging_postgres_data"; },
       ];
       for (const attack of attacks) {

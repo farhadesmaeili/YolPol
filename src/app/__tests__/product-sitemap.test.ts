@@ -5,6 +5,10 @@ import {
   getProductCatalogItem,
   listPublishedProductRoutes,
 } from "@/composition/products/product-catalog";
+import {
+  listCanonicalIndexableUrls,
+  publicStaticIndexablePaths,
+} from "@/composition/seo/public-indexable-pages";
 import {createProductJsonLd} from "@/features/products/presentation/seo/product-json-ld";
 import {createProductDetailMetadata} from "@/features/products/presentation/seo/product-metadata";
 import arMessages from "@/i18n/messages/ar.json";
@@ -32,19 +36,7 @@ describe("verified Product static routes", () => {
     const expectedProductUrls = routes.map(({locale, slug}) =>
       localizedAbsoluteUrl(locale, `/products/${slug}`),
     );
-    const staticPaths = [
-      "/",
-      "/products",
-      "/products/olive-oil",
-      "/products/food",
-      "/products/beverage",
-      "/about",
-      "/contact",
-      "/wholesale-process",
-      "/inquiry",
-      "/privacy",
-    ] as const;
-    const expectedStaticUrls = staticPaths.flatMap((pathname) =>
+    const expectedStaticUrls = publicStaticIndexablePaths.flatMap((pathname) =>
       routing.locales.map((locale) => localizedAbsoluteUrl(locale, pathname)),
     );
 
@@ -55,6 +47,14 @@ describe("verified Product static routes", () => {
     expect(entries.filter(({url}) => url.endsWith("/wholesale-process"))).toHaveLength(4);
     expect(entries.some(({url}) => url.endsWith("/export-logistics"))).toBe(false);
     expect(urls).toEqual(new Set([...expectedStaticUrls, ...expectedProductUrls]));
+    const canonicalUrls = await listCanonicalIndexableUrls();
+    expect(canonicalUrls).toEqual(entries.map(({url}) => url));
+    expect(new Set(canonicalUrls).size).toBe(76);
+    expect(canonicalUrls.every((url) => new URL(url).origin === "https://yolpol.com")).toBe(true);
+    for (const locale of routing.locales) {
+      expect(canonicalUrls.some((url) => new URL(url).pathname.startsWith(`/${locale}`))).toBe(true);
+    }
+    expect(canonicalUrls).not.toContain("https://yolpol.com/indexnow-key.txt");
     expect(expectedProductUrls).toHaveLength(36);
     expect(
       entries.filter(({url}) =>

@@ -326,6 +326,9 @@ class BootstrapTests(unittest.TestCase):
             io.BytesIO(json.dumps(payload).encode("utf-8")),
         )
         self.assertEqual(parsed["GROQ_API_KEY"], secret_value)
+        self.assertNotIn("INDEXNOW_KEY", parsed)
+        production_keys = {key for contract in bootstrap.PRODUCTION_SECRETS for key in contract.keys}
+        self.assertEqual(production_keys - set(payload["secrets"]), {"INDEXNOW_KEY"})
 
         payload["secrets"]["UNKNOWN"] = secret_value
         stderr = io.StringIO()
@@ -373,6 +376,17 @@ class BootstrapTests(unittest.TestCase):
         for value in ("has$dollar", "has#hash", "has space", "has\\backslash", 'has"quote', "has'quote"):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "secret input rejected"):
                 bootstrap.render_secret_file(contract, {"APP_DATABASE_URL": value})
+
+    def test_production_indexnow_secret_is_strict_and_not_part_of_staging(self) -> None:
+        _, staging_contracts = bootstrap.secret_contracts("staging")
+        _, production_contracts = bootstrap.secret_contracts("production")
+        self.assertNotIn("INDEXNOW_KEY", {key for contract in staging_contracts for key in contract.keys})
+        self.assertIn("INDEXNOW_KEY", {key for contract in production_contracts for key in contract.keys})
+        contract = next(item for item in production_contracts if item.filename == "indexnow-key")
+        self.assertEqual(bootstrap.render_secret_file(contract, {"INDEXNOW_KEY": "synthetic-key-123"}), b"synthetic-key-123\n")
+        for invalid in ("short-1", "invalid_key", "a" * 129):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "secret input rejected"):
+                bootstrap.render_secret_file(contract, {"INDEXNOW_KEY": invalid})
 
     def test_runtime_parser_rejects_unknown_duplicate_and_control_keys(self) -> None:
         valid = (
