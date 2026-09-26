@@ -192,6 +192,10 @@ APPLICATION_SECRETS = (
     SecretFile("groq-api-key", CONTAINER_UID, CONTAINER_GID, 0o400, ("GROQ_API_KEY",)),
 )
 
+PRODUCTION_SECRETS = APPLICATION_SECRETS + (
+    SecretFile("indexnow-key", CONTAINER_UID, CONTAINER_GID, 0o400, ("INDEXNOW_KEY",)),
+)
+
 MONITORING_SECRETS = (
     SecretFile("alert-telegram-bot-token", 65534, 65534, 0o400, ("ALERT_TELEGRAM_BOT_TOKEN",)),
     SecretFile("alert-telegram-chat-id", 65534, 65534, 0o400, ("ALERT_TELEGRAM_CHAT_ID",)),
@@ -912,7 +916,7 @@ def validate_environment_contract(name: str) -> None:
         ),
         "production": (
             "/opt/yolpol/production", "/opt/yolpol/production/runtime.env", "/opt/yolpol/production/compose.yaml",
-            ("--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations"),
+            ("--profile", "migration", "--profile", "backup", "--profile", "staff-operations", "--profile", "telegram-operations", "--profile", "seo-operations"),
         ),
         "ingress": ("/opt/yolpol/ingress", "/opt/yolpol/ingress/runtime.env", "/opt/yolpol/ingress/compose.yaml", ()),
         "monitoring": ("/opt/yolpol/monitoring", "/opt/yolpol/monitoring/runtime.env", "/opt/yolpol/monitoring/compose.yaml", ()),
@@ -1183,12 +1187,17 @@ def render_secret_file(contract: SecretFile, values: dict[str, str]) -> bytes:
             }.get(input_key, input_key)
             output.append(f"{output_key}={values[input_key]}")
         return ("\n".join(output) + "\n").encode("utf-8")
-    return values[contract.keys[0]].encode("utf-8") + b"\n"
+    value = values[contract.keys[0]]
+    if contract.filename == "indexnow-key" and re.fullmatch(r"[A-Za-z0-9-]{8,128}", value) is None:
+        fail("secret input rejected")
+    return value.encode("utf-8") + b"\n"
 
 
 def secret_contracts(environment: str) -> tuple[Path, tuple[SecretFile, ...]]:
-    if environment in {"staging", "production"}:
+    if environment == "staging":
         return HOST_ROOT / environment / "secrets", APPLICATION_SECRETS
+    if environment == "production":
+        return HOST_ROOT / environment / "secrets", PRODUCTION_SECRETS
     if environment == "monitoring":
         return HOST_ROOT / "monitoring/secrets", MONITORING_SECRETS
     fail("secret environment rejected")

@@ -86,6 +86,7 @@ PRODUCTION_FIXED_VALUES = {
     "YOLPOL_PRODUCTION_TELEGRAM_BOT_TOKEN_FILE": "/opt/yolpol/production/secrets/telegram-bot-token",
     "YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_SECRET_FILE": "/opt/yolpol/production/secrets/telegram-webhook-secret",
     "YOLPOL_PRODUCTION_GROQ_API_KEY_FILE": "/opt/yolpol/production/secrets/groq-api-key",
+    "YOLPOL_PRODUCTION_INDEXNOW_KEY_FILE": "/opt/yolpol/production/secrets/indexnow-key",
     "YOLPOL_PRODUCTION_BACKUP_DIRECTORY": "/opt/yolpol/production/backups",
     "YOLPOL_PRODUCTION_BACKUP_DATABASE_ENV_FILE": "/opt/yolpol/production/secrets/backup-database.env",
     "YOLPOL_PRODUCTION_RESTORE_DATABASE_ENV_FILE": "/opt/yolpol/production/secrets/restore-database.env",
@@ -184,7 +185,7 @@ STAGING_SERVICES = {
     "backup-deep-verify",
     "backup-retention",
 }
-PRODUCTION_SERVICES = STAGING_SERVICES - {"edge"}
+PRODUCTION_SERVICES = (STAGING_SERVICES - {"edge"}) | {"indexnow-submit"}
 INGRESS_SERVICES = {"ingress"}
 MONITORING_SERVICES = {
     "prometheus",
@@ -958,6 +959,18 @@ def _production_model_as_staging(model: dict[str, Any]) -> dict[str, Any]:
     normalized.pop("x-first-party-runtime", None)
     services = normalized.get("services")
     require(isinstance(services, dict), "Production Compose services")
+    services.pop("indexnow-submit", None)
+    web = services.get("web")
+    require(isinstance(web, dict), "Production web service")
+    web_environment = web.get("environment")
+    require(isinstance(web_environment, dict), "Production web environment")
+    web_environment.pop("INDEXNOW_KEY_FILE", None)
+    web_secrets = web.get("secrets")
+    require(isinstance(web_secrets, list), "Production web secrets")
+    web["secrets"] = [secret for secret in web_secrets if not (isinstance(secret, dict) and secret.get("source") == "indexnow_key")]
+    secrets = normalized.get("secrets")
+    require(isinstance(secrets, dict), "Production Compose secrets")
+    secrets.pop("indexnow_key", None)
     services["edge"] = {
         "image": STAGING_UPSTREAM_IMAGES["edge"],
         "restart": "unless-stopped",
@@ -985,8 +998,6 @@ def _production_model_as_staging(model: dict[str, Any]) -> dict[str, Any]:
     networks = normalized.get("networks")
     require(isinstance(networks, dict), "Production Compose networks")
     networks["edge"] = {"name": "yolpol-staging_edge"}
-    web = services.get("web")
-    require(isinstance(web, dict), "Production web service")
     web_networks = web.get("networks")
     require(isinstance(web_networks, dict), "Production web networks")
     web_networks["edge"] = None
@@ -1096,6 +1107,40 @@ def validate_production_compose_model(
         require(service.get("user") == "10001:10001", "Production first-party user")
         require(string_set(service.get("cap_drop"), "Production dropped capabilities") == {"ALL"}, "Production dropped capabilities")
         require(string_set(service.get("security_opt"), "Production security options") == {"no-new-privileges:true"}, "Production security options")
+
+    indexnow = services["indexnow-submit"]
+    validate_generic_service_security("indexnow-submit", indexnow)
+    require(indexnow.get("image") == runtime["YOLPOL_WORKER_IMAGE"], "IndexNow service image")
+    validate_command(indexnow, ["node", "--conditions=react-server", "--import", "tsx", "tooling/indexnow/submit-indexnow.ts"])
+    validate_profiles(indexnow, {"seo-operations"})
+    validate_no_build(indexnow)
+    require(normalized_service_networks(indexnow) == {"provider_egress": set()}, "IndexNow service network")
+    require(normalized_mounts(indexnow) == set(), "IndexNow service mount")
+    require(normalized_secrets(indexnow) == {("indexnow_key", "/run/secrets/indexnow_key")}, "IndexNow service secret")
+    validate_environment(indexnow, {
+        "NODE_ENV": "production",
+        "YOLPOL_DEPLOYMENT_ENVIRONMENT": "production",
+        "YOLPOL_APP_ORIGIN": "https://yolpol.com",
+        "INDEXNOW_KEY_FILE": "/run/secrets/indexnow_key",
+    }, "indexnow-submit")
+    validate_service_hardening(
+        indexnow,
+        read_only=True,
+        user="10001:10001",
+        tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=64m"},
+    )
+    require(indexnow.get("stdin_open") is None and indexnow.get("tty") is None, "IndexNow non-interactive operation")
+    validate_resources(indexnow, memory_bytes="536870912", cpus=0.50, pids=100, restart="no")
+    validate_ports(indexnow, set())
+    require(indexnow.get("depends_on") is None, "IndexNow database independence")
+
+    require(normalized_secrets(services["web"]) == {
+        ("telegram_bot_token", "/run/secrets/telegram_bot_token"),
+        ("telegram_webhook_secret", "/run/secrets/telegram_webhook_secret"),
+        ("indexnow_key", "/run/secrets/indexnow_key"),
+    }, "Production web secrets")
+    web_environment = services["web"].get("environment")
+    require(isinstance(web_environment, dict) and web_environment.get("INDEXNOW_KEY_FILE") == "/run/secrets/indexnow_key", "Production web IndexNow key path")
     require(
         normalized_service_networks(services["web"])
         == {"ingress": {"production-web"}, "backend": set()},
@@ -1103,6 +1148,23 @@ def validate_production_compose_model(
     )
     for service in services.values():
         validate_ports(service, set())
+
+    validate_exact_top_level_resources(
+        model,
+        {
+            "ingress": ("yolpol-production-ingress", False, True),
+            "backend": ("yolpol-production_backend", True, False),
+            "provider_egress": ("yolpol-production_provider_egress", False, False),
+        },
+        {"postgres_data": "yolpol-production_postgres_data"},
+        {
+            "telegram_bot_token": "/opt/yolpol/production/secrets/telegram-bot-token",
+            "telegram_webhook_secret": "/opt/yolpol/production/secrets/telegram-webhook-secret",
+            "groq_api_key": "/opt/yolpol/production/secrets/groq-api-key",
+            "backup_age_identity": "/opt/yolpol/production/secrets/backup-age-identity",
+            "indexnow_key": "/opt/yolpol/production/secrets/indexnow-key",
+        },
+    )
 
     staging_runtime = {
         **STAGING_FIXED_VALUES,

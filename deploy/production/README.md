@@ -31,6 +31,7 @@ The future root bootstrap must create this deterministic layout without making t
       telegram-bot-token                          10001:10001 0400
       telegram-webhook-secret                     10001:10001 0400
       groq-api-key                                10001:10001 0400
+      indexnow-key                                10001:10001 0400
       backup-age-identity                         10001:10001 0400, recovery operations only
     backups/                                      10001:10001 0700
   runtime/
@@ -49,7 +50,7 @@ The closed runtime schema contains only non-secret image/revision identity, fixe
 
 ## Runtime and network model
 
-Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. Migration, backup, restore, Staff, and Telegram operations are profile-gated and never start as a side effect of normal `up`. There is no Production-local edge service.
+Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `conversation-translation`, and `conversation-ai-fallback`. Migration, backup, restore, Staff, Telegram, and IndexNow operations are profile-gated and never start as a side effect of normal `up`. There is no Production-local edge service.
 
 - No Production service publishes a host port; shared ingress owns 80/443 independently.
 - Web is reachable only as `production-web` on `yolpol-production-ingress` and uses the internal backend network for PostgreSQL. PostgreSQL has no host port and never joins ingress.
@@ -88,6 +89,14 @@ Production requires a bot token and webhook secret that are not used by Staging.
 
 Groq and future provider credentials are Production-only file-backed secrets. This Compose contract does not change provider-neutral application policy or routing. Staff provisioning and first-Super-Admin bootstrap reuse the existing authoritative CLIs as explicit interactive one-shot operations with real stdin/stdout/stderr TTYs, backend-only access, no provider egress, no provider secret, and no public port.
 
+## IndexNow
+
+Production web alone receives the file-backed `indexnow_key` so it can serve the non-localized `/indexnow-key.txt` verification resource. The profile-gated `indexnow-submit` operation reuses the approved worker image, attaches only to provider egress, and receives the same key with no database, Telegram, Groq, backup, or recovery access. Staging has no IndexNow key, route exposure, service, or wrapper command.
+
+For initial Production activation, run the fixed argument-free `production-indexnow-submit` operation once after the reviewed contracts, complete Production secrets including `INDEXNOW_KEY`, closed runtime, `check-production`, approved web recreation, and public key-resource verification are complete. The operation submits the same 76-entry canonical source consumed by `sitemap.xml`; it may also be selected deliberately when a release materially affects the whole public site. Do not invoke it automatically after every ordinary release.
+
+Release-to-release changed-URL detection is intentionally deferred. A future integration should submit only added, updated, deleted, or otherwise materially changed URLs without adding URL arguments or another arbitrary operator surface. `sitemap.xml` remains the complete long-term inventory. `200` means submitted and `202` means accepted pending key validation; neither means indexed. IndexNow availability remains outside deployment correctness and rollback. See `docs/tasks/0068-indexnow-integration.md` for the exact activation order, rotation, and Bing Webmaster Tools verification.
+
 ## Shared ingress and activation prerequisites
 
 The dedicated `yolpol-ingress` project serves the canonical apex and permanently redirects `www.yolpol.com` to the matching apex path. Its Caddy state is neither Production application state nor shared with legacy Staging Caddy.
@@ -98,7 +107,7 @@ Task 0064 defines the shared ingress and migration/rollback contract, and the cu
 
 ## Operator commands and root responsibilities
 
-The wrapper exposes explicit `production-*` commands for validation, status, health, pulling approved Production images, database/app/worker deployment, migration, Staff operations, Telegram webhook set/info, and backup create/verify. `production-deploy-edge` is intentionally rejected. There is no generic `--environment`, path, service, image, Compose, or arbitrary argument channel. Existing unprefixed commands remain Staging/Monitoring operations.
+The wrapper exposes explicit `production-*` commands for validation, status, health, pulling approved Production images, database/app/worker deployment, migration, Staff operations, Telegram webhook set/info, IndexNow submission, and backup create/verify. `production-deploy-edge` is intentionally rejected. There is no generic `--environment`, path, URL, host, key, service, image, Compose, or arbitrary argument channel. Existing unprefixed commands remain Staging/Monitoring operations.
 
 Root remains responsible for bootstrap, authenticated release promotion, runtime and secret creation/rotation, database-role provisioning, deep verification, off-server durability, retention, restore/recovery, Monitoring activation, firewall/DNS/TLS, registry authentication, emergency work, and installation of the wrapper/sudoers contract.
 

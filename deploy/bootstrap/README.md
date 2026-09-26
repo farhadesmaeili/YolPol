@@ -127,6 +127,8 @@ TELEGRAM_WEBHOOK_SECRET
 GROQ_API_KEY
 ```
 
+Production additionally requires `INDEXNOW_KEY`. It is validated as 8-128 ASCII letters, digits, or hyphens and installed only as `/opt/yolpol/production/secrets/indexnow-key` (`10001:10001`, mode `0400`). The Staging secret schema rejects this key and never installs or receives the Production verification value.
+
 Monitoring uses an independent schema:
 
 ```text
@@ -142,7 +144,7 @@ STAGING_OPERATIONS_DATABASE_URL
 
 For `KEY=value` database files, raw whitespace, `$`, `#`, backslash, and quotes are rejected because Compose env-file interpretation is not an opaque byte transport. Percent-encode those characters in URL user-info/query components. `=` remains accepted, including in query values. Disposable tests resolve the rendered file through actual Docker Compose: the supported percent-encoded URL round-trips exactly, while raw `$NAME` and space-prefixed `#` demonstrate value-changing expansion/comment behavior.
 
-Staging and Production never share a schema invocation, destination, database URL, Telegram credential, Groq key, or runtime file.
+Staging and Production never share a schema invocation, destination, database URL, Telegram credential, Groq key, IndexNow key, or runtime file.
 
 Recovery credentials and the backup age identity are deferred to a later explicit recovery workflow. Phase B has no recovery-secret install/rotate commands, persists no recovery identity as a normal prerequisite, and base/environment readiness does not require recovery material. Bootstrap neither deletes pre-existing recovery files nor claims secure erasure.
 

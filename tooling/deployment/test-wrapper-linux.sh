@@ -44,7 +44,7 @@ for action in validate status health pull-approved-images deploy-database migrat
   production-validate production-status production-health production-pull-approved-images \
   production-deploy-database production-migrate production-deploy-app production-deploy-workers \
   production-staff-provision production-staff-bootstrap-super-admin \
-  production-telegram-webhook-set production-telegram-webhook-info production-backup-create \
+  production-telegram-webhook-set production-telegram-webhook-info production-indexnow-submit production-backup-create \
   ingress-validate ingress-status ingress-health ingress-health-production; do
   expect_accepted_grammar "$action"
 done
@@ -67,6 +67,8 @@ expect_rejected backup-verify "yolpol-staging-20260913T000000Z-abcdef0$(printf '
 expect_rejected backup-verify 'yolpol-staging-20260913T000000Z-abcdef0-é'
 expect_rejected backup-verify "yolpol-staging-20260913T000000Z-$(printf '%065d' 0)"
 expect_rejected production-status extra
+expect_rejected production-indexnow-submit extra
+expect_rejected production-indexnow-submit --host attacker.example
 expect_rejected deploy-edge
 expect_rejected production-deploy-edge
 expect_rejected ingress-deploy
