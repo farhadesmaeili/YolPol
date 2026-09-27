@@ -11,6 +11,7 @@ RUN apt-get update \
 COPY yolpol-deploy /opt/yolpol/bin/yolpol-deploy
 COPY yolpol-deploy-internal /opt/yolpol/bin/yolpol-deploy-internal
 COPY yolpol-deploy-policy.py /opt/yolpol/bin/yolpol-deploy-policy
+COPY yolpol-offserver-durability.py /opt/yolpol/bin/yolpol-offserver-durability
 COPY yolpol-bootstrap.py /opt/yolpol/bin/yolpol-bootstrap
 COPY fake-public-smoke-curl.sh /usr/bin/curl
 COPY sudoers.yolpol-deploy /etc/sudoers.d/yolpol-deploy
@@ -21,12 +22,12 @@ COPY test-wrapper-linux.sh /usr/local/bin/test-wrapper-linux
 COPY test-bootstrap-linux.py /usr/local/bin/test-bootstrap-linux.py
 
 RUN chown root:root /opt/yolpol/bin/yolpol-deploy /opt/yolpol/bin/yolpol-deploy-internal \
-    /opt/yolpol/bin/yolpol-deploy-policy /usr/bin/curl \
+    /opt/yolpol/bin/yolpol-deploy-policy /opt/yolpol/bin/yolpol-offserver-durability /usr/bin/curl \
     /opt/yolpol/bin/yolpol-bootstrap /etc/sudoers.d/yolpol-deploy /etc/sudoers.d/yolpol-deployment-agent \
     /usr/local/share/yolpol-deploy.sudoers /usr/local/share/yolpol-deployment-agent.sudoers \
     /usr/local/bin/test-wrapper-linux /usr/local/bin/test-bootstrap-linux.py \
   && chmod 0755 /opt/yolpol/bin/yolpol-deploy /usr/local/bin/test-wrapper-linux \
-  && chmod 0500 /opt/yolpol/bin/yolpol-deploy-internal \
+  && chmod 0500 /opt/yolpol/bin/yolpol-deploy-internal /opt/yolpol/bin/yolpol-offserver-durability \
   && chmod 0555 /opt/yolpol/bin/yolpol-deploy-policy /opt/yolpol/bin/yolpol-bootstrap /usr/bin/curl \
     /usr/local/bin/test-bootstrap-linux.py \
   && chmod 0440 /etc/sudoers.d/yolpol-deploy /etc/sudoers.d/yolpol-deployment-agent

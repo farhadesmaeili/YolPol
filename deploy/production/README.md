@@ -36,6 +36,8 @@ Root bootstrap creates this deterministic layout without making trusted paths op
     backups/                                      10001:10001 0700
   runtime/
     production-last-backup-created-at             root:root 0600
+    offserver-durability-evidence/                 root:root 0700
+      deployment-<deployment-id>.json              root:root 0600, only after full Phase C2 proof
 ```
 
 The existing root-owned release, lock, audit, protected operation-log, and incoming paths remain authoritative as documented in `deploy/operations/README.md`. `yolpol-operator` must not own Production files, join the Docker group, read the Docker socket or secrets, or receive arbitrary Docker, Compose, shell, service, log, systemd, firewall, or file-selection access.
@@ -65,11 +67,14 @@ Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `c
 Production PostgreSQL has its own volume and initialization credentials. Application, migration, backup, and explicit restore-target URLs are separate files so least-privilege roles can be provisioned. Web and workers never migrate automatically. The controlled release order is:
 
 ```text
-authenticated release and exact manifest promotion
--> current health/readiness
+authenticated release and exact current/target validation
+-> exact successful Staging ledger prerequisite
 -> encrypted Production backup
 -> identity-free backup verification
--> deep verification and off-server durability confirmation by root
+-> deep verification
+-> fixed provider-neutral off-server copy and independent destination verification
+-> durable-write confirmation and exact canonical evidence validation
+-> only then promote authority/runtime and deploy the database
 -> explicit migration only when the manifest/database gate requires it
 -> exact web and worker digest deployment
 -> readiness and operational verification
@@ -77,7 +82,7 @@ authenticated release and exact manifest promotion
 -> deployment record
 ```
 
-Backups are `yolpol-production-...dump.age` plus adjacent manifests under the Production-only directory. Creation streams a PostgreSQL custom archive through age encryption without persistent plaintext. The age recipient is Production-specific. The private recovery identity is never committed and must have a separately protected off-server copy; keeping the only copy on the active application server is prohibited.
+Backups are `yolpol-production-...dump.age` plus adjacent manifests under the Production-only directory. Creation streams a PostgreSQL custom archive through age encryption without persistent plaintext. The age recipient is Production-specific. The private recovery identity is never committed and must have a separately protected off-server copy; keeping the only copy on the active application server is prohibited. Phase C2 evidence binds the exact encrypted pair to the Deployment ID, current/target migration fingerprints, and authenticated target manifest. It contains only checksums, bounded identities, booleans, and a verification timestamp; it contains no credential, provider response, database URL, plaintext, or customer data.
 
 Before the first migration, backup creation accepts a genuinely pristine database with zero non-system user relations and records `schema.latestMigrationTimestamp=0`. Absence of `drizzle.__drizzle_migrations` alone is not evidence of a pristine database: if any user relation exists without that migration table, creation fails closed without publishing a backup pair. Once migration tracking exists, backup creation retains the normal latest-timestamp query. This bootstrap allowance does not relax the strict post-restore migration and required-schema validation for normal recovery.
 
@@ -117,8 +122,8 @@ The current `yolpol-monitoring` project remains application-data-specific to Sta
 
 ## Automation state and compatibility
 
-The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Production-changing migration fingerprints remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until independently verified off-server durability exists. Public activation remains separately approved.
+The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Task 0069 installs the root-owned Phase C2 core and evidence directory, but the repository intentionally supplies only an unconfigured adapter state. Production-changing migration fingerprints therefore remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` on the live path until a real provider is separately reviewed and activated. Public activation remains separately approved.
 
 ## Intentionally unsupported
 
-The repository contract and activated host path do not provide Production monitoring, an off-server backup store or schedule, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.
+The repository contract and activated host path do not provide a real off-server backup store or schedule, Production monitoring, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, upload a backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.

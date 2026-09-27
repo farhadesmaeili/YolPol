@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-مخزن فعلی شامل runtime سالم و مستقل Production و مسیر احراز‌شده انتشار از Staging به Production است. این وضعیت به معنی تکمیل cutover عمومی DNS/Cloudflare نیست؛ cutover نهایی عمومی، Production Monitoring، دوام backup خارج از سرور در Phase C2 و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production و هسته provider-neutral مربوط به durability/evidence در Phase C2 است. این وضعیت به معنی فعال‌شدن adapter واقعی storage یا migration تغییریافته Production نیست؛ cutover نهایی عمومی DNS/Cloudflare، Production Monitoring، فعال‌سازی provider واقعی و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 
@@ -317,8 +317,8 @@ Staging و Production دارای database، volume، credential، runtime file،
 
 gateهای عملیاتی زیر همچنان fail-closed باقی می‌مانند:
 
-- دوام backup خارج از سرور و با تأیید مستقل در Phase C2 کامل نشده است.
-- migration fingerprint تغییریافته برای Production با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
+- قرارداد repository-side مربوط به Phase C2 پیاده‌سازی و با داده synthetic آزمایش شده است، اما adapter واقعی remote پیکربندی یا فعال نشده است.
+- در نتیجه migration fingerprint تغییریافته برای Production همچنان پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
 - Production Monitoring جدا و غیرفعال/ناکامل است؛ پروژه Monitoring فعلی مخصوص Staging است.
 - automatic restore وجود ندارد.
 - disposable rebuild و اثبات کامل disaster recovery کامل نشده‌اند.
@@ -402,7 +402,7 @@ develop
 
 کارهای باقی‌مانده‌ای که در وضعیت فعلی تأیید شده‌اند عبارت‌اند از:
 
-- دوام backup خارج از سرور در Phase C2 و gate مرتبط با migrationهای Production؛
+- انتخاب، بازبینی، پیکربندی و فعال‌سازی زنده adapter واقعی off-server durability در Phase C2؛
 - فعال‌سازی Production Monitoring و تشخیص مستقل خرابی بیرونی؛
 - cutover نهایی و بازبینی‌شده عمومی DNS/Cloudflare؛
 - disposable rebuild و اثبات کامل disaster recovery؛

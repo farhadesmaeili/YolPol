@@ -129,11 +129,12 @@ describe("deployment result diagnostics", () => {
   });
 });
 
-describe("Phase C1 workflow contract", () => {
+describe("Phase C1 and repository-side Phase C2 workflow contract", () => {
   const release = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
   const reusable = readFileSync(resolve(root, ".github/workflows/deploy-release.yml"), "utf8");
   const production = readFileSync(resolve(root, ".github/workflows/promote-production.yml"), "utf8");
   const controller = readFileSync(resolve(root, "deploy/control-plane/yolpol-release-controller.py"), "utf8");
+  const durability = readFileSync(resolve(root, "deploy/operations/yolpol-offserver-durability.py"), "utf8");
   const internal = readFileSync(resolve(root, "deploy/operations/yolpol-deploy-internal"), "utf8");
   const wrapper = readFileSync(resolve(root, "deploy/operations/yolpol-deploy"), "utf8");
   const agent = readFileSync(resolve(root, "deploy/control-plane/yolpol-deployment-agent.py"), "utf8");
@@ -169,13 +170,17 @@ describe("Phase C1 workflow contract", () => {
     expect(internal).toContain("internal lock identity rejected");
   });
 
-  it("limits monitoring authority and Production migrations", () => {
+  it("limits monitoring authority and gates Production migrations on Phase C2", () => {
     expect(internal).toContain("monitoring_compose up -d --no-build --no-deps operations-exporter");
     expect(internal).toContain("monitoring_compose pull operations-exporter");
     expect(internal).not.toContain("monitoring_compose pull ;;");
     expect(internal).not.toMatch(/monitoring_compose up[^\n]*(?:prometheus|alertmanager|cadvisor|node-exporter|postgres-exporter|blackbox-exporter)/u);
     expect(controller).toContain("PHASE_C2_OFFSERVER_BACKUP_REQUIRED");
-    expect(controller).not.toContain('internal("migrate-production")');
+    expect(controller).toContain('run("backup-create-verify-deep-production")');
+    expect(controller).toContain("prove_production_durability(");
+    expect(controller).toContain('run(f"migrate-{environment}"');
+    expect(durability).toContain('raise DurabilityUnavailable("remote durability adapter is unavailable")');
+    expect(durability).not.toMatch(/subprocess|os\.system|shell=True|https?:\/\//u);
   });
 
   it("uses fixed Staging public smoke routes and no caller URL", () => {
@@ -258,7 +263,7 @@ describe("Phase C1 workflow contract", () => {
     expect(integrity).toBeGreaterThan(create);
     expect(deep).toBeGreaterThan(integrity);
     expect(throttle).toBeGreaterThan(deep);
-    expect(controller.indexOf('run("backup-create-verify-deep-staging")')).toBeLessThan(controller.indexOf('run("migrate-staging",'));
+    expect(controller.indexOf('run("backup-create-verify-deep-staging")')).toBeLessThan(controller.indexOf('run(f"migrate-{environment}",'));
   });
 
   it("installs but never activates the isolated deployment agent", () => {
@@ -281,6 +286,6 @@ describe("Phase C1 workflow contract", () => {
   it("does not expose Production cutover or infrastructure mutation", () => {
     expect(controller).toContain("deployed-not-publicly-activated");
     expect(controller).not.toMatch(/cloudflare|dns|deploy-operations-exporter-production|production.*monitoring/iu);
-    expect(controller).not.toContain('internal("migrate-production")');
+    expect(controller).not.toMatch(/remote-shell|remote-exec|provider-command|caller.*destination/iu);
   });
 });

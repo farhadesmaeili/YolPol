@@ -24,8 +24,10 @@ POLICY=/opt/yolpol/bin/yolpol-deploy-policy
 INTERNAL=/opt/yolpol/bin/yolpol-deploy-internal
 RELEASE_CONTROLLER=/opt/yolpol/bin/yolpol-release-controller
 CONTROL_PLANE_MODULE=/opt/yolpol/bin/yolpol_control_plane.py
+DURABILITY=/opt/yolpol/bin/yolpol-offserver-durability
 RUNTIME_DIRECTORY=/opt/yolpol/runtime
 RUNTIME_TMP=/opt/yolpol/runtime/tmp
+OFFSERVER_DURABILITY_EVIDENCE=/opt/yolpol/runtime/offserver-durability-evidence
 LOCK_FILE=/opt/yolpol/runtime/deployment.lock
 AUDIT_LOG=/opt/yolpol/runtime/deployment-audit.log
 OPERATION_LOG=/opt/yolpol/runtime/deployment-operation.log
@@ -307,11 +309,13 @@ require_base_contract() {
   require_directory "$RELEASE_DIRECTORY" 0 0 700
   require_directory "$RUNTIME_DIRECTORY" 0 0 700
   require_directory "$RUNTIME_TMP" 0 0 700
+  require_directory "$OFFSERVER_DURABILITY_EVIDENCE" 0 0 700
   require_file "$WRAPPER" 0 0 755
   require_file "$POLICY" 0 0 555
   require_file "$INTERNAL" 0 0 500
   require_file "$RELEASE_CONTROLLER" 0 0 500
   require_file "$CONTROL_PLANE_MODULE" 0 0 555
+  require_file "$DURABILITY" 0 0 500
   require_file "$LOCK_FILE" 0 0 600
   require_file "$AUDIT_LOG" 0 0 600
   require_file "$OPERATION_LOG" 0 0 600

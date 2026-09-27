@@ -1,8 +1,8 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, and the narrow Task 0066 extension that installs, but does not itself activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The control plane has since been activated separately on the current VPS.
+This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, the narrow Task 0066 authenticated-control-plane installation, and the Task 0069 root-owned Phase C2 module/evidence foundation. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The Phase C1 control plane has since been activated separately on the current VPS; the Phase C2 remote adapter has not.
 
-Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
+Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, upload a backup, activate a remote storage provider, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
 
 ## Supported host
 
@@ -40,7 +40,7 @@ The normal operator remains UID/GID `1001:1001`, has no supplementary groups, ha
 /opt/yolpol/bin/yolpol-deploy
 ```
 
-Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. See `deploy/control-plane/README.md`.
+Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. Task 0069 adds `/opt/yolpol/runtime/offserver-durability-evidence` as `root:root 0700`, the root-only durability module, and a non-activating `unconfigured` example. It adds no sudo command, provider credential, or operator-writable path. See `deploy/control-plane/README.md`.
 
 ## Commands
 

@@ -16,7 +16,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 ## Operational deployment automation
 
-The Production repository foundation and shared-ingress migration are complete. The repository-managed Phase B bootstrap contract, including Ubuntu 24.04 LTS/noble support, has been successfully applied and converged on the current VPS; `yolpol-bootstrap check` reports that the foundation is ready. Phase C1 is also implemented and activated: the deployment-agent timer is enabled and active, GitHub-side activation is complete for the verified main-only Production promotion path, Staging deploys automatically, and Production deploys only after explicit approval. Release `v0.2.2` (`48a566142bd0259c596314f6a01a92cc66d868ce`) completed that authenticated Staging-to-Production path, and both environments now identify it as active. The Production runtime is provisioned and healthy. Phase C2 off-server durability, Production Monitoring, final public DNS/Cloudflare cutover, and disposable rebuild/disaster-recovery proof remain separate work.
+The Production repository foundation and shared-ingress migration are complete. The repository-managed Phase B bootstrap contract, including Ubuntu 24.04 LTS/noble support, has been successfully applied and converged on the current VPS; `yolpol-bootstrap check` reports that the foundation is ready. Phase C1 is also implemented and activated: the deployment-agent timer is enabled and active, GitHub-side activation is complete for the verified main-only Production promotion path, Staging deploys automatically, and Production deploys only after explicit approval. Release `v0.2.2` (`48a566142bd0259c596314f6a01a92cc66d868ce`) completed that authenticated Staging-to-Production path, and both environments now identify it as active. The Production runtime is provisioned and healthy. Task 0069 implements and tests the repository-side Phase C2 durability/evidence contract, but no real remote adapter is selected or activated and the live VPS remains fail-closed. Provider activation, Production Monitoring, final public DNS/Cloudflare cutover, and disposable rebuild/disaster-recovery proof remain separate work.
 
 ### Phase A - Production Deployment Foundation
 
@@ -64,7 +64,7 @@ GitHub Release
 -> deployment record
 ```
 
-Normal releases use no interactive SSH. An approved GitHub-hosted Environment job binds exact intent bytes to GitHub OIDC and an explicit Deployment; a repository-scoped read-only GitHub App agent discovers it, and the root controller applies the existing one-lock host contracts. Staging deployment and same-fingerprint, already-provisioned Production promotion are covered. Production migration changes remain fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until Phase C2 adds independently verified off-server durability. The current VPS and GitHub configuration are activated for automatic Staging deployment and the explicit, approved, main-only Production promotion path; `v0.2.2` successfully exercised that path end to end.
+Normal releases use no interactive SSH. An approved GitHub-hosted Environment job binds exact intent bytes to GitHub OIDC and an explicit Deployment; a repository-scoped read-only GitHub App agent discovers it, and the root controller applies the existing one-lock host contracts. Staging deployment and same-fingerprint, already-provisioned Production promotion are covered. The repository controller now has the Phase C2 sequence for a fresh Production backup, local and deep verification, provider-neutral remote durability evidence, and the fixed Production migration primitive. Because the repository intentionally ships without an activated real adapter, live Production migration changes still fail closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`. The current VPS and GitHub configuration are activated only for automatic Staging deployment and the explicit, approved, main-only same-fingerprint Production promotion path; `v0.2.2` successfully exercised that path end to end.
 
 ### Phase D - Rebuild and Disaster-Recovery Validation
 
@@ -117,7 +117,8 @@ The final target operating model treats servers as disposable and rebuildable. S
 - [x] Apply and converge the repository-managed server bootstrap contract, including the Ubuntu 24.04/noble compatibility fix
 - [x] Activate authenticated automatic Staging deployment and explicit approved Production promotion
 - [x] Bootstrap and deploy the real Production runtime through `v0.2.2`
-- [ ] Add Phase C2 off-server backup durability for Production-changing migrations
+- [x] Implement and adversarially test the provider-neutral Phase C2 repository contract
+- [ ] Select, review, configure, and activate a real off-server durability adapter before Production-changing migrations
 - [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
 - [ ] Complete a separately verified and approved public DNS/Cloudflare cutover
 - Content review in all locales
