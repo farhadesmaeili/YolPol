@@ -12,6 +12,10 @@ The encrypted job `GITHUB_TOKEN` is decrypted only by the root controller. It ma
 
 `agent.json` is activation-time configuration. Replace every placeholder with verified repository/App/environment facts. The repository ID, owner ID, exact OIDC subjects, workflow refs, event/ref rules, App IDs, and capability key IDs are mandatory and fail closed. The example file is not an active configuration.
 
+The canonical Production promotion workflow is dispatched from `main`. Production trust is exact: the caller workflow is `promote-production.yml@refs/heads/main`, the reusable job workflow is `deploy-release.yml@refs/heads/main`, the event is `workflow_dispatch`, and the ref is `refs/heads/main`. This branch change does not authorize arbitrary `main` contents: the workflow must still authenticate a published Release and the controller still validates its exact tag, Git SHA, manifest SHA-256, immutable image digests, repository and workflow identities, OIDC claims, actor, and GitHub Deployment.
+
+Changing the repository-owned `agent.json.example` does not replace the active `/etc/yolpol/control-plane/agent.json`. To migrate an activated host, coordinate the final GitHub Production Environment allowed branch (`main`) with an explicit, reviewed, root-controlled replacement of the active Production trust values with the exact `refs/heads/main` contract. `refresh-contracts` may refresh the managed example and other repository contracts, but it does not activate that example as `agent.json`. Do not create a transition state that trusts both branches; keep the cutover fail-closed, then verify the new `main`-based promotion path separately.
+
 ## Protocol and replay
 
 Protocol version 1 uses compact, fixed-order UTF-8 JSON without a BOM or trailing whitespace. Decimal strings preserve GitHub numeric IDs. The body contains neither the OIDC JWT nor the Deployment ID. Its exact bytes are transported as unpadded base64url and its audience is exactly `yolpol-release-v1:<lowercase-sha256>`. The envelope has only `intentBody` and `oidcJwt`.
