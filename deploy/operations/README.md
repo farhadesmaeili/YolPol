@@ -2,7 +2,7 @@
 
 Task 0066 preserves this public closed grammar and its single global mutation lock. Compose execution now also exists in `/opt/yolpol/bin/yolpol-deploy-internal`, a root-only mode-`0500` primitive that is never sudo-exposed. Public human actions acquire the lock once and delegate fixed internal action names; the authenticated release controller holds the same lock across its entire transaction and never recursively calls this wrapper.
 
-This directory defines a repository-side contract for a future VPS. Nothing here installs sudoers, contacts a server, changes Docker, creates credentials, runs migrations, or deploys containers.
+This directory defines the repository-side contract installed on the current VPS. Repository files do not themselves install sudoers, contact a server, change Docker, create credentials, run migrations, or deploy containers; those effects occur only through the separately controlled host procedures and authenticated deployment path.
 
 ## Security boundary
 
@@ -191,4 +191,6 @@ Task 0064 defines the repository contract, and the live handoff and Staging veri
 
 ## Remaining operational limitations
 
-Shared ingress was deployed manually. The repository now provides the Phase B bootstrap workflow and the inactive Phase C1 authenticated deployment control plane, but neither has been applied or activated on the current VPS by these tasks. The foundation still does not provide signed release attestations, activate Production monitoring, provide Phase C2 off-server backup durability or scheduling, automate Production-changing migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials, provision PostgreSQL roles, or perform disaster-recovery cutover. Those omissions must not be worked around by expanding operator sudo.
+The Phase B bootstrap foundation is converged on the current VPS, and the Phase C1 authenticated deployment agent is enabled and active. Staging and Production both run release `v0.2.2` at `48a566142bd0259c596314f6a01a92cc66d868ce`; Production promotion is explicit, approval-gated, and trusted only from the canonical `main` workflow path. The legacy `/opt/yolpol/releases/active` authority remains deliberately retained for rollback compatibility rather than serving as either environment's current authority.
+
+The foundation still does not provide signed release attestations, activate Production monitoring, provide Phase C2 off-server backup durability or scheduling, permit automated Production-changing migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials automatically, or prove disposable rebuild/disaster-recovery cutover. Production-changing migrations continue to fail closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`. Those omissions must not be worked around by expanding operator sudo.
