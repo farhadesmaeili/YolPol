@@ -108,7 +108,7 @@ The dedicated `yolpol-ingress` project serves the canonical apex and permanently
 
 Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The Production runtime, secrets, database, release authority, and application containers are now provisioned and healthy on `v0.2.2`. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. Production Monitoring and a separately approved DNS/Cloudflare cutover remain outstanding; runtime health and shared ingress alone do not prove public Production activation.
+Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The Production runtime, secrets, database, release authority, and application containers are now provisioned and healthy on `v0.2.2`. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. The Production Monitoring repository contract is implemented, but its VPS activation and a separately approved DNS/Cloudflare cutover remain outstanding; runtime health and shared ingress alone do not prove public Production activation.
 
 ## Operator commands and root responsibilities
 
@@ -118,7 +118,9 @@ Root remains responsible for bootstrap, authenticated release promotion, runtime
 
 ## Monitoring decision
 
-The current `yolpol-monitoring` project remains application-data-specific to Staging. It identifies shared-ingress container presence and probes Staging web through `staging-web`, but it does not attach the Production ingress/backend network or credentials and does not claim an active Production public probe. Production monitoring is a separate follow-up requiring isolated exporter credentials, endpoint probes, alert routing, and policy tests before activation.
+The repository's single `yolpol-monitoring` project now defines isolated Production PostgreSQL, Operations, and Blackbox collectors. They use Production-only secret files, join only the Production backend or ingress network required by their function, label signals `environment="production"`, and probe only internal `production-web` liveness/readiness. Shared Prometheus, Alertmanager, Node Exporter, cAdvisor, host alerts, and the one shared-ingress presence alert are not duplicated. Production backup monitoring remains disabled by default.
+
+This is a repository contract, not a live-state claim. The Production monitoring role, real credentials, host contract refresh, and root-controlled collector activation remain deferred. Public `https://yolpol.com` DNS/TLS monitoring remains deferred until cutover, and an independent off-host watchdog is still required for total VPS loss.
 
 ## Automation state and compatibility
 
@@ -126,4 +128,4 @@ The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, se
 
 ## Intentionally unsupported
 
-The repository contract and activated host path do not provide a real off-server backup store or schedule, Production monitoring, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, upload a backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.
+The repository contract and activated host path do not provide a real off-server backup store or schedule, live Production Monitoring activation, public/off-host Production probing, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, upload a backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.

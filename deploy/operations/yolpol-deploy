@@ -388,8 +388,9 @@ require_monitoring_filesystem() {
   require_file /opt/yolpol/monitoring/alertmanager/alertmanager.telegram.yml 0 0 644
   require_file /opt/yolpol/monitoring/blackbox/blackbox.yml 0 0 644
   require_file "$MONITORING_ENV" 0 0 600
-  for file in alert-telegram-bot-token alert-telegram-chat-id staging-postgres-exporter-uri staging-postgres-exporter-user staging-postgres-exporter-password; do require_nonempty_file "/opt/yolpol/monitoring/secrets/$file" 65534 65534 400; done
+  for file in alert-telegram-bot-token alert-telegram-chat-id staging-postgres-exporter-uri staging-postgres-exporter-user staging-postgres-exporter-password production-postgres-exporter-uri production-postgres-exporter-user production-postgres-exporter-password; do require_nonempty_file "/opt/yolpol/monitoring/secrets/$file" 65534 65534 400; done
   require_nonempty_file /opt/yolpol/monitoring/secrets/staging-operations-database-url 10001 10001 400
+  require_nonempty_file /opt/yolpol/monitoring/secrets/production-operations-database-url 10001 10001 400
 }
 
 staging_compose() {

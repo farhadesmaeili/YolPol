@@ -206,6 +206,10 @@ MONITORING_SECRETS = (
     SecretFile("staging-postgres-exporter-user", 65534, 65534, 0o400, ("STAGING_POSTGRES_EXPORTER_USER",)),
     SecretFile("staging-postgres-exporter-password", 65534, 65534, 0o400, ("STAGING_POSTGRES_EXPORTER_PASSWORD",)),
     SecretFile("staging-operations-database-url", CONTAINER_UID, CONTAINER_GID, 0o400, ("STAGING_OPERATIONS_DATABASE_URL",)),
+    SecretFile("production-postgres-exporter-uri", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_URI",)),
+    SecretFile("production-postgres-exporter-user", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_USER",)),
+    SecretFile("production-postgres-exporter-password", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_PASSWORD",)),
+    SecretFile("production-operations-database-url", CONTAINER_UID, CONTAINER_GID, 0o400, ("PRODUCTION_OPERATIONS_DATABASE_URL",)),
 )
 
 

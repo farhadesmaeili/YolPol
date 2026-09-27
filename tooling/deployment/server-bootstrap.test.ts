@@ -96,6 +96,12 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).toContain("existing secret differs; use the explicit rotation command");
     expect(bootstrap).toContain('set(payload) != {"schemaVersion", "environment", "secrets"}');
     expect(bootstrap).not.toMatch(/print\([^\n]*(?:secret|payload|content|value)/iu);
+    for (const secret of [
+      "production-postgres-exporter-uri",
+      "production-postgres-exporter-user",
+      "production-postgres-exporter-password",
+      "production-operations-database-url",
+    ]) expect(bootstrap).toContain(secret);
   });
 
   it("creates only the two fixed bridge networks and starts no service", () => {

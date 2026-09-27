@@ -88,6 +88,16 @@ describe("YOLPOL operations metrics", () => {
     expect(rendered).toContain('queue="conversation_translation"');
     expect(rendered).toContain('queue="ai_fallback"');
     expect(rendered).not.toMatch(/inquiry[_-]?id|conversation[_-]?id|customer[_-]?id|message[_-]?id|email|phone|price|prompt/iu);
+
+    const productionRendered = renderOperationsMetrics({
+      environment: "production",
+      queues,
+      backup: {monitoringEnabled: false, scanSuccess: true, validPairExists: false, latestValidTimestampSeconds: 0, latestValidAgeSeconds: 0},
+      collectionDurationSeconds: 0.125,
+    });
+    expect(productionRendered).toContain('yolpol_queue_eligible_jobs{environment="production",queue="inquiry_notification"} 2');
+    expect(productionRendered).toContain('yolpol_backup_monitoring_enabled{environment="production"} 0');
+    expect(productionRendered).not.toMatch(/inquiry[_-]?id|conversation[_-]?id|customer[_-]?id|message[_-]?id|email|phone|price|prompt/iu);
   });
 
   it("verifies an encrypted artifact and manifest without an age identity", async () => {
@@ -150,6 +160,13 @@ describe("YOLPOL operations metrics", () => {
     });
     expect(config).toMatchObject({environment: "staging", port: 9464, backupEnabled: false, backupScanIntervalMilliseconds: 300_000});
     expect(config.databaseUrl).toBe("postgresql://monitor:synthetic@postgres:5432/yolpol");
+    const productionConfig = await readOperationsMetricsConfig({...process.env,
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: "production",
+      YOLPOL_MONITORING_DATABASE_URL_FILE: secretPath,
+      YOLPOL_MONITORING_BACKUP_ENABLED: "false",
+      YOLPOL_MONITORING_PORT: "9464",
+    });
+    expect(productionConfig).toMatchObject({environment: "production", port: 9464, backupEnabled: false});
     await expect(readOperationsMetricsConfig({...process.env, YOLPOL_DEPLOYMENT_ENVIRONMENT: "staging", YOLPOL_MONITORING_DATABASE_URL_FILE: secretPath, YOLPOL_MONITORING_BACKUP_ENABLED: "yes"})).rejects.toThrow("Invalid backup monitoring configuration.");
   });
 });

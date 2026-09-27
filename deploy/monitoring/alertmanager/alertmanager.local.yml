@@ -24,7 +24,13 @@ inhibit_rules:
   - source_matchers:
       - alertname="YolpolPostgresExporterDown"
     target_matchers:
-      - alertname=~"YolpolOperationsExporterDown|PrometheusTargetScrapeFailing"
+      - alertname="YolpolOperationsExporterDown"
+    equal: [environment]
+  - source_matchers:
+      - alertname="YolpolPostgresExporterDown"
+    target_matchers:
+      - alertname="PrometheusTargetScrapeFailing"
+      - service=~"postgres|operations-exporter"
     equal: [environment]
 
 receivers:
