@@ -57,10 +57,10 @@ def config() -> control.HostConfig:
     )
     production = control.EnvironmentTrust(
         subject="repo:farhadesmaeili/YolPol:environment:production",
-        workflow_ref="farhadesmaeili/YolPol/.github/workflows/promote-production.yml@refs/heads/develop",
-        job_workflow_ref="farhadesmaeili/YolPol/.github/workflows/deploy-release.yml@refs/heads/develop",
+        workflow_ref="farhadesmaeili/YolPol/.github/workflows/promote-production.yml@refs/heads/main",
+        job_workflow_ref="farhadesmaeili/YolPol/.github/workflows/deploy-release.yml@refs/heads/main",
         event_name="workflow_dispatch",
-        ref="refs/heads/develop",
+        ref="refs/heads/main",
         capability_key_id="production-key",
         capability_private_key_file="/etc/yolpol/control-plane/production-capability-private.pem",
     )
@@ -224,6 +224,36 @@ class ModuleLoadingTests(unittest.TestCase):
                 controller.load_python(source, module_name)
 
         self.assertIs(sys.modules[module_name], previous)
+
+
+class ProductionTrustContractTests(unittest.TestCase):
+    def test_repository_contract_is_exact_main_while_staging_remains_tag_bound(self) -> None:
+        value = json.loads((CONTROL_PLANE / "agent.json.example").read_text(encoding="utf-8"))
+
+        self.assertEqual(value["production"], {
+            "subject": "REPLACE_EXACT_PRODUCTION_OIDC_SUBJECT",
+            "workflowRef": "farhadesmaeili/YolPol/.github/workflows/promote-production.yml@refs/heads/main",
+            "jobWorkflowRef": "farhadesmaeili/YolPol/.github/workflows/deploy-release.yml@refs/heads/main",
+            "eventName": "workflow_dispatch",
+            "ref": "refs/heads/main",
+            "capabilityKeyId": "REPLACE_PRODUCTION_KEY_ID",
+            "capabilityPrivateKeyFile": "/etc/yolpol/control-plane/production-capability-private.pem",
+        })
+        self.assertNotIn("refs/heads/develop", json.dumps(value["production"]))
+        fixture = config().production
+        self.assertEqual(fixture.workflow_ref, value["production"]["workflowRef"])
+        self.assertEqual(fixture.job_workflow_ref, value["production"]["jobWorkflowRef"])
+        self.assertEqual(fixture.event_name, value["production"]["eventName"])
+        self.assertEqual(fixture.ref, value["production"]["ref"])
+        self.assertEqual(value["staging"], {
+            "subject": "REPLACE_EXACT_STAGING_OIDC_SUBJECT",
+            "workflowRef": "farhadesmaeili/YolPol/.github/workflows/release.yml@refs/tags/{releaseTag}",
+            "jobWorkflowRef": "farhadesmaeili/YolPol/.github/workflows/deploy-release.yml@refs/tags/{releaseTag}",
+            "eventName": "push",
+            "ref": "refs/tags/{releaseTag}",
+            "capabilityKeyId": "REPLACE_STAGING_KEY_ID",
+            "capabilityPrivateKeyFile": "/etc/yolpol/control-plane/staging-capability-private.pem",
+        })
 
 
 class ProtocolTests(unittest.TestCase):
