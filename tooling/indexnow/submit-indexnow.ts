@@ -12,4 +12,7 @@ async function main(): Promise<void> {
   if (!result.succeeded) process.exitCode = 1;
 }
 
-await main();
+void main().catch(() => {
+  process.stderr.write('{"event":"indexnow.submission.failed","result":"failed","reason":"configuration_failure"}\n');
+  process.exitCode = 1;
+});
