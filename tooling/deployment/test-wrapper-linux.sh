@@ -158,8 +158,8 @@ set -e
 printf '%s' "$sudo_output" | grep -Fq 'not allowed to execute' \
   && fail_test 'sudoers did not match arbitrary wrapper arguments as documented'
 
-mkdir -p /opt/yolpol/runtime/tmp
-chmod 0700 /opt/yolpol/runtime /opt/yolpol/runtime/tmp
+mkdir -p /opt/yolpol/runtime/tmp /opt/yolpol/runtime/offserver-durability-evidence
+chmod 0700 /opt/yolpol/runtime /opt/yolpol/runtime/tmp /opt/yolpol/runtime/offserver-durability-evidence
 : > /opt/yolpol/runtime/deployment.lock
 chmod 0600 /opt/yolpol/runtime/deployment.lock
 exec 9>>/opt/yolpol/runtime/deployment.lock

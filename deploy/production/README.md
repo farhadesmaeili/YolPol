@@ -1,6 +1,6 @@
 # YOLPOL Production deployment contract
 
-This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files that a later root bootstrap installs below `/opt/yolpol/production`; it does not create that directory, access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook.
+This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files installed below `/opt/yolpol/production`; repository source alone does not access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook. On the current VPS, the Production runtime, secrets, database, release authority, and application containers have been provisioned, and release `v0.2.2` is healthy. That runtime deployment is distinct from the separately approved public DNS/Cloudflare cutover, which is not claimed as complete.
 
 ## Fixed identity and isolation
 
@@ -10,7 +10,7 @@ Production owns distinct backend/provider networks and database volumes, `/opt/y
 
 ## Filesystem contract
 
-The future root bootstrap must create this deterministic layout without making trusted paths operator-writable:
+Root bootstrap creates this deterministic layout without making trusted paths operator-writable:
 
 ```text
 /opt/yolpol/                                      root:root 0755
@@ -36,6 +36,8 @@ The future root bootstrap must create this deterministic layout without making t
     backups/                                      10001:10001 0700
   runtime/
     production-last-backup-created-at             root:root 0600
+    offserver-durability-evidence/                 root:root 0700
+      deployment-<deployment-id>.json              root:root 0600, only after full Phase C2 proof
 ```
 
 The existing root-owned release, lock, audit, protected operation-log, and incoming paths remain authoritative as documented in `deploy/operations/README.md`. `yolpol-operator` must not own Production files, join the Docker group, read the Docker socket or secrets, or receive arbitrary Docker, Compose, shell, service, log, systemd, firewall, or file-selection access.
@@ -65,11 +67,14 @@ Ordinary startup consists only of `web`, `postgres`, `inquiry-notifications`, `c
 Production PostgreSQL has its own volume and initialization credentials. Application, migration, backup, and explicit restore-target URLs are separate files so least-privilege roles can be provisioned. Web and workers never migrate automatically. The controlled release order is:
 
 ```text
-authenticated release and exact manifest promotion
--> current health/readiness
+authenticated release and exact current/target validation
+-> exact successful Staging ledger prerequisite
 -> encrypted Production backup
 -> identity-free backup verification
--> deep verification and off-server durability confirmation by root
+-> deep verification
+-> fixed provider-neutral off-server copy and independent destination verification
+-> durable-write confirmation and exact canonical evidence validation
+-> only then promote authority/runtime and deploy the database
 -> explicit migration only when the manifest/database gate requires it
 -> exact web and worker digest deployment
 -> readiness and operational verification
@@ -77,7 +82,7 @@ authenticated release and exact manifest promotion
 -> deployment record
 ```
 
-Backups are `yolpol-production-...dump.age` plus adjacent manifests under the Production-only directory. Creation streams a PostgreSQL custom archive through age encryption without persistent plaintext. The age recipient is Production-specific. The private recovery identity is never committed and must have a separately protected off-server copy; keeping the only copy on the active application server is prohibited.
+Backups are `yolpol-production-...dump.age` plus adjacent manifests under the Production-only directory. Creation streams a PostgreSQL custom archive through age encryption without persistent plaintext. The age recipient is Production-specific. The private recovery identity is never committed and must have a separately protected off-server copy; keeping the only copy on the active application server is prohibited. Phase C2 evidence binds the exact encrypted pair to the Deployment ID, current/target migration fingerprints, and authenticated target manifest. It contains only checksums, bounded identities, booleans, and a verification timestamp; it contains no credential, provider response, database URL, plaintext, or customer data.
 
 Before the first migration, backup creation accepts a genuinely pristine database with zero non-system user relations and records `schema.latestMigrationTimestamp=0`. Absence of `drizzle.__drizzle_migrations` alone is not evidence of a pristine database: if any user relation exists without that migration table, creation fails closed without publishing a backup pair. Once migration tracking exists, backup creation retains the normal latest-timestamp query. This bootstrap allowance does not relax the strict post-restore migration and required-schema validation for normal recovery.
 
@@ -103,7 +108,7 @@ The dedicated `yolpol-ingress` project serves the canonical apex and permanently
 
 Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The live Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains active. Production public activation is still blocked until the Production runtime, secrets, database, release authority, application containers, Monitoring integration, health checks, and rollback are ready and the DNS/Cloudflare cutover is separately approved. Shared ingress alone does not make Production live.
+Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The Production runtime, secrets, database, release authority, and application containers are now provisioned and healthy on `v0.2.2`. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. The Production Monitoring repository contract is implemented, but its VPS activation and a separately approved DNS/Cloudflare cutover remain outstanding; runtime health and shared ingress alone do not prove public Production activation.
 
 ## Operator commands and root responsibilities
 
@@ -113,12 +118,14 @@ Root remains responsible for bootstrap, authenticated release promotion, runtime
 
 ## Monitoring decision
 
-The current `yolpol-monitoring` project remains application-data-specific to Staging. It identifies shared-ingress container presence and probes Staging web through `staging-web`, but it does not attach the Production ingress/backend network or credentials and does not claim an active Production public probe. Production monitoring is a separate follow-up requiring isolated exporter credentials, endpoint probes, alert routing, and policy tests before activation.
+The repository's single `yolpol-monitoring` project now defines isolated Production PostgreSQL, Operations, and Blackbox collectors. They use Production-only secret files, join only the Production backend or ingress network required by their function, label signals `environment="production"`, and probe only internal `production-web` liveness/readiness. Shared Prometheus, Alertmanager, Node Exporter, cAdvisor, host alerts, and the one shared-ingress presence alert are not duplicated. Production backup monitoring remains disabled by default.
 
-## Future automation compatibility
+This is a repository contract, not a live-state claim. The Production monitoring role, real credentials, host contract refresh, and root-controlled collector activation remain deferred. Public `https://yolpol.com` DNS/TLS monitoring remains deferred until cutover, and an independent off-host watchdog is still required for total VPS loss.
 
-A future bootstrap tool can install the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. A future release workflow can promote an approved manifest only to Production, create and verify a backup, compare migration identity, pull exact digests, migrate conditionally, replace web/workers on stable networks, verify readiness, and leave shared ingress running. Neither automation phase is implemented here, and Production activation remains separately approved.
+## Automation state and compatibility
+
+The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Task 0069 installs the root-owned Phase C2 core and evidence directory, but the repository intentionally supplies only an unconfigured adapter state. Production-changing migration fingerprints therefore remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` on the live path until a real provider is separately reviewed and activated. Public activation remains separately approved.
 
 ## Intentionally unsupported
 
-This repository now provides the shared-host ingress contract but does not install it, deploy Production, create host paths/networks, secrets, credentials, a database, bot, webhook, certificate, DNS record, GitHub Environment, bootstrap workflow, deployment workflow, Production monitoring, backup schedule, off-server store, PITR, down migration, automatic database rollback, restore cutover, arbitrary logs, arbitrary Compose, or shell access.
+The repository contract and activated host path do not provide a real off-server backup store or schedule, live Production Monitoring activation, public/off-host Production probing, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, upload a backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.

@@ -1,8 +1,8 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, and the narrow Task 0066 extension that installs, but does not activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface.
+This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, the narrow Task 0066 authenticated-control-plane installation, and the Task 0069 root-owned Phase C2 module/evidence foundation. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The Phase C1 control plane has since been activated separately on the current VPS; the Phase C2 remote adapter has not.
 
-Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the inactive Phase C1 control-plane contract.
+Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, upload a backup, activate a remote storage provider, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
 
 ## Supported host
 
@@ -21,7 +21,7 @@ Any other distribution, release, codename, or architecture fails closed; `ID_LIK
 /usr/libexec/docker/cli-plugins/docker-compose
 ```
 
-On the live VPS, the trusted source was established manually and the pre-Task-0067 `apply` command was attempted. Source validation passed, but the command failed closed at `validate_supported_host()` because that contract supported only Debian 12 while the VPS runs Ubuntu 24.04/noble. It did not proceed into prerequisite, user, directory, or managed-contract installation; Phase B did not converge or activate. Reapplying the updated bootstrap remains a separate controlled VPS operation.
+On the live VPS, the trusted source was established manually and the pre-Task-0067 `apply` command was attempted. Source validation passed, but the command failed closed at `validate_supported_host()` because that contract supported only Debian 12 while the VPS runs Ubuntu 24.04/noble. It did not proceed into prerequisite, user, directory, or managed-contract installation. After Task 0067 added the exact Ubuntu 24.04/noble contract, the updated bootstrap was successfully applied and converged; `/opt/yolpol/bin/yolpol-bootstrap check` now reports `yolpol-bootstrap: foundation is ready`.
 
 ## Trust boundary
 
@@ -40,7 +40,7 @@ The normal operator remains UID/GID `1001:1001`, has no supplementary groups, ha
 /opt/yolpol/bin/yolpol-deploy
 ```
 
-Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. See `deploy/control-plane/README.md`.
+Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. Task 0069 adds `/opt/yolpol/runtime/offserver-durability-evidence` as `root:root 0700`, the root-only durability module, and a non-activating `unconfigured` example. It adds no sudo command, provider credential, or operator-writable path. See `deploy/control-plane/README.md`.
 
 ## Commands
 
@@ -86,9 +86,9 @@ Then use the installed root-only command to install independently approved input
 5. Install the fixed ingress runtime.
 6. Run base `check`, then the applicable `check-staging`, `check-ingress`, and `check-monitoring` gates.
 7. Prove foundation convergence by running source-only `apply` again from the same authenticated fixed source followed by base `check`.
-8. In the later explicitly approved Production phase, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production`.
+8. When provisioning Production, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production` after explicit approval.
 
-The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures.
+The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures. On the current VPS, bootstrap convergence and deployment-timer activation have completed; Production Monitoring remains separate and inactive.
 
 ## Runtime installation
 
@@ -140,7 +140,13 @@ STAGING_POSTGRES_EXPORTER_URI
 STAGING_POSTGRES_EXPORTER_USER
 STAGING_POSTGRES_EXPORTER_PASSWORD
 STAGING_OPERATIONS_DATABASE_URL
+PRODUCTION_POSTGRES_EXPORTER_URI
+PRODUCTION_POSTGRES_EXPORTER_USER
+PRODUCTION_POSTGRES_EXPORTER_PASSWORD
+PRODUCTION_OPERATIONS_DATABASE_URL
 ```
+
+The four Production values are mandatory for a Monitoring secret installation and are written only to the corresponding `production-*` files. They must not reuse Staging credentials. PostgreSQL Exporter files are `65534:65534 0400`; Operations Exporter URL files are `10001:10001 0400`; the containing Monitoring secrets directory remains `root:root 0700`.
 
 `secret-install` is safe for first installation and an exact-value retry. It refuses any non-matching existing secret. Intentional replacement requires `secret-rotate`. Inputs are validated completely before any file is written. Each file is atomically promoted at its fixed destination with the existing owner/mode contract, and internal temporary files are always removed. Errors are generic and never echo values.
 
@@ -215,4 +221,4 @@ That future workflow must avoid command arguments and process environment for se
 
 For a disposable rebuild, start from a supported YOLPOL host—currently Debian 12/bookworm `x86_64` or Ubuntu 24.04/noble `x86_64`—establish the fixed trusted source manually, run `apply`, and pass base `check`. Install authenticated release/runtime/secret inputs only for each environment in scope and run its named readiness check. Repeat source-only `apply` plus base `check` to prove foundation convergence. The disposable repository validation image remains Debian-based; Ubuntu selection is covered deterministically by mocked host-validation and repository-rendering tests. Actual backup restore and end-to-end disaster-recovery proof remain Phase D.
 
-Service startup, shared-ingress listener handoff, Monitoring activation, database initialization/migrations, release health gates, Production approval/promotion, Cloudflare redirect removal, DNS cutover, certificate behavior, Telegram registration, legacy rollback cleanup, and Production monitoring are intentionally not automated here.
+Service startup, shared-ingress listener handoff, Monitoring activation, database initialization/migrations, release health gates, Production approval/promotion, Cloudflare redirect removal, DNS cutover, certificate behavior, Telegram registration, legacy rollback cleanup, and live activation of the Production Monitoring repository contract are intentionally not automated here.

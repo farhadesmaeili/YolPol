@@ -189,6 +189,38 @@ services:
     cpus: "${YOLPOL_POSTGRES_EXPORTER_CPU_LIMIT:-0.15}"
     pids_limit: 100
 
+  postgres-exporter-production:
+    <<: *service-security
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
+    restart: unless-stopped
+    command:
+      - --log.format=json
+      - --no-collector.locks
+      - --no-collector.replication
+      - --no-collector.replication_slots
+      - --no-collector.stat_archiver
+      - --no-collector.stat_bgwriter
+      - --no-collector.stat_progress_vacuum
+      - --no-collector.stat_replication
+      - --no-collector.stat_user_tables
+      - --no-collector.statio_user_tables
+      - --no-collector.wal
+    environment:
+      DATA_SOURCE_URI_FILE: /run/secrets/production_postgres_exporter_uri
+      DATA_SOURCE_USER_FILE: /run/secrets/production_postgres_exporter_user
+      DATA_SOURCE_PASS_FILE: /run/secrets/production_postgres_exporter_password
+      PG_EXPORTER_COLLECTION_TIMEOUT: 5s
+    secrets:
+      - production_postgres_exporter_uri
+      - production_postgres_exporter_user
+      - production_postgres_exporter_password
+    networks:
+      - monitoring
+      - production_backend
+    mem_limit: "${YOLPOL_POSTGRES_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_POSTGRES_EXPORTER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
   blackbox-exporter:
     <<: *service-security
     image: quay.io/prometheus/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
@@ -206,6 +238,27 @@ services:
     networks:
       - monitoring
       - staging_ingress
+    mem_limit: "${YOLPOL_BLACKBOX_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_BLACKBOX_EXPORTER_CPU_LIMIT:-0.10}"
+    pids_limit: 100
+
+  blackbox-exporter-production:
+    <<: *service-security
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+    restart: unless-stopped
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    volumes:
+      - type: bind
+        source: ./blackbox/blackbox.yml
+        target: /etc/blackbox_exporter/blackbox.yml
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - monitoring
+      - production_ingress
     mem_limit: "${YOLPOL_BLACKBOX_EXPORTER_MEMORY_LIMIT:-128m}"
     cpus: "${YOLPOL_BLACKBOX_EXPORTER_CPU_LIMIT:-0.10}"
     pids_limit: 100
@@ -239,6 +292,35 @@ services:
     cpus: "${YOLPOL_OPERATIONS_EXPORTER_CPU_LIMIT:-0.15}"
     pids_limit: 100
 
+  operations-exporter-production:
+    <<: *service-security
+    image: "${YOLPOL_OPERATIONS_METRICS_IMAGE:-yolpol-operations-metrics:local}"
+    restart: unless-stopped
+    environment:
+      YOLPOL_DEPLOYMENT_ENVIRONMENT: production
+      YOLPOL_MONITORING_DATABASE_URL_FILE: /run/secrets/production_operations_database_url
+      YOLPOL_MONITORING_BACKUP_ENABLED: "${YOLPOL_MONITORING_PRODUCTION_BACKUP_ENABLED:-false}"
+      YOLPOL_MONITORING_BACKUP_DIRECTORY: /backups
+      YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS: "${YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS:-300000}"
+      YOLPOL_MONITORING_PORT: "9464"
+    secrets:
+      - production_operations_database_url
+    volumes:
+      - type: bind
+        source: "${YOLPOL_MONITORING_PRODUCTION_BACKUP_DIRECTORY:-/opt/yolpol/production/backups}"
+        target: /backups
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    networks:
+      - monitoring
+      - production_backend
+    mem_limit: "${YOLPOL_OPERATIONS_EXPORTER_MEMORY_LIMIT:-128m}"
+    cpus: "${YOLPOL_OPERATIONS_EXPORTER_CPU_LIMIT:-0.15}"
+    pids_limit: 100
+
 networks:
   monitoring:
     internal: true
@@ -249,6 +331,12 @@ networks:
   staging_backend:
     external: true
     name: "${YOLPOL_MONITORING_STAGING_BACKEND_NETWORK:-yolpol-staging_backend}"
+  production_ingress:
+    external: true
+    name: "${YOLPOL_MONITORING_PRODUCTION_INGRESS_NETWORK:-yolpol-production-ingress}"
+  production_backend:
+    external: true
+    name: "${YOLPOL_MONITORING_PRODUCTION_BACKEND_NETWORK:-yolpol-production_backend}"
 
 volumes:
   prometheus_data:
@@ -267,3 +355,11 @@ secrets:
     file: "${YOLPOL_MONITORING_STAGING_POSTGRES_PASSWORD_FILE:?Set YOLPOL_MONITORING_STAGING_POSTGRES_PASSWORD_FILE}"
   staging_operations_database_url:
     file: "${YOLPOL_MONITORING_STAGING_OPERATIONS_DATABASE_URL_FILE:?Set YOLPOL_MONITORING_STAGING_OPERATIONS_DATABASE_URL_FILE}"
+  production_postgres_exporter_uri:
+    file: "${YOLPOL_MONITORING_PRODUCTION_POSTGRES_URI_FILE:?Set YOLPOL_MONITORING_PRODUCTION_POSTGRES_URI_FILE}"
+  production_postgres_exporter_user:
+    file: "${YOLPOL_MONITORING_PRODUCTION_POSTGRES_USER_FILE:?Set YOLPOL_MONITORING_PRODUCTION_POSTGRES_USER_FILE}"
+  production_postgres_exporter_password:
+    file: "${YOLPOL_MONITORING_PRODUCTION_POSTGRES_PASSWORD_FILE:?Set YOLPOL_MONITORING_PRODUCTION_POSTGRES_PASSWORD_FILE}"
+  production_operations_database_url:
+    file: "${YOLPOL_MONITORING_PRODUCTION_OPERATIONS_DATABASE_URL_FILE:?Set YOLPOL_MONITORING_PRODUCTION_OPERATIONS_DATABASE_URL_FILE}"

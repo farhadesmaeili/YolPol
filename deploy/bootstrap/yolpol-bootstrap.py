@@ -108,6 +108,7 @@ DIRECTORIES = (
     DirectoryContract("/opt/yolpol/runtime", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/runtime/tmp", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/runtime/deployment-journals", 0, 0, 0o700),
+    DirectoryContract("/opt/yolpol/runtime/offserver-durability-evidence", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/staging", 0, 0, 0o750),
     DirectoryContract("/opt/yolpol/staging/secrets", 0, 0, 0o700),
     DirectoryContract("/opt/yolpol/staging/backups", CONTAINER_UID, CONTAINER_GID, 0o700),
@@ -142,6 +143,8 @@ MANAGED_FILES = (
     FileContract("deploy/operations/yolpol-deploy", "/opt/yolpol/bin/yolpol-deploy", 0, 0, 0o755),
     FileContract("deploy/operations/yolpol-deploy-policy.py", "/opt/yolpol/bin/yolpol-deploy-policy", 0, 0, 0o555),
     FileContract("deploy/operations/yolpol-deploy-internal", "/opt/yolpol/bin/yolpol-deploy-internal", 0, 0, 0o500),
+    FileContract("deploy/operations/yolpol-offserver-durability.py", "/opt/yolpol/bin/yolpol-offserver-durability", 0, 0, 0o500),
+    FileContract("deploy/operations/offserver-durability.json.example", "/etc/yolpol/offserver-durability.json.example", 0, 0, 0o400),
     FileContract("deploy/control-plane/yolpol_control_plane.py", "/opt/yolpol/bin/yolpol_control_plane.py", 0, 0, 0o555),
     FileContract("deploy/control-plane/yolpol-deployment-agent.py", "/opt/yolpol/bin/yolpol-deployment-agent", 0, 0, 0o555),
     FileContract("deploy/control-plane/yolpol-release-controller.py", "/opt/yolpol/bin/yolpol-release-controller", 0, 0, 0o500),
@@ -203,6 +206,10 @@ MONITORING_SECRETS = (
     SecretFile("staging-postgres-exporter-user", 65534, 65534, 0o400, ("STAGING_POSTGRES_EXPORTER_USER",)),
     SecretFile("staging-postgres-exporter-password", 65534, 65534, 0o400, ("STAGING_POSTGRES_EXPORTER_PASSWORD",)),
     SecretFile("staging-operations-database-url", CONTAINER_UID, CONTAINER_GID, 0o400, ("STAGING_OPERATIONS_DATABASE_URL",)),
+    SecretFile("production-postgres-exporter-uri", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_URI",)),
+    SecretFile("production-postgres-exporter-user", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_USER",)),
+    SecretFile("production-postgres-exporter-password", 65534, 65534, 0o400, ("PRODUCTION_POSTGRES_EXPORTER_PASSWORD",)),
+    SecretFile("production-operations-database-url", CONTAINER_UID, CONTAINER_GID, 0o400, ("PRODUCTION_OPERATIONS_DATABASE_URL",)),
 )
 
 

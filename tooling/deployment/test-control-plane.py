@@ -5,6 +5,8 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
 import sys
 import tempfile
 import time
@@ -28,6 +30,11 @@ if controller_spec is None or controller_spec.loader is None:
     raise RuntimeError("Unable to load release controller")
 controller = importlib.util.module_from_spec(controller_spec)
 controller_spec.loader.exec_module(controller)
+
+durability = controller.load_python(
+    ROOT / "deploy/operations/yolpol-offserver-durability.py",
+    "yolpol_offserver_durability_test",
+)
 
 agent_spec = importlib.util.spec_from_file_location(
     "yolpol_deployment_agent", CONTROL_PLANE / "yolpol-deployment-agent.py",
@@ -171,6 +178,318 @@ def oidc_transport(method: str, url: str, headers: dict[str, str], data: bytes |
     if url == f"{control.OIDC_ISSUER}/.well-known/jwks":
         return control.HttpResponse(200, {}, b'{"keys":[{"kid":"key-1","kty":"RSA","use":"sig","alg":"RS256","x5c":["Y2VydA=="]}]}')
     raise AssertionError(url)
+
+
+class SyntheticRemoteAdapter:
+    """Disposable destination-backed adapter used only by Phase C2 tests."""
+
+    def __init__(self, destination: Path, failure: str | None = None) -> None:
+        self.destination = destination
+        self.failure = failure
+
+    @staticmethod
+    def _hash(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    @staticmethod
+    def _sync_file(path: Path) -> None:
+        with path.open("rb+") as stream:
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    @staticmethod
+    def _sync_directory(path: Path) -> None:
+        if not hasattr(os, "O_DIRECTORY"):
+            return
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def copy_and_verify(
+        self, pair: object, now_unix: int,
+    ) -> object:
+        if self.failure == "provider-nonzero":
+            raise RuntimeError("synthetic provider operation failed")
+        if self.destination.is_symlink():
+            raise durability.DurabilityError("synthetic destination symlink rejected")
+        artifact = self.destination / pair.artifact_filename
+        manifest = self.destination / pair.manifest_filename
+        if artifact.exists() or artifact.is_symlink() or manifest.exists() or manifest.is_symlink():
+            raise durability.DurabilityError("synthetic destination collision rejected")
+        if self.failure == "artifact-upload":
+            raise durability.DurabilityError("synthetic artifact upload failed")
+        shutil.copyfile(pair.artifact_path, artifact)
+        if self.failure == "manifest-upload":
+            raise durability.DurabilityError("synthetic manifest upload failed")
+        shutil.copyfile(pair.manifest_path, manifest)
+        if self.failure == "missing-remote-object":
+            artifact.unlink()
+        elif self.failure == "truncated-artifact":
+            artifact.write_bytes(artifact.read_bytes()[:1])
+        elif self.failure == "altered-manifest":
+            manifest.write_bytes(manifest.read_bytes() + b" ")
+        if not artifact.is_file() or artifact.is_symlink() or not manifest.is_file() or manifest.is_symlink():
+            raise durability.DurabilityError("synthetic remote pair missing")
+        self._sync_file(artifact)
+        self._sync_file(manifest)
+        self._sync_directory(self.destination)
+        remote_artifact_sha = self._hash(artifact)
+        remote_manifest_sha = self._hash(manifest)
+        if self.failure == "checksum-mismatch":
+            remote_artifact_sha = "0" * 64
+        return durability.RemoteDurabilityConfirmation(
+            backup_id="yolpol-production-20990101T000000Z-abcdef0"
+            if self.failure == "wrong-backup" else pair.backup_id,
+            artifact_sha256=remote_artifact_sha,
+            manifest_sha256=remote_manifest_sha,
+            destination_verified=self.failure != "destination-unverified",
+            verification_source="local" if self.failure == "local-verification" else "destination",
+            durable_write_confirmed=self.failure != "missing-durability",
+            durability_confirmation="bad confirmation!"
+            if self.failure == "malformed-confirmation" else "synthetic-fsync-v1",
+            remote_object_set_id="synthetic/object-set/001",
+            verified_at_unix=now_unix - 901 if self.failure == "stale" else now_unix,
+        )
+
+
+class OffserverDurabilityTests(unittest.TestCase):
+    NOW = 1_800_000_000
+    BACKUP_ID = "yolpol-production-20270115T120000Z-abcdef0"
+
+    def context(self, **overrides: str) -> object:
+        values = {
+            "deployment_id": "123456789",
+            "backup_id": self.BACKUP_ID,
+            "current_migration_fingerprint": f"0023:{'a' * 64}",
+            "target_migration_fingerprint": f"0024:{'b' * 64}",
+            "target_manifest_sha256": "c" * 64,
+            **overrides,
+        }
+        return durability.DurabilityContext(**values)
+
+    def pair(self, source: Path) -> None:
+        artifact = source / f"{self.BACKUP_ID}.dump.age"
+        artifact.write_bytes(b"synthetic encrypted archive")
+        checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        manifest = {
+            "formatVersion": 1,
+            "backupId": self.BACKUP_ID,
+            "createdAt": "2027-01-15T12:00:00Z",
+            "deploymentEnvironment": "production",
+            "applicationRevision": "abcdef0",
+            "postgresql": {"majorVersion": 17, "serverVersion": "17.6", "clientVersion": "pg_dump 17.6"},
+            "dump": {"format": "custom"},
+            "encryption": {"scheme": "age-x25519"},
+            "artifact": {
+                "filename": artifact.name,
+                "sizeBytes": artifact.stat().st_size,
+                "sha256": checksum,
+            },
+            "schema": {
+                "latestMigrationTimestamp": 1789391490099,
+                "requiredMigration": "0023_telegram_notification_destinations",
+                "requiredMigrationTimestamp": 1789391490099,
+            },
+        }
+        (source / f"{self.BACKUP_ID}.manifest.json").write_text(
+            json.dumps(manifest, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def directories(self, root: Path) -> tuple[Path, Path, Path]:
+        source = root / "source"
+        destination = root / "remote"
+        evidence = root / "evidence"
+        source.mkdir()
+        destination.mkdir()
+        evidence.mkdir()
+        self.pair(source)
+        return source, destination, evidence
+
+    def test_synthetic_adapter_copies_verifies_and_persists_canonical_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, destination, evidence = self.directories(Path(directory))
+            value = durability.perform_durability(
+                self.context(),
+                SyntheticRemoteAdapter(destination),
+                source_directory=source,
+                evidence_directory=evidence,
+                now_unix=self.NOW,
+            )
+            self.assertEqual(value["environment"], "production")
+            self.assertEqual(value["backupId"], self.BACKUP_ID)
+            self.assertTrue(value["destinationVerified"])
+            self.assertTrue(value["durableWriteConfirmed"])
+            self.assertEqual(value["verificationSource"], "destination")
+            persisted = evidence / "deployment-123456789.json"
+            self.assertEqual(persisted.read_bytes(), durability.canonical_bytes(value))
+            self.assertEqual(
+                (destination / f"{self.BACKUP_ID}.dump.age").read_bytes(),
+                (source / f"{self.BACKUP_ID}.dump.age").read_bytes(),
+            )
+
+    def test_remote_copy_failure_modes_fail_closed_without_evidence(self) -> None:
+        failures = (
+            "artifact-upload", "manifest-upload", "missing-remote-object", "truncated-artifact",
+            "checksum-mismatch", "altered-manifest", "wrong-backup", "destination-unverified",
+            "local-verification", "missing-durability", "malformed-confirmation", "stale",
+            "provider-nonzero",
+        )
+        for failure in failures:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                source, destination, evidence = self.directories(Path(directory))
+                with self.assertRaises(durability.DurabilityError):
+                    durability.perform_durability(
+                        self.context(),
+                        SyntheticRemoteAdapter(destination, failure),
+                        source_directory=source,
+                        evidence_directory=evidence,
+                        now_unix=self.NOW,
+                    )
+                self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_evidence_rejects_wrong_binding_duplicate_unknown_and_stale_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, destination, evidence = self.directories(Path(directory))
+            context = self.context()
+            value = durability.perform_durability(
+                context,
+                SyntheticRemoteAdapter(destination),
+                source_directory=source,
+                evidence_directory=evidence,
+                now_unix=self.NOW,
+            )
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            mutations = {
+                "boolean-schema-version": {**value, "schemaVersion": True},
+                "string-schema-version": {**value, "schemaVersion": "1"},
+                "wrong-environment": {**value, "environment": "staging"},
+                "wrong-backup": {**value, "backupId": "yolpol-production-20270115T120001Z-abcdef0"},
+                "wrong-current": {**value, "currentMigrationFingerprint": f"0022:{'d' * 64}"},
+                "wrong-target": {**value, "targetMigrationFingerprint": f"0025:{'d' * 64}"},
+                "wrong-release": {**value, "targetManifestSha256": "d" * 64},
+                "reused-deployment": {**value, "deploymentId": "987654321"},
+                "unknown-field": {**value, "unexpected": True},
+                "stale": {**value, "verifiedAtUnix": self.NOW - 901},
+                "integer-local-integrity": {**value, "localIntegrityVerified": 1},
+                "string-local-integrity": {**value, "localIntegrityVerified": "true"},
+                "integer-deep-verification": {**value, "deepArchiveVerified": 1},
+                "string-deep-verification": {**value, "deepArchiveVerified": "true"},
+                "integer-destination-verification": {**value, "destinationVerified": 1},
+                "integer-durability-confirmation": {**value, "durableWriteConfirmed": 1},
+                "durability-missing": {**value, "durableWriteConfirmed": False},
+            }
+            for label, mutated in mutations.items():
+                with self.subTest(label=label), self.assertRaises(durability.DurabilityError):
+                    durability.validate_evidence_bytes(
+                        durability.canonical_bytes(mutated), context, pair, self.NOW,
+                    )
+            duplicate = durability.canonical_bytes(value).replace(
+                b'{"artifactFilename":',
+                b'{"schemaVersion":1,"artifactFilename":',
+                1,
+            )
+            with self.assertRaises(durability.DurabilityError):
+                durability.validate_evidence_bytes(duplicate, context, pair, self.NOW)
+
+    def test_manifest_format_version_rejects_boolean_and_string_values(self) -> None:
+        for invalid in (True, "1"):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                source, _, _ = self.directories(Path(directory))
+                manifest_path = source / f"{self.BACKUP_ID}.manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["formatVersion"] = invalid
+                manifest_path.write_text(
+                    json.dumps(manifest, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+                with self.assertRaises(durability.DurabilityError):
+                    durability.inspect_backup_pair(source, self.BACKUP_ID)
+
+    def test_configuration_schema_version_rejects_boolean_value(self) -> None:
+        content = durability.canonical_bytes({"schemaVersion": True, "state": "unconfigured"})
+        with self.assertRaises(durability.DurabilityUnavailable):
+            durability._validate_configuration_bytes(content)
+
+    @unittest.skipIf(os.name == "nt", "Windows symlink creation requires optional privileges")
+    def test_source_and_destination_symlinks_and_path_escape_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, destination, evidence = self.directories(root)
+            artifact = source / f"{self.BACKUP_ID}.dump.age"
+            outside = root / "outside.age"
+            artifact.rename(outside)
+            artifact.symlink_to(outside)
+            with self.assertRaises(durability.DurabilityError):
+                durability.perform_durability(
+                    self.context(), SyntheticRemoteAdapter(destination),
+                    source_directory=source, evidence_directory=evidence, now_unix=self.NOW,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            real_destination = root / "real-remote"
+            evidence = root / "evidence"
+            source.mkdir()
+            real_destination.mkdir()
+            evidence.mkdir()
+            self.pair(source)
+            destination = root / "remote"
+            destination.symlink_to(real_destination, target_is_directory=True)
+            with self.assertRaises(durability.DurabilityError):
+                durability.perform_durability(
+                    self.context(), SyntheticRemoteAdapter(destination),
+                    source_directory=source, evidence_directory=evidence, now_unix=self.NOW,
+                )
+
+    def test_live_entrypoint_remains_unavailable_without_root_activated_configuration(self) -> None:
+        with patch.object(durability, "CONFIG_PATH", Path("/definitely/missing/config")):
+            with self.assertRaises(durability.DurabilityUnavailable):
+                durability.execute_production_durability(self.context())
+
+
+class ProductionBackupReceiptTests(unittest.TestCase):
+    BACKUP_ID = "yolpol-production-20270115T120000Z-abcdef0"
+
+    def valid_receipt(self) -> bytes:
+        return (
+            '{"schemaVersion":1,"environment":"production","backupId":"'
+            + self.BACKUP_ID
+            + '","integrityVerified":true,"deepVerified":true}\n'
+        ).encode("ascii")
+
+    def test_valid_canonical_receipt_is_accepted_unchanged(self) -> None:
+        self.assertEqual(controller.production_backup_receipt(self.valid_receipt()), self.BACKUP_ID)
+
+    def test_adversarial_receipts_fail_closed(self) -> None:
+        valid = self.valid_receipt()
+        invalid_receipts = {
+            "duplicate-key": valid.replace(
+                b'{"schemaVersion":1,',
+                b'{"schemaVersion":1,"schemaVersion":1,',
+                1,
+            ),
+            "boolean-schema-version": valid.replace(b'"schemaVersion":1', b'"schemaVersion":true'),
+            "integer-integrity": valid.replace(b'"integrityVerified":true', b'"integrityVerified":1'),
+            "integer-deep-verification": valid.replace(b'"deepVerified":true', b'"deepVerified":1'),
+            "wrong-environment": valid.replace(b'"environment":"production"', b'"environment":"staging"'),
+            "malformed-backup-id": valid.replace(self.BACKUP_ID.encode("ascii"), b"../backup"),
+            "unknown-field": valid.replace(b'}\n', b',"unknown":true}\n'),
+            "noncanonical-order": (
+                '{"environment":"production","schemaVersion":1,"backupId":"'
+                + self.BACKUP_ID
+                + '","integrityVerified":true,"deepVerified":true}\n'
+            ).encode("ascii"),
+            "noncanonical-whitespace": b" " + valid,
+            "multiple-json-values": valid + b"{}",
+            "trailing-json": valid + b'{"trailing":true}',
+        }
+        for label, receipt in invalid_receipts.items():
+            with self.subTest(label=label), self.assertRaises(control.ControlPlaneError):
+                controller.production_backup_receipt(receipt)
 
 
 class ModuleLoadingTests(unittest.TestCase):
@@ -733,6 +1052,323 @@ class LedgerAndRollbackTests(unittest.TestCase):
         }
         authority.update(updates)
         return authority
+
+    def production_transaction_material(
+        self, *, changed: bool = True,
+    ) -> tuple[object, dict[str, object], dict[str, object], dict[str, object], dict[str, object]]:
+        manifest_sha = "c" * 64
+        intent = types.SimpleNamespace(
+            environment="production",
+            value={"manifestSha256": manifest_sha},
+        )
+        request = types.SimpleNamespace(intent=intent)
+        current_database = {"latestMigration": "0023", "migrationSetSha256": "d" * 64}
+        target_database = {
+            "latestMigration": "0024" if changed else "0023",
+            "migrationSetSha256": "e" * 64 if changed else "d" * 64,
+        }
+        current = {
+            "manifest": {"database": current_database},
+            "manifestBytes": b"current-manifest",
+            "checksumBytes": b"current-checksum",
+            "sha256": "b" * 64,
+            "migrationFingerprint": f"0023:{'d' * 64}",
+        }
+        target = {"database": target_database}
+        record = {
+            "environment": "production",
+            "manifestSha256": manifest_sha,
+            "phase": "accepted",
+            "localOutcome": "in-progress",
+            "migrationState": "never-started",
+            "result": None,
+        }
+        ledger = {
+            "schemaVersion": 1,
+            "records": [
+                {
+                    "environment": "staging",
+                    "manifestSha256": manifest_sha,
+                    "localOutcome": "success",
+                    "migrationState": "never-started",
+                },
+                record,
+            ],
+        }
+        return request, current, target, record, ledger
+
+    def test_same_fingerprint_production_still_deploys_without_phase_c2(self) -> None:
+        request, current, target, record, ledger = self.production_transaction_material(changed=False)
+        actions: list[str] = []
+
+        def run_internal(action: str, **_kwargs: object) -> bytes:
+            actions.append(action)
+            return b""
+
+        runtimes = {Path("/opt/yolpol/production/runtime.env"): b"target-runtime"}
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(controller, "authenticate_release", return_value=(b"target", b"checksum", target)),
+            patch.object(controller, "target_runtimes", return_value=runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=runtimes),
+            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")),
+            patch.object(controller, "activate"),
+            patch.object(controller, "docker_auth", return_value=(Path("/tmp/request"), Path("/tmp/docker"))),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(controller, "prove_production_durability") as prove,
+            patch.object(controller.shutil, "rmtree"),
+        ):
+            result = controller.execute_transaction(
+                config(), "123", request, {"actor": "farhadesmaeili"}, b"token",
+                ledger, record, "new",
+            )
+        self.assertEqual(result, "deployed-not-publicly-activated")
+        self.assertNotIn("backup-create-verify-deep-production", actions)
+        self.assertNotIn("migrate-production", actions)
+        prove.assert_not_called()
+
+    def test_changed_production_fails_closed_before_authority_when_adapter_unavailable(self) -> None:
+        request, current, target, record, ledger = self.production_transaction_material()
+        actions: list[str] = []
+        backup_id = "yolpol-production-20270115T120000Z-abcdef0"
+        receipt = (
+            '{"schemaVersion":1,"environment":"production","backupId":"'
+            + backup_id
+            + '","integrityVerified":true,"deepVerified":true}\n'
+        ).encode("ascii")
+
+        def run_internal(action: str, **_kwargs: object) -> bytes:
+            actions.append(action)
+            return receipt if action == "backup-create-verify-deep-production" else b""
+
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(controller, "authenticate_release", return_value=(b"target", b"checksum", target)),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(
+                controller,
+                "prove_production_durability",
+                side_effect=control.ControlPlaneError("synthetic unavailable detail"),
+            ),
+            patch.object(controller, "journal_snapshot") as journal,
+            patch.object(controller, "activate") as activate,
+            patch.object(controller, "docker_auth") as docker_auth,
+        ):
+            with self.assertRaises(controller.DeploymentTransactionError) as captured:
+                controller.execute_transaction(
+                    config(), "123", request, {"actor": "farhadesmaeili"}, b"token",
+                    ledger, record, "new",
+                )
+        self.assertEqual(captured.exception.stage, "offserver-durability")
+        self.assertEqual(captured.exception.disposition, "failed-before-activation")
+        self.assertNotIn("synthetic unavailable detail", str(captured.exception))
+        self.assertEqual(
+            actions,
+            ["validate-production", "health-production", "backup-create-verify-deep-production"],
+        )
+        self.assertEqual(record["phase"], "phase-c2-required")
+        self.assertEqual(record["result"], controller.PHASE_C2_RESULT)
+        self.assertEqual(record["phaseC2BackupId"], backup_id)
+        journal.assert_not_called()
+        activate.assert_not_called()
+        docker_auth.assert_not_called()
+
+    def test_changed_production_requires_durability_before_authority_and_uses_production_migration(self) -> None:
+        request, current, target, record, ledger = self.production_transaction_material()
+        backup_id = "yolpol-production-20270115T120000Z-abcdef0"
+        receipt = (
+            '{"schemaVersion":1,"environment":"production","backupId":"'
+            + backup_id
+            + '","integrityVerified":true,"deepVerified":true}\n'
+        ).encode("ascii")
+        summary = {
+            "phaseC2BackupId": backup_id,
+            "phaseC2ArtifactSha256": "1" * 64,
+            "phaseC2ManifestSha256": "2" * 64,
+            "phaseC2RemoteObjectSetId": "synthetic/object-set/001",
+            "phaseC2VerifiedAtUnix": 1_800_000_000,
+        }
+        events: list[str] = []
+
+        def run_internal(action: str, **_kwargs: object) -> bytes:
+            events.append(action)
+            return receipt if action == "backup-create-verify-deep-production" else b""
+
+        def prove(*_args: object) -> dict[str, object]:
+            events.append("durability-proof")
+            return summary
+
+        def snapshot(*_args: object, **_kwargs: object) -> Path:
+            events.append("journal")
+            return Path("/tmp/journal")
+
+        def activate(*_args: object, **_kwargs: object) -> None:
+            events.append("authority-activation")
+
+        runtimes = {Path("/opt/yolpol/production/runtime.env"): b"target-runtime"}
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(controller, "authenticate_release", return_value=(b"target", b"checksum", target)),
+            patch.object(controller, "target_runtimes", return_value=runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=runtimes),
+            patch.object(controller, "journal_snapshot", side_effect=snapshot),
+            patch.object(controller, "activate", side_effect=activate),
+            patch.object(controller, "docker_auth", return_value=(Path("/tmp/request"), Path("/tmp/docker"))),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(controller, "prove_production_durability", side_effect=prove),
+            patch.object(controller.shutil, "rmtree"),
+        ):
+            result = controller.execute_transaction(
+                config(), "123", request, {"actor": "farhadesmaeili"}, b"token",
+                ledger, record, "new",
+            )
+        self.assertEqual(result, "deployed-not-publicly-activated")
+        self.assertLess(events.index("backup-create-verify-deep-production"), events.index("durability-proof"))
+        self.assertLess(events.index("durability-proof"), events.index("journal"))
+        self.assertLess(events.index("durability-proof"), events.index("authority-activation"))
+        self.assertIn("migrate-production", events)
+        self.assertNotIn("migrate-staging", events)
+        self.assertEqual(record["migrationState"], "completed")
+        for key, value in summary.items():
+            self.assertEqual(record[key], value)
+
+    def test_post_production_migration_failure_requires_manual_review_without_restore(self) -> None:
+        request, current, target, record, ledger = self.production_transaction_material()
+        backup_id = "yolpol-production-20270115T120000Z-abcdef0"
+        receipt = (
+            '{"schemaVersion":1,"environment":"production","backupId":"'
+            + backup_id
+            + '","integrityVerified":true,"deepVerified":true}\n'
+        ).encode("ascii")
+        summary = {
+            "phaseC2BackupId": backup_id,
+            "phaseC2ArtifactSha256": "1" * 64,
+            "phaseC2ManifestSha256": "2" * 64,
+            "phaseC2RemoteObjectSetId": "synthetic/object-set/001",
+            "phaseC2VerifiedAtUnix": 1_800_000_000,
+        }
+        health_calls = 0
+
+        def run_internal(action: str, **_kwargs: object) -> bytes:
+            nonlocal health_calls
+            if action == "backup-create-verify-deep-production":
+                return receipt
+            if action == "health-production":
+                health_calls += 1
+                if health_calls == 2:
+                    raise control.ControlPlaneError("synthetic post-migration failure")
+            return b""
+
+        runtimes = {Path("/opt/yolpol/production/runtime.env"): b"target-runtime"}
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(controller, "authenticate_release", return_value=(b"target", b"checksum", target)),
+            patch.object(controller, "target_runtimes", return_value=runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=runtimes),
+            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")),
+            patch.object(controller, "activate"),
+            patch.object(controller, "restore_previous") as restore,
+            patch.object(controller, "docker_auth", return_value=(Path("/tmp/request"), Path("/tmp/docker"))),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(controller, "prove_production_durability", return_value=summary),
+            patch.object(controller.shutil, "rmtree"),
+        ):
+            with self.assertRaises(controller.DeploymentTransactionError) as captured:
+                controller.execute_transaction(
+                    config(), "123", request, {"actor": "farhadesmaeili"}, b"token",
+                    ledger, record, "new",
+                )
+        self.assertEqual(captured.exception.stage, "health-production")
+        self.assertEqual(captured.exception.disposition, "manual-review-required")
+        self.assertEqual(record["phase"], "manual-review")
+        self.assertEqual(record["migrationState"], "completed")
+        self.assertEqual(record["failureStage"], "health-production")
+        self.assertEqual(record["failureDisposition"], "manual-review-required")
+        restore.assert_not_called()
+
+        candidate = self.identity(deployment_id="124", manifest="f" * 64)
+        candidate.update({
+            "environment": "production",
+            "jti": "new-production-jti",
+            "nonce": "e" * 43,
+            "intentSha256": "f" * 64,
+        })
+        with patch.object(controller, "persist_ledger"):
+            blocked, mode = controller.begin_record(ledger, candidate, current)
+        self.assertEqual(mode, "manual-database-review")
+        self.assertEqual(blocked["phase"], "manual-review-blocked")
+        self.assertEqual(blocked["result"], controller.MANUAL_DATABASE_REVIEW_RESULT)
+
+    def test_failed_changed_production_migration_persists_manual_review_blocker(self) -> None:
+        request, current, target, record, ledger = self.production_transaction_material()
+        backup_id = "yolpol-production-20270115T120000Z-abcdef0"
+        receipt = (
+            '{"schemaVersion":1,"environment":"production","backupId":"'
+            + backup_id
+            + '","integrityVerified":true,"deepVerified":true}\n'
+        ).encode("ascii")
+        summary = {
+            "phaseC2BackupId": backup_id,
+            "phaseC2ArtifactSha256": "1" * 64,
+            "phaseC2ManifestSha256": "2" * 64,
+            "phaseC2RemoteObjectSetId": "synthetic/object-set/001",
+            "phaseC2VerifiedAtUnix": 1_800_000_000,
+        }
+
+        def run_internal(action: str, **_kwargs: object) -> bytes:
+            if action == "backup-create-verify-deep-production":
+                return receipt
+            if action == "migrate-production":
+                raise control.ControlPlaneError("synthetic migration failure")
+            return b""
+
+        runtimes = {Path("/opt/yolpol/production/runtime.env"): b"target-runtime"}
+        with (
+            patch.object(controller, "persist_ledger"),
+            patch.object(controller, "load_python", return_value=Mock()),
+            patch.object(controller, "current_authority", return_value=current),
+            patch.object(controller, "authenticate_release", return_value=(b"target", b"checksum", target)),
+            patch.object(controller, "target_runtimes", return_value=runtimes),
+            patch.object(controller, "read_previous_runtimes", return_value=runtimes),
+            patch.object(controller, "journal_snapshot", return_value=Path("/tmp/journal")),
+            patch.object(controller, "activate"),
+            patch.object(controller, "restore_previous") as restore,
+            patch.object(controller, "docker_auth", return_value=(Path("/tmp/request"), Path("/tmp/docker"))),
+            patch.object(controller, "internal", side_effect=run_internal),
+            patch.object(controller, "prove_production_durability", return_value=summary),
+            patch.object(controller.shutil, "rmtree"),
+        ):
+            with self.assertRaises(controller.DeploymentTransactionError) as captured:
+                controller.execute_transaction(
+                    config(), "123", request, {"actor": "farhadesmaeili"}, b"token",
+                    ledger, record, "new",
+                )
+
+        self.assertEqual(captured.exception.stage, "migrate-production")
+        self.assertEqual(captured.exception.disposition, "manual-review-required")
+        self.assertEqual(record["phase"], "manual-review")
+        self.assertEqual(record["migrationState"], "failed")
+        restore.assert_not_called()
+
+        candidate = self.identity(deployment_id="124", manifest="f" * 64)
+        candidate.update({
+            "environment": "production",
+            "jti": "new-production-jti",
+            "nonce": "e" * 43,
+            "intentSha256": "f" * 64,
+        })
+        with patch.object(controller, "persist_ledger"):
+            blocked, mode = controller.begin_record(ledger, candidate, current)
+        self.assertEqual(mode, "manual-database-review")
+        self.assertEqual(blocked["result"], controller.MANUAL_DATABASE_REVIEW_RESULT)
 
     def assert_reconciliation_rejected(
         self,

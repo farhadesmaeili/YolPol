@@ -1,6 +1,6 @@
 # YOLPOL Release and Rollback Operations
 
-This repository defines release artifacts and the inactive Phase C1 authenticated deployment contract. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. When a release is promoted from Staging to Production, Production selects the same tested immutable image digests; the environments nevertheless retain independent active authorities and may run different approved versions. Neither promotion nor rollback rebuilds source. Host/GitHub activation remains a separate reviewed operation; see `deploy/control-plane/README.md`.
+This repository defines release artifacts and the active Phase C1 authenticated deployment contract. A release is one exact `main` commit, five first-party Linux/amd64 images, and a validated version-1 manifest plus SHA-256 checksum. When a release is promoted from Staging to Production, Production selects the same tested immutable image digests; the environments nevertheless retain independent active authorities and may run different approved versions. Neither promotion nor rollback rebuilds source. The current VPS and GitHub Environments are activated for automatic Staging deployment and explicit approved Production promotion; release `v0.2.2` successfully completed that path. See `deploy/control-plane/README.md`.
 
 ## Version and source policy
 
@@ -101,7 +101,7 @@ No web or worker startup runs migrations, and the release workflow never accesse
 
 The planner only validates JSON and emits a plan. It never invokes Docker, PostgreSQL, Drizzle, backup restore, or network operations. The restricted deployment and sudo installation contract is documented in `deploy/operations/README.md`; restore and destructive retention are deliberately excluded from it.
 
-## First Production release procedure (do not run from this feature)
+## Release and Production promotion procedure
 
 1. Merge all completed features to `develop`.
 2. Open a `develop` to `main` pull request.
@@ -112,16 +112,16 @@ The planner only validates JSON and emits a plan. It never invokes Docker, Postg
 7. After explicit operator approval, create an annotated (signed when the operator's established signing setup is available) `vMAJOR.MINOR.PATCH` tag on that `main` commit.
 8. Push the tag.
 9. Confirm the release workflow validates the source and publishes all five SHA identities and safe SemVer aliases.
-10. Select the approved tag independently, download `release-manifest.json` and `release-manifest.sha256` over an authenticated GitHub channel from `farhadesmaeili/YolPol`, verify the checksum and strict manifest schema, and compare its source/full commit to the approved release record. A checksum received with an operator-controlled upload proves integrity only, not authenticity.
-11. Populate Staging with the manifest's exact Git SHA and image digests; run Compose with `--no-build`.
-12. Complete Staging acceptance testing.
-13. Before any migration, complete the encrypted backup, integrity, deep archive, off-server verification, and durability gate.
-14. Promote the same manifest and digests to Production without rebuilding.
-15. Verify liveness, readiness, workers, and monitoring.
+10. Confirm the Release Publication workflow succeeded and published the exact `release-manifest.json` and `release-manifest.sha256` for the approved tag and commit.
+11. Allow the authenticated control plane to verify that published Release and deploy its exact immutable manifest and digests automatically to Staging.
+12. Complete Staging acceptance testing and confirm the successful Staging deployment ledger record.
+13. Before Production dispatch, verify approval and migration compatibility. The repository-side Phase C2 path may continue a changed fingerprint only after its fresh Production backup and exact remote durability evidence validate. The shipped unconfigured adapter still stops with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`; do not bypass that gate.
+14. Dispatch the canonical Production promotion workflow from `main`, complete the GitHub Production Environment approval, and promote the same Staging-tested manifest and digests without rebuilding.
+15. Verify Production liveness, readiness, workers, and the available health gates. Production Monitoring remains a separate activation.
 16. Retain the previous known-good manifest/checksum for rollback.
 
-On the initial one-VPS topology, Task 0064 now defines shared ingress but does not install it. Steps that expose Production publicly remain blocked until root completes the documented listener handoff, Staging and Production route health, rollback readiness, and separately approved DNS/Cloudflare cutover. Production has no local edge or wrapper edge-activation command. Ordinary Staging/Production web replacement preserves the fixed network alias and does not restart shared ingress.
+On the one-VPS topology, shared ingress is installed and the `v0.2.2` Production runtime is deployed and healthy. This does not establish that Production is publicly activated: the repository's last verified Cloudflare state redirects the apex and `www` to Staging, and no later verified cutover is recorded here. Production has no local edge or wrapper edge-activation command. A separately approved DNS/Cloudflare cutover remains required; ordinary Staging/Production web replacement preserves the fixed network alias and does not restart shared ingress.
 
 ## Known limitations
 
-The foundation does not deploy a server, configure registry pull access, change package visibility, sign images/manifests, manage Cosign keys, automate server bootstrap/release deployment, activate Production monitoring, infer schema backward compatibility, provide down migrations, perform database cutover, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.
+The repository implements the provider-neutral Phase C2 durability/evidence core, but the activated foundation does not configure a real remote adapter or allow live automatic Production-changing migrations. It also does not sign images/manifests, manage Cosign keys, activate Production monitoring, infer schema backward compatibility, provide down migrations, perform automatic database cutover/restore, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.

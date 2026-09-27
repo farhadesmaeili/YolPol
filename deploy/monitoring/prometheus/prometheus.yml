@@ -48,12 +48,20 @@ scrape_configs:
         labels:
           environment: staging
           service: postgres
+      - targets: ["postgres-exporter-production:9187"]
+        labels:
+          environment: production
+          service: postgres
 
   - job_name: operations
     static_configs:
       - targets: ["operations-exporter:9464"]
         labels:
           environment: staging
+          service: operations-exporter
+      - targets: ["operations-exporter-production:9464"]
+        labels:
+          environment: production
           service: operations-exporter
 
   - job_name: blackbox-web
@@ -78,3 +86,26 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-web-production
+    metrics_path: /probe
+    params:
+      module: [http_health]
+    static_configs:
+      - targets: ["http://production-web:3000/api/health/live"]
+        labels:
+          environment: production
+          service: web
+          probe: liveness
+      - targets: ["http://production-web:3000/api/health/ready"]
+        labels:
+          environment: production
+          service: web
+          probe: readiness
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter-production:9115
