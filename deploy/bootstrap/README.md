@@ -140,7 +140,13 @@ STAGING_POSTGRES_EXPORTER_URI
 STAGING_POSTGRES_EXPORTER_USER
 STAGING_POSTGRES_EXPORTER_PASSWORD
 STAGING_OPERATIONS_DATABASE_URL
+PRODUCTION_POSTGRES_EXPORTER_URI
+PRODUCTION_POSTGRES_EXPORTER_USER
+PRODUCTION_POSTGRES_EXPORTER_PASSWORD
+PRODUCTION_OPERATIONS_DATABASE_URL
 ```
+
+The four Production values are mandatory for a Monitoring secret installation and are written only to the corresponding `production-*` files. They must not reuse Staging credentials. PostgreSQL Exporter files are `65534:65534 0400`; Operations Exporter URL files are `10001:10001 0400`; the containing Monitoring secrets directory remains `root:root 0700`.
 
 `secret-install` is safe for first installation and an exact-value retry. It refuses any non-matching existing secret. Intentional replacement requires `secret-rotate`. Inputs are validated completely before any file is written. Each file is atomically promoted at its fixed destination with the existing owner/mode contract, and internal temporary files are always removed. Errors are generic and never echo values.
 
@@ -215,4 +221,4 @@ That future workflow must avoid command arguments and process environment for se
 
 For a disposable rebuild, start from a supported YOLPOL host—currently Debian 12/bookworm `x86_64` or Ubuntu 24.04/noble `x86_64`—establish the fixed trusted source manually, run `apply`, and pass base `check`. Install authenticated release/runtime/secret inputs only for each environment in scope and run its named readiness check. Repeat source-only `apply` plus base `check` to prove foundation convergence. The disposable repository validation image remains Debian-based; Ubuntu selection is covered deterministically by mocked host-validation and repository-rendering tests. Actual backup restore and end-to-end disaster-recovery proof remain Phase D.
 
-Service startup, shared-ingress listener handoff, Monitoring activation, database initialization/migrations, release health gates, Production approval/promotion, Cloudflare redirect removal, DNS cutover, certificate behavior, Telegram registration, legacy rollback cleanup, and Production monitoring are intentionally not automated here.
+Service startup, shared-ingress listener handoff, Monitoring activation, database initialization/migrations, release health gates, Production approval/promotion, Cloudflare redirect removal, DNS cutover, certificate behavior, Telegram registration, legacy rollback cleanup, and live activation of the Production Monitoring repository contract are intentionally not automated here.

@@ -42,6 +42,76 @@ tests:
 
   - interval: 1m
     input_series:
+      - series: 'probe_success{job="blackbox-web-production",probe="liveness",environment="production",service="web",instance="http://production-web:3000/api/health/live"}'
+        values: '0+0x5'
+      - series: 'probe_success{job="blackbox-web-production",probe="readiness",environment="production",service="web",instance="http://production-web:3000/api/health/ready"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: YolpolWebLivenessUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolWebLivenessUnavailable
+              category: availability
+              environment: production
+              instance: http://production-web:3000/api/health/live
+              job: blackbox-web-production
+              probe: liveness
+              service: web
+              severity: critical
+            exp_annotations:
+              summary: YOLPOL web liveness has been unavailable for two minutes.
+      - eval_time: 3m
+        alertname: YolpolWebReadinessUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolWebReadinessUnavailable
+              category: readiness
+              environment: production
+              instance: http://production-web:3000/api/health/ready
+              job: blackbox-web-production
+              probe: readiness
+              service: web
+              severity: critical
+            exp_annotations:
+              summary: YOLPOL web readiness has been unavailable for two minutes.
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="postgres",environment="production",service="postgres",instance="postgres-exporter-production:9187"}'
+        values: '0+0x5'
+      - series: 'up{job="operations",environment="production",service="operations-exporter",instance="operations-exporter-production:9464"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: YolpolPostgresExporterDown
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolPostgresExporterDown
+              category: dependency
+              environment: production
+              instance: postgres-exporter-production:9187
+              job: postgres
+              service: postgres
+              severity: critical
+            exp_annotations:
+              summary: PostgreSQL metrics collection is unavailable.
+      - eval_time: 3m
+        alertname: YolpolOperationsExporterDown
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolOperationsExporterDown
+              category: dependency
+              environment: production
+              instance: operations-exporter-production:9464
+              job: operations
+              service: operations-exporter
+              severity: critical
+            exp_annotations:
+              summary: YOLPOL operations metrics collection is unavailable.
+
+  - interval: 1m
+    input_series:
       - series: 'node_filesystem_avail_bytes{job="node",environment="host",instance="node-exporter:9100",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
         values: '50+0x8'
       - series: 'node_filesystem_size_bytes{job="node",environment="host",instance="node-exporter:9100",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
@@ -80,6 +150,45 @@ tests:
               severity: critical
             exp_annotations:
               summary: The expected Inquiry Notification worker container is absent.
+          - exp_labels:
+              alertname: YolpolInquiryNotificationWorkerAbsent
+              category: container
+              container_label_com_docker_compose_project: yolpol-production
+              container_label_com_docker_compose_service: inquiry-notifications
+              environment: production
+              job: cadvisor
+              service: inquiry-notifications
+              severity: critical
+            exp_annotations:
+              summary: The expected Production Inquiry Notification worker container is absent.
+
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolConversationTranslationWorkerAbsent
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolConversationTranslationWorkerAbsent
+              category: container
+              container_label_com_docker_compose_project: yolpol-staging
+              container_label_com_docker_compose_service: conversation-translation
+              environment: staging
+              job: cadvisor
+              service: conversation-translation
+              severity: critical
+            exp_annotations:
+              summary: The expected Conversation Translation worker container is absent.
+          - exp_labels:
+              alertname: YolpolConversationTranslationWorkerAbsent
+              category: container
+              container_label_com_docker_compose_project: yolpol-production
+              container_label_com_docker_compose_service: conversation-translation
+              environment: production
+              job: cadvisor
+              service: conversation-translation
+              severity: critical
+            exp_annotations:
+              summary: The expected Production Conversation Translation worker container is absent.
 
   - interval: 1m
     input_series:
@@ -98,6 +207,38 @@ tests:
               severity: critical
             exp_annotations:
               summary: Eligible YOLPOL queue work has been waiting for more than 30 minutes.
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_queue_oldest_eligible_age_seconds{environment="production",queue="ai_fallback"}'
+        values: '1900+0x20'
+      - series: 'yolpol_queue_eligible_jobs{environment="production",queue="ai_fallback"}'
+        values: '101+0x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: YolpolQueueStaleCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolQueueStaleCritical
+              category: queue
+              environment: production
+              queue: ai_fallback
+              service: operations-exporter
+              severity: critical
+            exp_annotations:
+              summary: Eligible YOLPOL queue work has been waiting for more than 30 minutes.
+      - eval_time: 11m
+        alertname: YolpolQueueBacklogLargeCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: YolpolQueueBacklogLargeCritical
+              category: queue
+              environment: production
+              queue: ai_fallback
+              service: operations-exporter
+              severity: critical
+            exp_annotations:
+              summary: A YOLPOL processing queue has more than 100 eligible jobs.
 
   - interval: 1m
     input_series:
@@ -152,6 +293,30 @@ tests:
     alert_rule_test:
       - eval_time: 16m
         alertname: YolpolBackupMissing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: YolpolBackupStaleCritical
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'yolpol_backup_monitoring_enabled{environment="production"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_integrity_scan_success{environment="production"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_valid_pair_exists{environment="production"}'
+        values: '0+0x20'
+      - series: 'yolpol_backup_latest_valid_age_seconds{environment="production"}'
+        values: '99999+0x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: YolpolBackupMissing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: YolpolBackupIntegrityScanFailed
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: YolpolBackupStaleWarning
         exp_alerts: []
       - eval_time: 16m
         alertname: YolpolBackupStaleCritical

@@ -144,6 +144,14 @@ MONITORING_FIXED_VALUES = {
     "YOLPOL_MONITORING_STAGING_OPERATIONS_DATABASE_URL_FILE": "/opt/yolpol/monitoring/secrets/staging-operations-database-url",
     "YOLPOL_MONITORING_STAGING_BACKUP_ENABLED": "false",
     "YOLPOL_MONITORING_STAGING_BACKUP_DIRECTORY": "/opt/yolpol/staging/backups",
+    "YOLPOL_MONITORING_PRODUCTION_INGRESS_NETWORK": "yolpol-production-ingress",
+    "YOLPOL_MONITORING_PRODUCTION_BACKEND_NETWORK": "yolpol-production_backend",
+    "YOLPOL_MONITORING_PRODUCTION_POSTGRES_URI_FILE": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-uri",
+    "YOLPOL_MONITORING_PRODUCTION_POSTGRES_USER_FILE": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-user",
+    "YOLPOL_MONITORING_PRODUCTION_POSTGRES_PASSWORD_FILE": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-password",
+    "YOLPOL_MONITORING_PRODUCTION_OPERATIONS_DATABASE_URL_FILE": "/opt/yolpol/monitoring/secrets/production-operations-database-url",
+    "YOLPOL_MONITORING_PRODUCTION_BACKUP_ENABLED": "false",
+    "YOLPOL_MONITORING_PRODUCTION_BACKUP_DIRECTORY": "/opt/yolpol/production/backups",
     "YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS": "300000",
     "YOLPOL_MONITORING_LOG_MAX_SIZE": "10m",
     "YOLPOL_MONITORING_LOG_MAX_FILES": "3",
@@ -193,8 +201,11 @@ MONITORING_SERVICES = {
     "node-exporter",
     "cadvisor",
     "postgres-exporter",
+    "postgres-exporter-production",
     "blackbox-exporter",
+    "blackbox-exporter-production",
     "operations-exporter",
+    "operations-exporter-production",
 }
 
 ALLOWED_SERVICE_KEYS = {
@@ -242,7 +253,9 @@ MONITORING_UPSTREAM_IMAGES = {
     "node-exporter": "quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0",
     "cadvisor": "ghcr.io/google/cadvisor:v0.60.5@sha256:763aecf1c32c2be8a1a75f9abfc2fc461005c9dbbaa39cb356b354aac1296dbe",
     "postgres-exporter": "quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e",
+    "postgres-exporter-production": "quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e",
     "blackbox-exporter": "quay.io/prometheus/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc",
+    "blackbox-exporter-production": "quay.io/prometheus/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc",
 }
 
 
@@ -1265,15 +1278,22 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
     exact_keys(model, {"name", "networks", "secrets", "services", "volumes", "x-json-logging", "x-service-security"}, "Monitoring Compose model")
     require(model.get("name") == "yolpol-monitoring", "Monitoring project name")
     services = service_map(model, MONITORING_SERVICES)
-    images = {**MONITORING_UPSTREAM_IMAGES, "operations-exporter": runtime["YOLPOL_OPERATIONS_METRICS_IMAGE"]}
+    images = {
+        **MONITORING_UPSTREAM_IMAGES,
+        "operations-exporter": runtime["YOLPOL_OPERATIONS_METRICS_IMAGE"],
+        "operations-exporter-production": runtime["YOLPOL_OPERATIONS_METRICS_IMAGE"],
+    }
     expected_networks = {
         "prometheus": {"monitoring"},
         "alertmanager": {"monitoring", "alert_egress"},
         "node-exporter": {"monitoring"},
         "cadvisor": {"monitoring"},
         "postgres-exporter": {"monitoring", "staging_backend"},
+        "postgres-exporter-production": {"monitoring", "production_backend"},
         "blackbox-exporter": {"monitoring", "staging_ingress"},
+        "blackbox-exporter-production": {"monitoring", "production_ingress"},
         "operations-exporter": {"monitoring", "staging_backend"},
+        "operations-exporter-production": {"monitoring", "production_backend"},
     }
     expected_mounts = {
         "prometheus": {
@@ -1300,6 +1320,10 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             ("bind", "/opt/yolpol/monitoring/blackbox/blackbox.yml", "/etc/blackbox_exporter/blackbox.yml", True)
         },
         "operations-exporter": {("bind", "/opt/yolpol/staging/backups", "/backups", True)},
+        "blackbox-exporter-production": {
+            ("bind", "/opt/yolpol/monitoring/blackbox/blackbox.yml", "/etc/blackbox_exporter/blackbox.yml", True)
+        },
+        "operations-exporter-production": {("bind", "/opt/yolpol/production/backups", "/backups", True)},
     }
     expected_secrets = {
         "alertmanager": {("alert_telegram_bot_token", "/run/secrets/alert_telegram_bot_token"), ("alert_telegram_chat_id", "/run/secrets/alert_telegram_chat_id")},
@@ -1309,6 +1333,12 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             ("staging_postgres_exporter_password", "/run/secrets/staging_postgres_exporter_password"),
         },
         "operations-exporter": {("staging_operations_database_url", "/run/secrets/staging_operations_database_url")},
+        "postgres-exporter-production": {
+            ("production_postgres_exporter_uri", "/run/secrets/production_postgres_exporter_uri"),
+            ("production_postgres_exporter_user", "/run/secrets/production_postgres_exporter_user"),
+            ("production_postgres_exporter_password", "/run/secrets/production_postgres_exporter_password"),
+        },
+        "operations-exporter-production": {("production_operations_database_url", "/run/secrets/production_operations_database_url")},
     }
     commands = {
         "prometheus": [
@@ -1349,8 +1379,23 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "--no-collector.statio_user_tables",
             "--no-collector.wal",
         ],
+        "postgres-exporter-production": [
+            "--log.format=json",
+            "--no-collector.locks",
+            "--no-collector.replication",
+            "--no-collector.replication_slots",
+            "--no-collector.stat_archiver",
+            "--no-collector.stat_bgwriter",
+            "--no-collector.stat_progress_vacuum",
+            "--no-collector.stat_replication",
+            "--no-collector.stat_user_tables",
+            "--no-collector.statio_user_tables",
+            "--no-collector.wal",
+        ],
         "blackbox-exporter": ["--config.file=/etc/blackbox_exporter/blackbox.yml"],
+        "blackbox-exporter-production": ["--config.file=/etc/blackbox_exporter/blackbox.yml"],
         "operations-exporter": None,
+        "operations-exporter-production": None,
     }
     environments = {
         "prometheus": {},
@@ -1363,13 +1408,28 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "DATA_SOURCE_USER_FILE": "/run/secrets/staging_postgres_exporter_user",
             "PG_EXPORTER_COLLECTION_TIMEOUT": "5s",
         },
+        "postgres-exporter-production": {
+            "DATA_SOURCE_PASS_FILE": "/run/secrets/production_postgres_exporter_password",
+            "DATA_SOURCE_URI_FILE": "/run/secrets/production_postgres_exporter_uri",
+            "DATA_SOURCE_USER_FILE": "/run/secrets/production_postgres_exporter_user",
+            "PG_EXPORTER_COLLECTION_TIMEOUT": "5s",
+        },
         "blackbox-exporter": {},
+        "blackbox-exporter-production": {},
         "operations-exporter": {
             "YOLPOL_DEPLOYMENT_ENVIRONMENT": "staging",
             "YOLPOL_MONITORING_BACKUP_DIRECTORY": "/backups",
             "YOLPOL_MONITORING_BACKUP_ENABLED": "false",
             "YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS": "300000",
             "YOLPOL_MONITORING_DATABASE_URL_FILE": "/run/secrets/staging_operations_database_url",
+            "YOLPOL_MONITORING_PORT": "9464",
+        },
+        "operations-exporter-production": {
+            "YOLPOL_DEPLOYMENT_ENVIRONMENT": "production",
+            "YOLPOL_MONITORING_BACKUP_DIRECTORY": "/backups",
+            "YOLPOL_MONITORING_BACKUP_ENABLED": "false",
+            "YOLPOL_MONITORING_BACKUP_SCAN_INTERVAL_MS": "300000",
+            "YOLPOL_MONITORING_DATABASE_URL_FILE": "/run/secrets/production_operations_database_url",
             "YOLPOL_MONITORING_PORT": "9464",
         },
     }
@@ -1379,8 +1439,11 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         "node-exporter": ("134217728", 0.15, 100),
         "cadvisor": ("268435456", 0.30, 150),
         "postgres-exporter": ("134217728", 0.15, 100),
+        "postgres-exporter-production": ("134217728", 0.15, 100),
         "blackbox-exporter": ("134217728", 0.10, 100),
+        "blackbox-exporter-production": ("134217728", 0.10, 100),
         "operations-exporter": ("134217728", 0.15, 100),
+        "operations-exporter-production": ("134217728", 0.15, 100),
     }
     for name, service in services.items():
         validate_generic_service_security(name, service, allowed_host_pid=name == "node-exporter")
@@ -1395,8 +1458,8 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         validate_service_hardening(
             service,
             read_only=True,
-            user="65534:65534" if name in {"node-exporter", "blackbox-exporter"} else None,
-            tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=32m"} if name in {"prometheus", "alertmanager", "operations-exporter"} else set(),
+            user="65534:65534" if name in {"node-exporter", "blackbox-exporter", "blackbox-exporter-production"} else None,
+            tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=32m"} if name in {"prometheus", "alertmanager", "operations-exporter", "operations-exporter-production"} else set(),
         )
         memory_bytes, cpus, pids = resources[name]
         validate_resources(service, memory_bytes=memory_bytes, cpus=cpus, pids=pids, restart="unless-stopped")
@@ -1411,6 +1474,8 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "alert_egress": ("yolpol-monitoring_alert_egress", False, False),
             "staging_ingress": ("yolpol-staging-ingress", False, True),
             "staging_backend": ("yolpol-staging_backend", False, True),
+            "production_ingress": ("yolpol-production-ingress", False, True),
+            "production_backend": ("yolpol-production_backend", False, True),
         },
         {
             "prometheus_data": "yolpol-monitoring_prometheus_data",
@@ -1423,6 +1488,10 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "staging_postgres_exporter_user": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-user",
             "staging_postgres_exporter_password": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-password",
             "staging_operations_database_url": "/opt/yolpol/monitoring/secrets/staging-operations-database-url",
+            "production_postgres_exporter_uri": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-uri",
+            "production_postgres_exporter_user": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-user",
+            "production_postgres_exporter_password": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-password",
+            "production_operations_database_url": "/opt/yolpol/monitoring/secrets/production-operations-database-url",
         },
     )
 

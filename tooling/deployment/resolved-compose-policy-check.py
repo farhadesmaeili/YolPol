@@ -43,7 +43,7 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             ("prometheus", "/etc/prometheus/rules"): "/opt/yolpol/monitoring/prometheus/rules",
             ("alertmanager", "/etc/alertmanager/alertmanager.yml"): "/opt/yolpol/monitoring/alertmanager/alertmanager.local.yml",
             ("blackbox-exporter", "/etc/blackbox_exporter/blackbox.yml"): "/opt/yolpol/monitoring/blackbox/blackbox.yml",
-            ("operations-exporter", "/backups"): "/opt/yolpol/staging/backups",
+            ("blackbox-exporter-production", "/etc/blackbox_exporter/blackbox.yml"): "/opt/yolpol/monitoring/blackbox/blackbox.yml",
         },
     }[mode]
     for service_name, raw_service in services.items():
@@ -79,6 +79,10 @@ def normalize_host_paths(model: dict[str, object], mode: str) -> None:
             "staging_postgres_exporter_user": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-user",
             "staging_postgres_exporter_password": "/opt/yolpol/monitoring/secrets/staging-postgres-exporter-password",
             "staging_operations_database_url": "/opt/yolpol/monitoring/secrets/staging-operations-database-url",
+            "production_postgres_exporter_uri": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-uri",
+            "production_postgres_exporter_user": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-user",
+            "production_postgres_exporter_password": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-password",
+            "production_operations_database_url": "/opt/yolpol/monitoring/secrets/production-operations-database-url",
         },
     }[mode]
     for secret_name, path in expected_secret_paths.items():

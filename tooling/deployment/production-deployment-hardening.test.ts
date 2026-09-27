@@ -304,6 +304,50 @@ describe("Production deployment hardening", () => {
       if (socketMount === undefined) throw new Error("Expected cAdvisor Docker socket mount.");
       socketMount.read_only = false;
       expect(runResolvedPolicy("monitoring", writableSocket).status).toBe(1);
+
+      const crossEnvironmentBackend = structuredClone(requireObject(monitoringModel));
+      requireObject(requireObject(crossEnvironmentBackend.services)["postgres-exporter-production"]).networks = {
+        monitoring: null,
+        staging_backend: null,
+      };
+      expect(runResolvedPolicy("monitoring", crossEnvironmentBackend).status).toBe(1);
+
+      const crossEnvironmentIngress = structuredClone(requireObject(monitoringModel));
+      requireObject(requireObject(crossEnvironmentIngress.services)["blackbox-exporter-production"]).networks = {
+        monitoring: null,
+        staging_ingress: null,
+      };
+      expect(runResolvedPolicy("monitoring", crossEnvironmentIngress).status).toBe(1);
+
+      const stagingSecretReuse = structuredClone(requireObject(monitoringModel));
+      const productionOperations = requireObject(requireObject(stagingSecretReuse.services)["operations-exporter-production"]);
+      productionOperations.secrets = [{source: "staging_operations_database_url", target: "/run/secrets/production_operations_database_url"}];
+      expect(runResolvedPolicy("monitoring", stagingSecretReuse).status).toBe(1);
+
+      const wrongProductionBackupDirectory = structuredClone(requireObject(monitoringModel));
+      const productionVolumes = requireObject(requireObject(wrongProductionBackupDirectory.services)["operations-exporter-production"]).volumes;
+      if (!Array.isArray(productionVolumes)) throw new Error("Expected Production Operations Exporter volumes.");
+      requireObject(productionVolumes[0]).source = "/opt/yolpol/staging/backups";
+      expect(runResolvedPolicy("monitoring", wrongProductionBackupDirectory).status).toBe(1);
+
+      const exporterPort = structuredClone(requireObject(monitoringModel));
+      requireObject(requireObject(exporterPort.services)["postgres-exporter-production"]).ports = [{target: 9187, published: "19187", protocol: "tcp"}];
+      expect(runResolvedPolicy("monitoring", exporterPort).status).toBe(1);
+
+      const exporterEgress = structuredClone(requireObject(monitoringModel));
+      requireObject(requireObject(exporterEgress.services)["operations-exporter-production"]).networks = {
+        monitoring: null,
+        production_backend: null,
+        alert_egress: null,
+      };
+      expect(runResolvedPolicy("monitoring", exporterEgress).status).toBe(1);
+
+      const exporterSocket = structuredClone(requireObject(monitoringModel));
+      const exporterSocketService = requireObject(requireObject(exporterSocket.services)["operations-exporter-production"]);
+      const exporterSocketVolumes = exporterSocketService.volumes;
+      if (!Array.isArray(exporterSocketVolumes)) throw new Error("Expected Production Operations Exporter volumes.");
+      exporterSocketVolumes.push({type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock", read_only: true});
+      expect(runResolvedPolicy("monitoring", exporterSocket).status).toBe(1);
     } finally {
       rmSync(temporaryDirectory, {recursive: true, force: true});
     }

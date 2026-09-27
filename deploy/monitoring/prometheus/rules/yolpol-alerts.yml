@@ -2,7 +2,7 @@ groups:
   - name: yolpol-availability
     rules:
       - alert: YolpolWebLivenessUnavailable
-        expr: probe_success{job="blackbox-web", probe="liveness"} == 0
+        expr: probe_success{job=~"blackbox-web|blackbox-web-production", probe="liveness"} == 0
         for: 2m
         labels:
           severity: critical
@@ -12,7 +12,7 @@ groups:
           summary: YOLPOL web liveness has been unavailable for two minutes.
 
       - alert: YolpolWebReadinessUnavailable
-        expr: probe_success{job="blackbox-web", probe="readiness"} == 0
+        expr: probe_success{job=~"blackbox-web|blackbox-web-production", probe="readiness"} == 0
         for: 2m
         labels:
           severity: critical
@@ -42,7 +42,7 @@ groups:
           summary: YOLPOL operations metrics collection is unavailable.
 
       - alert: PrometheusTargetScrapeFailing
-        expr: up{job=~"prometheus|alertmanager|node|cadvisor|postgres|operations|blackbox-web"} == 0
+        expr: up{job=~"prometheus|alertmanager|node|cadvisor|postgres|operations|blackbox-web|blackbox-web-production"} == 0
         for: 5m
         labels:
           severity: warning
@@ -251,6 +251,61 @@ groups:
           service: conversation-ai-fallback
         annotations:
           summary: The expected AI Fallback worker container is absent.
+
+      - alert: YolpolWebContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-production", container_label_com_docker_compose_service="web"})
+        for: 5m
+        labels:
+          environment: production
+          severity: critical
+          category: container
+          service: web
+        annotations:
+          summary: The expected Production web container is absent.
+
+      - alert: YolpolPostgresContainerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-production", container_label_com_docker_compose_service="postgres"})
+        for: 5m
+        labels:
+          environment: production
+          severity: critical
+          category: container
+          service: postgres
+        annotations:
+          summary: The expected Production PostgreSQL container is absent.
+
+      - alert: YolpolInquiryNotificationWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-production", container_label_com_docker_compose_service="inquiry-notifications"})
+        for: 5m
+        labels:
+          environment: production
+          severity: critical
+          category: container
+          service: inquiry-notifications
+        annotations:
+          summary: The expected Production Inquiry Notification worker container is absent.
+
+      - alert: YolpolConversationTranslationWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-production", container_label_com_docker_compose_service="conversation-translation"})
+        for: 5m
+        labels:
+          environment: production
+          severity: critical
+          category: container
+          service: conversation-translation
+        annotations:
+          summary: The expected Production Conversation Translation worker container is absent.
+
+      - alert: YolpolAiFallbackWorkerAbsent
+        expr: absent(container_last_seen{job="cadvisor", container_label_com_docker_compose_project="yolpol-production", container_label_com_docker_compose_service="conversation-ai-fallback"})
+        for: 5m
+        labels:
+          environment: production
+          severity: critical
+          category: container
+          service: conversation-ai-fallback
+        annotations:
+          summary: The expected Production AI Fallback worker container is absent.
 
   - name: yolpol-queues-and-backups
     rules:

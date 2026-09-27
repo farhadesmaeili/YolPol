@@ -56,7 +56,7 @@ The Telegram actions also accept no additional arguments and use fixed nonintera
 
 ## Runtime and release authority
 
-The Staging, Production, shared-ingress, and Monitoring examples enumerate four independent complete runtime schemas. Each application environment contains one full lowercase Git SHA; four fixed YOLPOL repository digest references; environment-specific paths, resource/logging limits, retention values, public age recipient, public Telegram username, and fixed webhook origin. Production additionally contains only the fixed host path for its file-backed IndexNow key; the key value remains outside `runtime.env`. Staging retains legacy edge binding values only for root migration/rollback; Production has none. Ingress has only four fixed non-secret Caddy resource/logging values and no release/image or credential input. Monitoring contains the fifth first-party digest plus its Staging-specific loopback ports, config/secret paths, fixed external networks, and disabled-by-default backup monitoring. Unknown keys remain unsupported.
+The Staging, Production, shared-ingress, and Monitoring examples enumerate four independent complete runtime schemas. Each application environment contains one full lowercase Git SHA; four fixed YOLPOL repository digest references; environment-specific paths, resource/logging limits, retention values, public age recipient, public Telegram username, and fixed webhook origin. Production additionally contains only the fixed host path for its file-backed IndexNow key; the key value remains outside `runtime.env`. Staging retains legacy edge binding values only for root migration/rollback; Production has none. Ingress has only four fixed non-secret Caddy resource/logging values and no release/image or credential input. Monitoring contains the fifth first-party digest plus loopback ports, config and environment-specific secret paths, both fixed backend/ingress network pairs, and disabled-by-default backup monitoring for both environments. Unknown keys remain unsupported.
 
 Active release authority is environment-specific:
 
@@ -67,7 +67,7 @@ Active release authority is environment-specific:
 /opt/yolpol/releases/production/active/release-manifest.sha256
 ```
 
-All four files are root-owned, mode `0600`, non-symlinks beneath root-only ancestors. Staging and the currently Staging-specific Monitoring project validate only the Staging authority. Production validates only the Production authority. The helper duplicates the repository release contract for both environments: fixed source repository, version/tag/full SHA/platform/database fingerprint, exactly five roles and targets, exact repositories, digest syntax, and internally consistent immutable refs. Staging may therefore advance while Production retains its previously approved manifest and runtime refs; rollback selection is also independent.
+All four files are root-owned, mode `0600`, non-symlinks beneath root-only ancestors. Staging and the shared Monitoring project's single Operations Metrics image validate only the Staging authority. Production application deployment validates only the Production authority. Automated Staging deployment and rollback may pull and recreate only the Staging Operations Exporter; they must never mutate the Production collector. Root activation or recreation of that collector requires an explicit compatibility review against both active environment releases and immutable digests, because a Staging N+1 image cannot be assumed compatible with Production N. Per-environment monitoring image authority is a future reviewed change. The helper duplicates the repository release contract for both environments: fixed source repository, version/tag/full SHA/platform/database fingerprint, exactly five roles and targets, exact repositories, digest syntax, and internally consistent immutable refs. Staging may therefore advance while Production retains its previously approved manifest and runtime refs; rollback selection is also independent.
 
 The SHA-256 sidecar detects corruption but is not an authenticity mechanism when supplied beside attacker-controlled bytes. Root must obtain the release assets over an authenticated channel from the independently selected release at `farhadesmaeili/YolPol`, run `pnpm release:manifest:verify`, compare the tag/source/full commit to the approved release record, and only then promote both files from a root-controlled location. Never authenticate an operator upload with a checksum uploaded by that same operator.
 
@@ -120,8 +120,11 @@ Every first-party runtime uses non-login UID/GID `10001:10001`. Confirm both num
     runtime.env                                     root:root 0600
     prometheus/, alertmanager/, blackbox/            root:root 0755
     secrets/                                        root:root 0700
-      alert-telegram-*, staging-postgres-exporter-* 65534:65534 0400
+      alert-telegram-*                              65534:65534 0400
+      staging-postgres-exporter-*                   65534:65534 0400
+      production-postgres-exporter-*                65534:65534 0400
       staging-operations-database-url               10001:10001 0400
+      production-operations-database-url            10001:10001 0400
 ```
 
 `runtime/production-last-backup-created-at` is an additional `root:root 0600` throttle-state file. Production and Staging have distinct Compose projects, databases, backend networks, runtime files, secrets, backups, Telegram/provider credentials, and throttle state. Shared ingress owns separate `yolpol-ingress_caddy_data` and `yolpol-ingress_caddy_config` volumes and only the two fixed external ingress networks; it reuses neither legacy Staging Caddy state nor application state.
@@ -154,7 +157,9 @@ cAdvisor's read-only Docker socket bind is still Docker-API access and must be t
   --env-file /opt/yolpol/monitoring/runtime.env \
   -f /opt/yolpol/monitoring/compose.yaml \
   up -d --no-build --no-deps \
-  prometheus alertmanager node-exporter cadvisor postgres-exporter blackbox-exporter operations-exporter
+  prometheus alertmanager node-exporter cadvisor \
+  postgres-exporter blackbox-exporter operations-exporter \
+  postgres-exporter-production blackbox-exporter-production operations-exporter-production
 ```
 
 Never use an implicit whole-project `up`, add another service without updating the policy, or delegate this root procedure to `yolpol-operator`.
@@ -181,7 +186,9 @@ The sudoers `ALL` before `(root)` is the host selector. `NOPASSWD:NOSETENV` appl
 
 ## Production monitoring boundary
 
-The existing Monitoring project remains intentionally Staging-specific. It is not extended with Production database/exporter credentials, backup mounts, endpoint targets, or Production networks in this feature. Production monitoring requires a separately reviewed repository change and root-only activation; never reuse Staging monitoring credentials to bridge the gap.
+The single Monitoring project now has a repository-validated Production extension. It reuses shared Prometheus, Alertmanager, Node Exporter, and cAdvisor while giving Production dedicated PostgreSQL, Operations, and Blackbox collectors on only the Production backend or ingress network required by each function. Production secrets and the read-only `/opt/yolpol/production/backups` mount are distinct from Staging. The current single Operations Metrics image remains authenticated by the Staging release manifest, but the deployment controller and restricted internal action update only the Staging instance. Production collector activation or recreation remains a reviewed root operation with an explicit compatibility check; Production release authority is unchanged.
+
+This repository state is not live activation. Root must later provision the least-privilege Production monitoring login and four fixed secret files, install the runtime/managed contracts, validate the resolved policy, and explicitly activate the three new collectors plus updated Prometheus. The operator receives no generic Monitoring action, Docker socket access, or wider sudo. The default Production backup-monitoring flag remains false. A public `https://yolpol.com` probe and an independent off-host watchdog remain deferred.
 
 ## Shared-host ingress contract
 
@@ -193,4 +200,4 @@ Task 0064 defines the repository contract, and the live handoff and Staging veri
 
 The Phase B bootstrap foundation is converged on the current VPS, and the Phase C1 authenticated deployment agent is enabled and active. Staging and Production both run release `v0.2.2` at `48a566142bd0259c596314f6a01a92cc66d868ce`; Production promotion is explicit, approval-gated, and trusted only from the canonical `main` workflow path. Task 0069 adds the repository-side Phase C2 controller/evidence contract without activating a real remote adapter on that VPS. The legacy `/opt/yolpol/releases/active` authority remains deliberately retained for rollback compatibility rather than serving as either environment's current authority.
 
-The foundation still does not provide signed release attestations, activate Production monitoring, configure a real off-server storage provider or schedule, permit live automated Production-changing migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials automatically, or prove disposable rebuild/disaster-recovery cutover. Although the Phase C2 core is repository-implemented and synthetically tested, Production-changing migrations continue to fail closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until separate provider activation. Those omissions must not be worked around by expanding operator sudo.
+The foundation still does not provide signed release attestations, activate the implemented Production Monitoring repository contract on the VPS, configure a real off-server storage provider or schedule, permit live automated Production-changing migrations, perform final Production DNS/Cloudflare cutover, rotate registry credentials automatically, or prove disposable rebuild/disaster-recovery cutover. Although the Phase C2 core is repository-implemented and synthetically tested, Production-changing migrations continue to fail closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until separate provider activation. Those omissions must not be worked around by expanding operator sudo.

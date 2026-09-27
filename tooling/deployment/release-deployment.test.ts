@@ -170,11 +170,13 @@ describe("Phase C1 and repository-side Phase C2 workflow contract", () => {
     expect(internal).toContain("internal lock identity rejected");
   });
 
-  it("limits monitoring authority and gates Production migrations on Phase C2", () => {
-    expect(internal).toContain("monitoring_compose up -d --no-build --no-deps operations-exporter");
-    expect(internal).toContain("monitoring_compose pull operations-exporter");
+  it("keeps automated monitoring mutations Staging-only and gates Production migrations on Phase C2", () => {
+    expect(internal).toContain("deploy-operations-exporter) validate_monitoring; monitoring_compose up -d --no-build --no-deps operations-exporter ;;");
+    expect(internal).toContain("monitoring_compose pull operations-exporter ;;");
+    expect(internal).not.toMatch(/monitoring_compose[^\n]*operations-exporter-production/u);
     expect(internal).not.toContain("monitoring_compose pull ;;");
     expect(internal).not.toMatch(/monitoring_compose up[^\n]*(?:prometheus|alertmanager|cadvisor|node-exporter|postgres-exporter|blackbox-exporter)/u);
+    expect(controller).not.toMatch(/deploy-operations-exporter-production|production.*monitoring/iu);
     expect(controller).toContain("PHASE_C2_OFFSERVER_BACKUP_REQUIRED");
     expect(controller).toContain('run("backup-create-verify-deep-production")');
     expect(controller).toContain("prove_production_durability(");

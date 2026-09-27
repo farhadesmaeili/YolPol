@@ -16,7 +16,7 @@ The multilingual pallet-only planning page, verified Product packaging boundary,
 
 ## Operational deployment automation
 
-The Production repository foundation and shared-ingress migration are complete. The repository-managed Phase B bootstrap contract, including Ubuntu 24.04 LTS/noble support, has been successfully applied and converged on the current VPS; `yolpol-bootstrap check` reports that the foundation is ready. Phase C1 is also implemented and activated: the deployment-agent timer is enabled and active, GitHub-side activation is complete for the verified main-only Production promotion path, Staging deploys automatically, and Production deploys only after explicit approval. Release `v0.2.2` (`48a566142bd0259c596314f6a01a92cc66d868ce`) completed that authenticated Staging-to-Production path, and both environments now identify it as active. The Production runtime is provisioned and healthy. Task 0069 implements and tests the repository-side Phase C2 durability/evidence contract, but no real remote adapter is selected or activated and the live VPS remains fail-closed. Provider activation, Production Monitoring, final public DNS/Cloudflare cutover, and disposable rebuild/disaster-recovery proof remain separate work.
+The Production repository foundation and shared-ingress migration are complete. The repository-managed Phase B bootstrap contract, including Ubuntu 24.04 LTS/noble support, has been successfully applied and converged on the current VPS; `yolpol-bootstrap check` reports that the foundation is ready. Phase C1 is also implemented and activated: the deployment-agent timer is enabled and active, GitHub-side activation is complete for the verified main-only Production promotion path, Staging deploys automatically, and Production deploys only after explicit approval. Release `v0.2.2` (`48a566142bd0259c596314f6a01a92cc66d868ce`) completed that authenticated Staging-to-Production path, and both environments now identify it as active. The Production runtime is provisioned and healthy. Task 0069 implements and tests the repository-side Phase C2 durability/evidence contract, but no real remote adapter is selected or activated and the live VPS remains fail-closed. Task 0070 implements the isolated Production Monitoring repository contract; database-role/secret provisioning and VPS activation remain separate. Provider activation, final public DNS/Cloudflare cutover, independent external monitoring, and disposable rebuild/disaster-recovery proof remain separate work.
 
 ### Phase A - Production Deployment Foundation
 
@@ -119,7 +119,9 @@ The final target operating model treats servers as disposable and rebuildable. S
 - [x] Bootstrap and deploy the real Production runtime through `v0.2.2`
 - [x] Implement and adversarially test the provider-neutral Phase C2 repository contract
 - [ ] Select, review, configure, and activate a real off-server durability adapter before Production-changing migrations
-- [ ] Validate disposable rebuild/disaster recovery and activate Production monitoring
+- [x] Implement and synthetically validate the isolated Production Monitoring repository contract
+- [ ] Provision the Production monitoring role/secrets and activate the reviewed collectors on the VPS
+- [ ] Validate disposable rebuild/disaster recovery
 - [ ] Complete a separately verified and approved public DNS/Cloudflare cutover
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation

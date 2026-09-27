@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production و هسته provider-neutral مربوط به durability/evidence در Phase C2 است. این وضعیت به معنی فعال‌شدن adapter واقعی storage یا migration تغییریافته Production نیست؛ cutover نهایی عمومی DNS/Cloudflare، Production Monitoring، فعال‌سازی provider واقعی و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 و قرارداد repository-side ایزوله برای Production Monitoring است. این وضعیت به معنی فعال‌شدن adapter واقعی storage، migration تغییریافته Production یا collectorهای Production Monitoring روی VPS نیست؛ provision نقش و secretهای Monitoring، cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی provider واقعی و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 
@@ -319,7 +319,7 @@ gateهای عملیاتی زیر همچنان fail-closed باقی می‌مان
 
 - قرارداد repository-side مربوط به Phase C2 پیاده‌سازی و با داده synthetic آزمایش شده است، اما adapter واقعی remote پیکربندی یا فعال نشده است.
 - در نتیجه migration fingerprint تغییریافته برای Production همچنان پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
-- Production Monitoring جدا و غیرفعال/ناکامل است؛ پروژه Monitoring فعلی مخصوص Staging است.
+- قرارداد repository-side مربوط به Production Monitoring پیاده‌سازی و به‌صورت synthetic اعتبارسنجی شده است، اما نقش database، credentialها و collectorهای VPS آن فعال نشده‌اند؛ monitoring عمومی و off-host نیز جدا باقی می‌ماند.
 - automatic restore وجود ندارد.
 - disposable rebuild و اثبات کامل disaster recovery کامل نشده‌اند.
 - cutover نهایی عمومی DNS/Cloudflare نیازمند بازبینی و کنترل جداگانه است.
@@ -403,7 +403,7 @@ develop
 کارهای باقی‌مانده‌ای که در وضعیت فعلی تأیید شده‌اند عبارت‌اند از:
 
 - انتخاب، بازبینی، پیکربندی و فعال‌سازی زنده adapter واقعی off-server durability در Phase C2؛
-- فعال‌سازی Production Monitoring و تشخیص مستقل خرابی بیرونی؛
+- provision نقش/secretهای Production Monitoring، فعال‌سازی آن روی VPS و تشخیص مستقل خرابی بیرونی؛
 - cutover نهایی و بازبینی‌شده عمومی DNS/Cloudflare؛
 - disposable rebuild و اثبات کامل disaster recovery؛
 - بازبینی محتوای همه زبان‌ها؛
