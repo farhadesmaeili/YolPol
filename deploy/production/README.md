@@ -1,6 +1,6 @@
 # YOLPOL Production deployment contract
 
-This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files that a later root bootstrap installs below `/opt/yolpol/production`; it does not create that directory, access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook.
+This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files installed below `/opt/yolpol/production`; repository source alone does not access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook. On the current VPS, the Production runtime, secrets, database, release authority, and application containers have been provisioned, and release `v0.2.2` is healthy. That runtime deployment is distinct from the separately approved public DNS/Cloudflare cutover, which is not claimed as complete.
 
 ## Fixed identity and isolation
 
@@ -10,7 +10,7 @@ Production owns distinct backend/provider networks and database volumes, `/opt/y
 
 ## Filesystem contract
 
-The future root bootstrap must create this deterministic layout without making trusted paths operator-writable:
+Root bootstrap creates this deterministic layout without making trusted paths operator-writable:
 
 ```text
 /opt/yolpol/                                      root:root 0755
@@ -103,7 +103,7 @@ The dedicated `yolpol-ingress` project serves the canonical apex and permanently
 
 Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The live Cloudflare redirect `yolpol.com -> staging.yolpol.com` remains active. Production public activation is still blocked until the Production runtime, secrets, database, release authority, application containers, Monitoring integration, health checks, and rollback are ready and the DNS/Cloudflare cutover is separately approved. Shared ingress alone does not make Production live.
+Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The Production runtime, secrets, database, release authority, and application containers are now provisioned and healthy on `v0.2.2`. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. Production Monitoring and a separately approved DNS/Cloudflare cutover remain outstanding; runtime health and shared ingress alone do not prove public Production activation.
 
 ## Operator commands and root responsibilities
 
@@ -115,10 +115,10 @@ Root remains responsible for bootstrap, authenticated release promotion, runtime
 
 The current `yolpol-monitoring` project remains application-data-specific to Staging. It identifies shared-ingress container presence and probes Staging web through `staging-web`, but it does not attach the Production ingress/backend network or credentials and does not claim an active Production public probe. Production monitoring is a separate follow-up requiring isolated exporter credentials, endpoint probes, alert routing, and policy tests before activation.
 
-## Future automation compatibility
+## Automation state and compatibility
 
-A future bootstrap tool can install the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. A future release workflow can promote an approved manifest only to Production, create and verify a backup, compare migration identity, pull exact digests, migrate conditionally, replace web/workers on stable networks, verify readiness, and leave shared ingress running. Neither automation phase is implemented here, and Production activation remains separately approved.
+The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Production-changing migration fingerprints remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` until independently verified off-server durability exists. Public activation remains separately approved.
 
 ## Intentionally unsupported
 
-This repository now provides the shared-host ingress contract but does not install it, deploy Production, create host paths/networks, secrets, credentials, a database, bot, webhook, certificate, DNS record, GitHub Environment, bootstrap workflow, deployment workflow, Production monitoring, backup schedule, off-server store, PITR, down migration, automatic database rollback, restore cutover, arbitrary logs, arbitrary Compose, or shell access.
+The repository contract and activated host path do not provide Production monitoring, an off-server backup store or schedule, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.

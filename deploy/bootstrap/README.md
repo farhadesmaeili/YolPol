@@ -1,8 +1,8 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, and the narrow Task 0066 extension that installs, but does not activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface.
+This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, and the narrow Task 0066 extension that installs, but does not itself activate, the authenticated deployment control plane. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The control plane has since been activated separately on the current VPS.
 
-Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the inactive Phase C1 control-plane contract.
+Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
 
 ## Supported host
 
@@ -21,7 +21,7 @@ Any other distribution, release, codename, or architecture fails closed; `ID_LIK
 /usr/libexec/docker/cli-plugins/docker-compose
 ```
 
-On the live VPS, the trusted source was established manually and the pre-Task-0067 `apply` command was attempted. Source validation passed, but the command failed closed at `validate_supported_host()` because that contract supported only Debian 12 while the VPS runs Ubuntu 24.04/noble. It did not proceed into prerequisite, user, directory, or managed-contract installation; Phase B did not converge or activate. Reapplying the updated bootstrap remains a separate controlled VPS operation.
+On the live VPS, the trusted source was established manually and the pre-Task-0067 `apply` command was attempted. Source validation passed, but the command failed closed at `validate_supported_host()` because that contract supported only Debian 12 while the VPS runs Ubuntu 24.04/noble. It did not proceed into prerequisite, user, directory, or managed-contract installation. After Task 0067 added the exact Ubuntu 24.04/noble contract, the updated bootstrap was successfully applied and converged; `/opt/yolpol/bin/yolpol-bootstrap check` now reports `yolpol-bootstrap: foundation is ready`.
 
 ## Trust boundary
 
@@ -86,9 +86,9 @@ Then use the installed root-only command to install independently approved input
 5. Install the fixed ingress runtime.
 6. Run base `check`, then the applicable `check-staging`, `check-ingress`, and `check-monitoring` gates.
 7. Prove foundation convergence by running source-only `apply` again from the same authenticated fixed source followed by base `check`.
-8. In the later explicitly approved Production phase, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production`.
+8. When provisioning Production, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production` after explicit approval.
 
-The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures.
+The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures. On the current VPS, bootstrap convergence and deployment-timer activation have completed; Production Monitoring remains separate and inactive.
 
 ## Runtime installation
 

@@ -4,9 +4,9 @@ This directory is the repository contract for Task 0066 Phase C1. Routine deploy
 
 ## Trust and credential boundaries
 
-The GitHub App must be installed only on `farhadesmaeili/YolPol` with `Deployments: read` and inherent metadata read. It has no mutation permission and is not a PAT. Each installation-token request additionally names only the verified numeric YolPol repository ID and requests only `deployments: read`; the agent rejects broader returned permissions or repository scope. `/etc/yolpol/control-plane/github-app-private.pem` is provisioned later by root as `root:yolpol-deployment-agent` mode `0440`; the repository never creates or contains it.
+The GitHub App must be installed only on `farhadesmaeili/YolPol` with `Deployments: read` and inherent metadata read. It has no mutation permission and is not a PAT. Each installation-token request additionally names only the verified numeric YolPol repository ID and requests only `deployments: read`; the agent rejects broader returned permissions or repository scope. `/etc/yolpol/control-plane/github-app-private.pem` is provisioned by root outside the repository as `root:yolpol-deployment-agent` mode `0440`; the repository never creates or contains it.
 
-The Staging and Production capability keys are separate RSA private keys at the fixed paths in `agent.json.example`. They are root-owned mode `0400`, are provisioned later, and are unrelated to the GitHub App key. Their corresponding RSA public keys are base64-encoded GitHub Environment variables named `YOLPOL_DEPLOYMENT_CAPABILITY_PUBLIC_KEY_B64`; `YOLPOL_DEPLOYMENT_CAPABILITY_KEY_ID` identifies the selected key. A 4096-bit RSA key is required so RSA-OAEP-SHA256 can carry the bounded short-lived job token.
+The Staging and Production capability keys are separate RSA private keys at the fixed paths in `agent.json.example`. They are provisioned by root outside the repository, are root-owned mode `0400`, and are unrelated to the GitHub App key. Their corresponding RSA public keys are base64-encoded GitHub Environment variables named `YOLPOL_DEPLOYMENT_CAPABILITY_PUBLIC_KEY_B64`; `YOLPOL_DEPLOYMENT_CAPABILITY_KEY_ID` identifies the selected key. A 4096-bit RSA key is required so RSA-OAEP-SHA256 can carry the bounded short-lived job token.
 
 The encrypted job `GITHUB_TOKEN` is decrypted only by the root controller. It may authenticate Release assets, a request-local GHCR login, and Deployment status writes. The controller requires the signed OIDC `actor` and stable decimal `actor_id`; the validated `actor` is the GHCR username and the token is supplied only on standard input. Plaintext is not persisted. Private registry configuration lives below `/run/yolpol-deployment`, is removed on success or failure, and never changes `/root/.docker/config.json`. If authenticated login fails, immutable public images may be pulled with an empty request-local configuration.
 
@@ -44,7 +44,7 @@ Transaction failures retain a closed, non-secret `failureStage` and `failureDisp
 
 Production is dispatch-only and also requires an existing provisioned Production contract, an exact successful Staging ledger record, and an unchanged migration fingerprint before any mutation. A changed fingerprint fails with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`. A successful Phase C1 result is `deployed-not-publicly-activated`; it does not alter ingress, DNS, Cloudflare, monitoring, secrets, or public activation.
 
-## Activation prerequisites
+## Activation prerequisites and verified state
 
 Bootstrap installs and validates the account, files, directories, units, and sudo rules, then performs `systemctl daemon-reload` only. It does not enable or start the timer. Before an operator may enable it, all of the following must be independently reviewed and provisioned:
 
@@ -59,8 +59,10 @@ Bootstrap installs and validates the account, files, directories, units, and sud
 
 Only after that separate activation review may root run `systemctl enable --now yolpol-deployment-agent.timer`. Custom deployment-protection apps are incompatible with `environment.deployment: false`; normal Environment approval and variables remain supported.
 
+That review and activation are complete on the current VPS. The deployment-agent timer is enabled and active, recent executions complete successfully, and the GitHub Environments support automatic Staging deployment plus explicit approved Production promotion. Release `v0.2.2` at `48a566142bd0259c596314f6a01a92cc66d868ce` successfully deployed to Staging and then Production through this authenticated path. The live Production trust is main-only: `promote-production.yml@refs/heads/main`, `deploy-release.yml@refs/heads/main`, `workflow_dispatch`, and `refs/heads/main`.
+
 Application secrets remain environment-separated on the host. Phase C1 has no routine application-secret transport. A later explicit Environment-gated sync/rotation workflow must own that concern; changing a GitHub Environment application secret alone cannot alter host runtime state.
 
 ## Known limitations
 
-Phase C1 provides local encrypted pre-migration backup verification only. Production migration changes remain blocked until Phase C2 supplies independently verified off-server durability. Crash handling is deliberately fail-closed; only the narrowly proven, explicit root-only Staging pre-mutation reconciliation above can terminalize one stale record. Status synchronization still depends on the request's short-lived job capability, and reconciliation does not repair it. No automatic restore exists. Third-party workflow Actions still use mutable major-version tags and must be full-SHA pinned before activation after those exact SHAs are independently verified. This repository task neither configures GitHub settings/App credentials nor activates a VPS.
+Phase C1 provides local encrypted pre-migration backup verification only. Production migration changes remain blocked until Phase C2 supplies independently verified off-server durability. Crash handling is deliberately fail-closed; only the narrowly proven, explicit root-only Staging pre-mutation reconciliation above can terminalize one stale record. Status synchronization still depends on the request's short-lived job capability, and reconciliation does not repair it. No automatic restore exists. Production Monitoring, disposable rebuild/disaster-recovery proof, and final public DNS/Cloudflare cutover remain outside Phase C1 and require separate review and activation.
