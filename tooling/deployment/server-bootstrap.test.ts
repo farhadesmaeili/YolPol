@@ -63,6 +63,8 @@ describe("server bootstrap automation", () => {
     for (const source of [
       "deploy/operations/yolpol-deploy",
       "deploy/operations/yolpol-deploy-policy.py",
+      "deploy/operations/yolpol-offserver-durability.py",
+      "deploy/operations/offserver-durability.json.example",
       "deploy/operations/logrotate.yolpol-deploy",
       "deploy/staging/compose.yaml",
       "deploy/production/compose.yaml",

@@ -52,6 +52,7 @@ JOURNAL_ROOT = Path("/opt/yolpol/runtime/deployment-journals")
 INTERNAL = Path("/opt/yolpol/bin/yolpol-deploy-internal")
 BOOTSTRAP = Path("/opt/yolpol/bin/yolpol-bootstrap")
 POLICY = Path("/opt/yolpol/bin/yolpol-deploy-policy")
+DURABILITY = Path("/opt/yolpol/bin/yolpol-offserver-durability")
 RUN_ROOT = Path("/run/yolpol-deployment")
 MAX_TRANSACTION_SECONDS = 4_500
 RELEASE_ASSET_LIMIT = 1_000_000
@@ -70,6 +71,8 @@ FAILURE_STAGES = frozenset({
     "validate-production",
     "staging-success-verification",
     "phase-c2-approval",
+    "backup-create-verify-deep-production",
+    "offserver-durability",
     "validate-staging",
     "backup-create-verify-deep-staging",
     "target-runtime-rendering",
@@ -82,6 +85,7 @@ FAILURE_STAGES = frozenset({
     "deploy-database-staging",
     "deploy-database-production",
     "migrate-staging",
+    "migrate-production",
     "deploy-app-staging",
     "deploy-app-production",
     "deploy-workers-staging",
@@ -776,8 +780,9 @@ def restore_previous(bootstrap: ModuleType, environment: str, journal: Path) -> 
 def internal(action: str, *, docker_config: Path | None = None, deadline: float | None = None) -> bytes:
     allowed = {
         "validate-staging", "validate-production", "backup-create-verify-deep-staging",
+        "backup-create-verify-deep-production",
         "pull-staging", "pull-production", "deploy-database-staging", "deploy-database-production",
-        "migrate-staging", "deploy-app-staging", "deploy-app-production", "deploy-workers-staging",
+        "migrate-staging", "migrate-production", "deploy-app-staging", "deploy-app-production", "deploy-workers-staging",
         "deploy-workers-production", "deploy-operations-exporter", "health-staging", "health-production",
         "ingress-health-staging", "ingress-health-production", "public-smoke-staging",
     }
@@ -804,6 +809,99 @@ def internal(action: str, *, docker_config: Path | None = None, deadline: float 
     if result.returncode != 0:
         controller_fail(f"internal deployment operation failed: {action}")
     return result.stdout
+
+
+def production_backup_receipt(data: bytes) -> str:
+    if not data or len(data) > 1_024:
+        controller_fail("Production backup receipt rejected")
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                controller_fail("Production backup receipt rejected")
+            value[key] = item
+        return value
+
+    try:
+        value = json.loads(
+            data.decode("ascii", "strict"),
+            object_pairs_hook=unique_object,
+            parse_constant=lambda _value: controller_fail("Production backup receipt rejected"),
+        )
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ControlPlaneError("Production backup receipt rejected") from error
+    expected_keys = {
+        "schemaVersion", "environment", "backupId", "integrityVerified", "deepVerified",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        controller_fail("Production backup receipt rejected")
+    backup_id = value.get("backupId")
+    if (
+        isinstance(value.get("schemaVersion"), bool)
+        or not isinstance(value.get("schemaVersion"), int)
+        or value.get("schemaVersion") != 1
+        or value.get("environment") != "production"
+        or value.get("integrityVerified") is not True
+        or value.get("deepVerified") is not True
+        or not isinstance(backup_id, str)
+        or re.fullmatch(r"yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?", backup_id) is None
+    ):
+        controller_fail("Production backup receipt rejected")
+    canonical = (
+        '{"schemaVersion":1,"environment":"production","backupId":"'
+        + backup_id
+        + '","integrityVerified":true,"deepVerified":true}\n'
+    ).encode("ascii")
+    if data != canonical:
+        controller_fail("Production backup receipt rejected")
+    return backup_id
+
+
+def prove_production_durability(
+    deployment_id: str,
+    backup_id: str,
+    current_fingerprint: str,
+    target_fingerprint: str,
+    target_manifest_sha256: str,
+) -> dict[str, Any]:
+    durability = load_python(DURABILITY, "yolpol_offserver_durability_controller")
+    try:
+        context = durability.DurabilityContext(
+            deployment_id=deployment_id,
+            backup_id=backup_id,
+            current_migration_fingerprint=current_fingerprint,
+            target_migration_fingerprint=target_fingerprint,
+            target_manifest_sha256=target_manifest_sha256,
+        )
+        evidence = durability.execute_production_durability(context)
+        summary = durability.bounded_summary(evidence)
+    except Exception as error:
+        raise ControlPlaneError("Production off-server durability unavailable") from error
+    expected_keys = {
+        "phaseC2BackupId", "phaseC2ArtifactSha256", "phaseC2ManifestSha256",
+        "phaseC2RemoteObjectSetId", "phaseC2VerifiedAtUnix",
+    }
+    if not isinstance(summary, dict) or set(summary) != expected_keys:
+        controller_fail("Production durability summary rejected")
+    if summary.get("phaseC2BackupId") != backup_id:
+        controller_fail("Production durability summary rejected")
+    for key in ("phaseC2ArtifactSha256", "phaseC2ManifestSha256"):
+        value = summary.get(key)
+        if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            controller_fail("Production durability summary rejected")
+    remote_identity = summary.get("phaseC2RemoteObjectSetId")
+    if (
+        not isinstance(remote_identity, str)
+        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}", remote_identity) is None
+        or "://" in remote_identity
+        or "@" in remote_identity
+    ):
+        controller_fail("Production durability summary rejected")
+    verified_at = summary.get("phaseC2VerifiedAtUnix")
+    if isinstance(verified_at, bool) or not isinstance(verified_at, int) or verified_at <= 0:
+        controller_fail("Production durability summary rejected")
+    return summary
 
 
 def docker_auth(token: bytes, actor: str) -> tuple[Path, Path]:
@@ -892,12 +990,40 @@ def execute_transaction(
                 stage = "staging-success-verification"
                 controller_fail("exact Release has not succeeded on Staging")
             if changed:
-                stage = "phase-c2-approval"
+                run("health-production")
+                transition(ledger, record, "production-current-verified")
+                receipt = run("backup-create-verify-deep-production")
+                backup_id = production_backup_receipt(receipt)
                 transition(
-                    ledger, record, "phase-c2-required",
-                    localOutcome="failure", result=PHASE_C2_RESULT,
+                    ledger,
+                    record,
+                    "production-backup-deep-verified",
+                    phaseC2BackupId=backup_id,
                 )
-                controller_fail(PHASE_C2_RESULT)
+                stage = "offserver-durability"
+                try:
+                    durability_summary = prove_production_durability(
+                        deployment_id,
+                        backup_id,
+                        current_fingerprint,
+                        target_fingerprint,
+                        intent["manifestSha256"],
+                    )
+                except ControlPlaneError:
+                    transition(
+                        ledger,
+                        record,
+                        "phase-c2-required",
+                        localOutcome="failure",
+                        result=PHASE_C2_RESULT,
+                    )
+                    controller_fail(PHASE_C2_RESULT)
+                transition(
+                    ledger,
+                    record,
+                    "offserver-durability-confirmed",
+                    **durability_summary,
+                )
         else:
             run("validate-staging")
             if changed:
@@ -930,7 +1056,7 @@ def execute_transaction(
         transition(ledger, record, "database-ready")
         if changed:
             transition(ledger, record, "migration-starting", migrationState="started")
-            run("migrate-staging", docker_config=docker_config)
+            run(f"migrate-{environment}", docker_config=docker_config)
             transition(ledger, record, "migration-completed", migrationState="completed")
         run(f"deploy-app-{environment}", docker_config=docker_config)
         transition(ledger, record, "application-deployed")
@@ -954,6 +1080,11 @@ def execute_transaction(
             if record.get("migrationState") == "started":
                 transition(
                     ledger, record, "manual-review", migrationState="failed",
+                    failureStage=failed_stage, failureDisposition="manual-review-required",
+                )
+            elif environment == "production" and record.get("migrationState") == "completed":
+                transition(
+                    ledger, record, "manual-review",
                     failureStage=failed_stage, failureDisposition="manual-review-required",
                 )
             raise DeploymentTransactionError(failed_stage, "manual-review-required") from error

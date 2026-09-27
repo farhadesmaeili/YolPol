@@ -6,7 +6,7 @@ YOLPOL is a multilingual, SEO-first B2B wholesale sourcing platform. Its current
 
 Commercial activity is inquiry-only: the public site does not publish internal Product prices or provide checkout, payment, or direct online purchasing. The application is designed for self-hosting and favors static Server Components, crawlable locale-prefixed routes, and explicit operational boundaries.
 
-The current repository includes a healthy, separately isolated Production runtime and an authenticated Staging-to-Production release path. This is not a claim that the public Production DNS/Cloudflare cutover is complete; the final public cutover, Production Monitoring, Phase C2 off-server backup durability, and full disposable disaster-recovery proof remain separate work.
+The current repository includes a healthy, separately isolated Production runtime, an authenticated Staging-to-Production release path, and the provider-neutral Phase C2 durability/evidence core. This is not a claim that a real remote storage adapter or Production-changing migration path is activated. The final public DNS/Cloudflare cutover, Production Monitoring, real provider activation, and full disposable disaster-recovery proof remain separate work.
 
 ## Key features
 
@@ -317,8 +317,8 @@ The environments have independent databases, volumes, credentials, runtime files
 
 Known operational gates remain fail closed:
 
-- Phase C2 independently verified off-server backup durability is incomplete.
-- Production-changing migration fingerprints are rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`.
+- The Phase C2 repository contract is implemented and synthetically tested, but no real remote adapter is configured or activated.
+- Production-changing migration fingerprints therefore remain rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` before authority mutation.
 - Production Monitoring is separate and inactive/incomplete; the current Monitoring project is Staging-specific.
 - No automatic restore exists.
 - Disposable rebuild and full disaster-recovery proof remain incomplete.
@@ -402,7 +402,7 @@ Use Node.js 22 and pnpm `11.14.0`, run `pnpm install` with the committed lockfil
 
 The current verified remaining work includes:
 
-- Phase C2 off-server backup durability and the resulting Production migration gate.
+- selection, review, configuration, and live activation of a real Phase C2 off-server durability adapter;
 - Production Monitoring activation and independent external failure detection.
 - final reviewed public DNS/Cloudflare cutover;
 - disposable rebuild and full disaster-recovery proof;

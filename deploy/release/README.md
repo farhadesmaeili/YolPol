@@ -115,7 +115,7 @@ The planner only validates JSON and emits a plan. It never invokes Docker, Postg
 10. Confirm the Release Publication workflow succeeded and published the exact `release-manifest.json` and `release-manifest.sha256` for the approved tag and commit.
 11. Allow the authenticated control plane to verify that published Release and deploy its exact immutable manifest and digests automatically to Staging.
 12. Complete Staging acceptance testing and confirm the successful Staging deployment ledger record.
-13. Before Production dispatch, verify approval and migration compatibility. A changed Production migration fingerprint must stop with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`; do not bypass the off-server durability gate.
+13. Before Production dispatch, verify approval and migration compatibility. The repository-side Phase C2 path may continue a changed fingerprint only after its fresh Production backup and exact remote durability evidence validate. The shipped unconfigured adapter still stops with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`; do not bypass that gate.
 14. Dispatch the canonical Production promotion workflow from `main`, complete the GitHub Production Environment approval, and promote the same Staging-tested manifest and digests without rebuilding.
 15. Verify Production liveness, readiness, workers, and the available health gates. Production Monitoring remains a separate activation.
 16. Retain the previous known-good manifest/checksum for rollback.
@@ -124,4 +124,4 @@ On the one-VPS topology, shared ingress is installed and the `v0.2.2` Production
 
 ## Known limitations
 
-The activated foundation does not sign images/manifests, manage Cosign keys, activate Production monitoring, infer schema backward compatibility, provide Phase C2 off-server backup durability, allow automatic Production-changing migrations, provide down migrations, perform automatic database cutover/restore, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.
+The repository implements the provider-neutral Phase C2 durability/evidence core, but the activated foundation does not configure a real remote adapter or allow live automatic Production-changing migrations. It also does not sign images/manifests, manage Cosign keys, activate Production monitoring, infer schema backward compatibility, provide down migrations, perform automatic database cutover/restore, or implement PITR. GitHub tags and releases provide history; digest identity plus the checksum-verified manifest provides artifact selection. Supply-chain signing and expanded platform support can be added later without weakening this contract.
