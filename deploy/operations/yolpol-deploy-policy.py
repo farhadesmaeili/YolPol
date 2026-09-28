@@ -157,6 +157,8 @@ MONITORING_FIXED_VALUES = {
     "YOLPOL_MONITORING_LOG_MAX_FILES": "3",
     "YOLPOL_PROMETHEUS_MEMORY_LIMIT": "512m",
     "YOLPOL_PROMETHEUS_CPU_LIMIT": "0.50",
+    "YOLPOL_PROMETHEUS_ADMIN_PROXY_MEMORY_LIMIT": "64m",
+    "YOLPOL_PROMETHEUS_ADMIN_PROXY_CPU_LIMIT": "0.10",
     "YOLPOL_ALERTMANAGER_MEMORY_LIMIT": "128m",
     "YOLPOL_ALERTMANAGER_CPU_LIMIT": "0.15",
     "YOLPOL_NODE_EXPORTER_MEMORY_LIMIT": "128m",
@@ -197,6 +199,7 @@ PRODUCTION_SERVICES = (STAGING_SERVICES - {"edge"}) | {"indexnow-submit"}
 INGRESS_SERVICES = {"ingress"}
 MONITORING_SERVICES = {
     "prometheus",
+    "prometheus-admin-proxy",
     "alertmanager",
     "node-exporter",
     "cadvisor",
@@ -249,6 +252,7 @@ INGRESS_UPSTREAM_IMAGES = {
 }
 MONITORING_UPSTREAM_IMAGES = {
     "prometheus": "quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0",
+    "prometheus-admin-proxy": "caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
     "alertmanager": "quay.io/prometheus/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286",
     "node-exporter": "quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0",
     "cadvisor": "ghcr.io/google/cadvisor:v0.60.5@sha256:763aecf1c32c2be8a1a75f9abfc2fc461005c9dbbaa39cb356b354aac1296dbe",
@@ -663,7 +667,13 @@ def normalized_secrets(service: dict[str, Any]) -> set[tuple[str, str]]:
     return result
 
 
-def validate_exact_top_level_resources(model: dict[str, Any], expected_networks: dict[str, tuple[str, bool, bool]], expected_volumes: dict[str, str], expected_secrets: dict[str, str]) -> None:
+def validate_exact_top_level_resources(
+    model: dict[str, Any],
+    expected_networks: dict[str, tuple[str, bool, bool]],
+    expected_volumes: dict[str, str],
+    expected_secrets: dict[str, str],
+    expected_network_options: dict[str, dict[str, Any]] | None = None,
+) -> None:
     networks = model.get("networks", {})
     volumes = model.get("volumes", {})
     secrets = model.get("secrets", {})
@@ -671,14 +681,23 @@ def validate_exact_top_level_resources(model: dict[str, Any], expected_networks:
     exact_keys(networks, set(expected_networks), "Compose networks")
     exact_keys(volumes, set(expected_volumes), "Compose volumes")
     exact_keys(secrets, set(expected_secrets), "Compose secrets")
+    network_options = expected_network_options or {}
+    require(set(network_options).issubset(expected_networks), "Compose network option names")
     for key, (name, internal, external) in expected_networks.items():
         network = networks[key]
         require(isinstance(network, dict), "Compose network")
-        require(set(network).issubset({"name", "internal", "external", "ipam"}), "Compose network fields")
+        expected_options = network_options.get(key, {})
+        require(
+            set(network).issubset({"name", "internal", "external", "ipam"} | set(expected_options)),
+            "Compose network fields",
+        )
         require(network.get("ipam", {}) == {}, "Compose network IPAM")
         require(network.get("name") == name, "Compose network name")
         require(network.get("internal", False) is internal, "Compose internal network")
         require(network.get("external", False) is external, "Compose external network")
+        for option, expected in expected_options.items():
+            default = False if option == "attachable" else None
+            require(network.get(option, default) == expected, f"Compose network {option}")
     for key, name in expected_volumes.items():
         volume = volumes[key]
         require(isinstance(volume, dict) and volume.get("name") == name, "Compose named volume")
@@ -1284,7 +1303,8 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         "operations-exporter-production": runtime["YOLPOL_OPERATIONS_METRICS_IMAGE"],
     }
     expected_networks = {
-        "prometheus": {"monitoring"},
+        "prometheus": {"monitoring", "prometheus_proxy"},
+        "prometheus-admin-proxy": {"prometheus_proxy", "prometheus_admin"},
         "alertmanager": {"monitoring", "alert_egress"},
         "node-exporter": {"monitoring"},
         "cadvisor": {"monitoring"},
@@ -1348,6 +1368,14 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "--storage.tsdb.retention.size=2GB",
             "--web.listen-address=0.0.0.0:9090",
         ],
+        "prometheus-admin-proxy": [
+            "caddy",
+            "reverse-proxy",
+            "--from",
+            ":9090",
+            "--to",
+            "http://prometheus:9090",
+        ],
         "alertmanager": [
             "--config.file=/etc/alertmanager/alertmanager.yml",
             "--storage.path=/alertmanager",
@@ -1399,6 +1427,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
     }
     environments = {
         "prometheus": {},
+        "prometheus-admin-proxy": {},
         "alertmanager": {},
         "node-exporter": {},
         "cadvisor": {},
@@ -1435,6 +1464,7 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
     }
     resources = {
         "prometheus": ("536870912", 0.50, 150),
+        "prometheus-admin-proxy": ("67108864", 0.10, 100),
         "alertmanager": ("134217728", 0.15, 100),
         "node-exporter": ("134217728", 0.15, 100),
         "cadvisor": ("268435456", 0.30, 150),
@@ -1446,7 +1476,17 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         "operations-exporter-production": ("134217728", 0.15, 100),
     }
     for name, service in services.items():
-        validate_generic_service_security(name, service, allowed_host_pid=name == "node-exporter")
+        validate_generic_service_security(
+            name,
+            service,
+            allowed_host_pid=name == "node-exporter",
+            allowed_capabilities={"NET_BIND_SERVICE"} if name == "prometheus-admin-proxy" else None,
+        )
+        require(service.get("depends_on") is None, "Monitoring service dependencies")
+        require(service.get("healthcheck") is None, "Monitoring service healthcheck")
+        require(service.get("stop_grace_period") is None, "Monitoring service stop grace period")
+        require(service.get("stdin_open") is None, "Monitoring service standard input")
+        require(service.get("tty") is None, "Monitoring service TTY")
         require(service.get("image") == images[name], "Monitoring service image")
         validate_command(service, commands[name])
         validate_profiles(service, set())
@@ -1458,19 +1498,27 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
         validate_service_hardening(
             service,
             read_only=True,
-            user="65534:65534" if name in {"node-exporter", "blackbox-exporter", "blackbox-exporter-production"} else None,
-            tmpfs={"/tmp:rw,noexec,nosuid,nodev,size=32m"} if name in {"prometheus", "alertmanager", "operations-exporter", "operations-exporter-production"} else set(),
+            user="65534:65534" if name in {"prometheus-admin-proxy", "node-exporter", "blackbox-exporter", "blackbox-exporter-production"} else None,
+            tmpfs=(
+                {"/tmp:rw,noexec,nosuid,nodev,size=16m"}
+                if name == "prometheus-admin-proxy"
+                else {"/tmp:rw,noexec,nosuid,nodev,size=32m"}
+                if name in {"prometheus", "alertmanager", "operations-exporter", "operations-exporter-production"}
+                else set()
+            ),
         )
         memory_bytes, cpus, pids = resources[name]
         validate_resources(service, memory_bytes=memory_bytes, cpus=cpus, pids=pids, restart="unless-stopped")
-        if name not in {"prometheus", "alertmanager"}:
+        if name not in {"prometheus-admin-proxy", "alertmanager"}:
             validate_ports(service, set())
-    validate_ports(services["prometheus"], {("127.0.0.1", 9090, "9090", "tcp")})
+    validate_ports(services["prometheus-admin-proxy"], {("127.0.0.1", 9090, "9090", "tcp")})
     validate_ports(services["alertmanager"], {("127.0.0.1", 9093, "9093", "tcp")})
     validate_exact_top_level_resources(
         model,
         {
             "monitoring": ("yolpol-monitoring_monitoring", True, False),
+            "prometheus_proxy": ("yolpol-monitoring_prometheus_proxy", True, False),
+            "prometheus_admin": ("yolpol-monitoring_prometheus_admin", False, False),
             "alert_egress": ("yolpol-monitoring_alert_egress", False, False),
             "staging_ingress": ("yolpol-staging-ingress", False, True),
             "staging_backend": ("yolpol-staging_backend", False, True),
@@ -1492,6 +1540,24 @@ def validate_monitoring_compose_model(model: dict[str, Any], runtime: dict[str, 
             "production_postgres_exporter_user": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-user",
             "production_postgres_exporter_password": "/opt/yolpol/monitoring/secrets/production-postgres-exporter-password",
             "production_operations_database_url": "/opt/yolpol/monitoring/secrets/production-operations-database-url",
+        },
+        {
+            "prometheus_proxy": {
+                "attachable": False,
+                "driver": "bridge",
+                "enable_ipv6": False,
+            },
+            "prometheus_admin": {
+                "attachable": False,
+                "driver": "bridge",
+                "driver_opts": {
+                    "com.docker.network.bridge.enable_icc": "false",
+                    "com.docker.network.bridge.enable_ip_masquerade": "false",
+                    "com.docker.network.bridge.gateway_mode_ipv4": "nat",
+                    "com.docker.network.bridge.host_binding_ipv4": "127.0.0.1",
+                },
+                "enable_ipv6": False,
+            }
         },
     )
 

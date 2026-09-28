@@ -6,7 +6,7 @@ YOLPOL is a multilingual, SEO-first B2B wholesale sourcing platform. Its current
 
 Commercial activity is inquiry-only: the public site does not publish internal Product prices or provide checkout, payment, or direct online purchasing. The application is designed for self-hosting and favors static Server Components, crawlable locale-prefixed routes, and explicit operational boundaries.
 
-The current repository includes a healthy, separately isolated Production runtime, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core, and an isolated Production Monitoring repository contract. This is not a claim that a real remote storage adapter, Production-changing migration path, or Production monitoring collectors are activated on the VPS. Monitoring role/secret provisioning, final public DNS/Cloudflare cutover, independent external monitoring, real provider activation, and full disposable disaster-recovery proof remain separate work.
+The current repository includes a healthy, separately isolated Production runtime, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core, and active isolated Staging/Production Monitoring on the VPS at `v0.2.3`. The repository also contains the not-yet-deployed fix for Docker Engine 29.8.0 failing to materialize Prometheus's loopback port while it was attached only to an internal bridge. Final public DNS/Cloudflare cutover, independent external monitoring, real remote-storage provider activation, and full disposable disaster-recovery proof remain separate work.
 
 ## Key features
 
