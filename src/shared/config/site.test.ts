@@ -81,7 +81,7 @@ describe("site configuration", () => {
 
   it("owns stable approved Privacy facts and a footer-only route", () => {
     expect(siteConfig.identity).toEqual({brandName: "YolPol", publicName: "YolPol"});
-    expect(privacyPolicy).toEqual({publicName: "YolPol", lastUpdated: "2026-08-31", inquiryRetentionMonths: 24, securityRetentionDays: 30});
+    expect(privacyPolicy).toEqual({publicName: "YolPol", lastUpdated: "2026-09-28", inquiryRetentionMonths: 24, securityRetentionDays: 30});
     expect(legalNavigation).toEqual([{id: "privacy", href: "/privacy"}]);
     expect(primaryNavigation.map(({href}) => href)).not.toContain("/privacy");
   });

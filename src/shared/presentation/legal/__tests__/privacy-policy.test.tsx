@@ -22,15 +22,16 @@ describe("localized Privacy Policy",()=>{
     expect(html).toContain(privacyPolicy.publicName); expect(html).toContain(siteConfig.contact.location.summary[locale as keyof typeof locales]);
     expect(html).toContain(`href="${siteConfig.contact.emailHref}"`); expect(html).toContain(`<time dateTime="${privacyPolicy.lastUpdated}"`);
   });
-  it("states storage, enforced retention policy, absent metadata, cookies, and analytics accurately",()=>{
+  it("states storage, enforced retention policy, metadata, cookies, and optional analytics accurately",()=>{
     const policy=JSON.stringify({privacy:en.PrivacyPage,active:en.ActiveInquiryPrivacy,inventory:en.InquiryPrivacyInventory});
     expect(policy).toContain("securely transmitted"); expect(policy).toContain("up to 24 months"); expect(policy).toContain("does not currently collect separate IP-address");
     expect(policy).toContain("internal operational notifications"); expect(policy).toContain("Telegram"); expect(policy).toContain("third-party communication infrastructure");
-    expect(policy).toContain("NEXT_LOCALE"); expect(policy).toContain("No website analytics platform is currently active");
+    expect(policy).toContain("NEXT_LOCALE"); expect(policy).toContain("Analytics storage is denied by default");
+    expect(policy).toContain("generate_lead"); expect(policy).toContain("does not intentionally send the Inquiry reference");
   });
   it("keeps equivalent active policy structures in every locale",()=>{
     const shape=(value:unknown):string=>typeof value!=="object"||value===null?typeof value:Object.keys(value).sort().map(key=>`${key}:${shape((value as Record<string,unknown>)[key])}`).join("|");
-    for(const key of ["PrivacyPage","InquiryConsent","ActiveInquiryPrivacy","InquiryPrivacyInventory"] as const) expect(new Set(Object.values(locales).map(messages=>shape(messages[key]))).size).toBe(1);
+    for(const key of ["PrivacyPage","InquiryConsent","ActiveInquiryPrivacy","InquiryPrivacyInventory","AnalyticsConsent"] as const) expect(new Set(Object.values(locales).map(messages=>shape(messages[key]))).size).toBe(1);
   });
   it.each(Object.entries(locales))("discloses only active contract fields for %s",(_locale,messages)=>{
     const disclosure=JSON.stringify(messages.InquiryPrivacyInventory);
@@ -42,7 +43,7 @@ describe("localized Privacy Policy",()=>{
     expect(publicCopy).not.toMatch(/submission is not active|submission is unavailable|does not persist|only locally|secure online submission is not active/iu);
     expect(publicCopy).not.toMatch(/does not (?:send|generate)[^.]*Telegram/iu);
     expect(publicCopy).not.toMatch(/GDPR compliant|CCPA compliant|Data Protection Officer|registered company|ISO certified|absolute security/iu);
-    const sources=["src/app/[locale]/privacy/page.tsx","src/shared/presentation/legal/privacy-policy.tsx","src/app/[locale]/inquiry/page.tsx"].map(path=>readFileSync(path,"utf8")).join("\n");
+    const sources=["src/app/[locale]/(public)/privacy/page.tsx","src/shared/presentation/legal/privacy-policy.tsx","src/app/[locale]/(public)/inquiry/page.tsx"].map(path=>readFileSync(path,"utf8")).join("\n");
     expect(sources).not.toMatch(/gtag\(|googletagmanager|analytics\.js|umami\.is|data-website-id/iu);
     expect(readFileSync("src/features/inquiries/presentation/components/inquiry-form.tsx","utf8")).not.toMatch(/i18n\/messages|\.json["']/u);
   });

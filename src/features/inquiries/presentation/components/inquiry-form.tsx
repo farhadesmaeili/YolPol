@@ -5,6 +5,7 @@ import {useEffect, useReducer, useRef, useState} from "react";
 import {contactMethods, targetCountries} from "@/features/inquiries/domain/types/inquiry-types";
 import type {CustomerInquirySummaryDto} from "@/features/inquiries/application/dto/customer-inquiry-summary-dto";
 import {loadCustomerInquirySummary} from "@/features/inquiries/presentation/clients/customer-inquiry-summary-client";
+import {trackSuccessfulInquiryLead} from "@/features/inquiries/presentation/analytics/inquiry-analytics";
 import {InquiryProductImage, InquiryProductPicker} from "@/features/inquiries/presentation/components/inquiry-product-picker";
 import {CustomerChat} from "@/features/inquiries/presentation/components/customer-chat/customer-chat";
 import {loadCustomerMessageHistory} from "@/features/inquiries/presentation/clients/customer-message-client";
@@ -142,6 +143,7 @@ export function InquiryForm({locale, products, labels, chatLabels, privacyHref}:
     try {
       const response = await requestInquirySubmissionWithTimeout(result.input, controller);
       if (!mounted.current) return;
+      trackSuccessfulInquiryLead(response, {locale, productCount: result.input.items.length});
       if (response.status === "created") {
         activeResumeController.current?.abort();
         activeResumeController.current = null;

@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {describe, expect, it} from "vitest";
 
-const routeSource = readFileSync("src/app/[locale]/wholesale-process/page.tsx", "utf8");
+const routeSource = readFileSync("src/app/[locale]/(public)/wholesale-process/page.tsx", "utf8");
 const presentationSource = readFileSync(
   "src/features/export-logistics/presentation/components/export-logistics-page.tsx",
   "utf8",

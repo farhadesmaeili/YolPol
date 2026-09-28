@@ -1,8 +1,8 @@
 # YolPol Roadmap
 
-## Privacy and future measurement
+## Privacy and measurement
 
-The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata, and sitemap integration are implemented. No analytics tracker is active. Google Search Console is planned separately for search-performance monitoring; self-hosted Umami is the preferred future traffic analytics option, while GA4 remains deferred. Privacy content and consent requirements must be reviewed before any tracker is activated, and analytics implementation belongs in a separate future task or branch.
+The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata, sitemap integration, and explicit optional-analytics preferences are implemented. GA4 is a Production-only runtime feature isolated to a public root document that is separate from Staff: analytics storage defaults to denied, the external Google script is not loaded before consent, Staging remains disabled, explicit App Router page views omit query strings, and successful new Inquiries emit only a minimal `generate_lead` event without Inquiry PII. Before Production activation, an operator must verify that the Google Web Stream's Enhanced Measurement option **Page changes based on browser history events** is disabled; the repository does not configure that external setting. Google Search Console remains a separate search-performance concern.
 
 ## Customer Inquiry presentation
 

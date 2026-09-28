@@ -7,11 +7,12 @@ import type {ReactNode} from "react";
 import {getLocaleDirection} from "@/i18n/locale";
 import {routing, type Locale} from "@/i18n/routing";
 import {createLocalizedMetadata} from "@/shared/seo/metadata";
+import {AnalyticsConsentProvider} from "@/shared/presentation/analytics/analytics-consent-provider";
 import {SiteFooter} from "@/shared/presentation/site-shell/site-footer";
 import {SiteHeader} from "@/shared/presentation/site-shell/site-header";
 import {PublicSiteFrame} from "@/shared/presentation/site-shell/public-site-frame";
 import {getLocaleFontClass} from "@/shared/presentation/typography/locale-font";
-import "../globals.css";
+import "../../globals.css";
 
 type LocaleLayoutProps = {
   children: ReactNode;
@@ -65,13 +66,15 @@ export default async function LocaleLayout({
     >
       <body className={`${getLocaleFontClass(locale as Locale)} min-h-screen bg-background text-foreground antialiased`}>
         <NextIntlClientProvider messages={messages}>
-          <PublicSiteFrame
-            header={<SiteHeader locale={locale as Locale} />}
-            footer={<SiteFooter locale={locale as Locale} />}
-            skipToContent={siteShell("skipToContent")}
-          >
-            {children}
-          </PublicSiteFrame>
+          <AnalyticsConsentProvider locale={locale as Locale}>
+            <PublicSiteFrame
+              header={<SiteHeader locale={locale as Locale} />}
+              footer={<SiteFooter locale={locale as Locale} />}
+              skipToContent={siteShell("skipToContent")}
+            >
+              {children}
+            </PublicSiteFrame>
+          </AnalyticsConsentProvider>
         </NextIntlClientProvider>
       </body>
     </html>

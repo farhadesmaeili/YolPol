@@ -57,6 +57,7 @@ describe("Production Compose deployment contract", () => {
     expect(compose).toContain("YOLPOL_DEPLOYMENT_ENVIRONMENT: production");
     expect(compose).toContain("YOLPOL_APP_ORIGIN: https://yolpol.com");
     expect(runtime).toContain("YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN=https://yolpol.com");
+    expect(runtime).toContain("YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID=G-76B2GKE2Q8");
   });
 
   it("requires manifest-derived immutable first-party images and has no build contract", () => {
@@ -127,6 +128,17 @@ describe("Production Compose deployment contract", () => {
     expect(compose).toContain("cap_drop:\n    - ALL");
     expect(compose).toContain("no-new-privileges:true");
     expect(compose).not.toMatch(/privileged:|cap_add:|devices:|network_mode:\s*host|\/var\/run\/docker\.sock/u);
+  });
+
+  it("exposes the runtime GA4 ID only to the Production web service", () => {
+    const analyticsKey = "YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID";
+    expect(serviceBlock("web")).toContain(`${analyticsKey}: "\${YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID:?`);
+    for (const service of [
+      "postgres", "inquiry-notifications", "conversation-translation", "conversation-ai-fallback",
+      "staff-provision", "staff-bootstrap-super-admin", "telegram-webhook-set", "telegram-webhook-info",
+      "indexnow-submit", "migrate", "backup-create", "backup-verify", "backup-deep-verify", "backup-retention", "restore",
+    ]) expect(serviceBlock(service)).not.toContain(analyticsKey);
+    expect(stagingCompose).not.toMatch(/GOOGLE_ANALYTICS|G-76B2GKE2Q8/u);
   });
 
   it("adds only explicit fixed Production wrapper actions", () => {
@@ -275,6 +287,8 @@ describe("Production Compose deployment contract", () => {
         (value) => { requireObject(requireObject(value.services).web).networks = {ingress: {aliases: ["staging-web"]}, backend: null}; },
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://attacker.example"}; },
         (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_APP_ORIGIN: "https://staging.yolpol.com"}; },
+        (value) => { requireObject(requireObject(value.services).web).environment = {...requireObject(requireObject(requireObject(value.services).web).environment), YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID: "G-ATTACKER00"}; },
+        (value) => { requireObject(requireObject(value.services)["inquiry-notifications"]).environment = {...requireObject(requireObject(requireObject(value.services)["inquiry-notifications"]).environment), YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID: "G-76B2GKE2Q8"}; },
         (value) => { requireObject(requireObject(value.services)["staff-provision"]).networks = {backend: null, provider_egress: null}; },
         (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).command = ["sh"]; },
         (value) => { requireObject(requireObject(value.services)["indexnow-submit"]).networks = {backend: null}; },

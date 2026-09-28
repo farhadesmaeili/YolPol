@@ -115,7 +115,7 @@ export const publicSocialLinks = Object.values(siteConfig.social).filter(
 
 export const privacyPolicy = {
   publicName: siteConfig.identity.publicName,
-  lastUpdated: "2026-08-31",
+  lastUpdated: "2026-09-28",
   inquiryRetentionMonths: 24,
   securityRetentionDays: 30,
 } as const;
