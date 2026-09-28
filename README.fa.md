@@ -411,4 +411,4 @@ develop
 - distributed abuse control، idempotency بین clientها برای inquiry و مواردی که صریحاً در roadmap deferred شده‌اند؛
 - persistence عمومی Product، پرداخت، CMS، کاتالوگ/dashboard مدیریتی و customer-acquisition automation.
 
-در حال حاضر analytics tracker فعالی وجود ندارد. برای scope و ترتیب اجرا به [roadmap](docs/roadmap/ROADMAP.md) مراجعه کنید و کار برنامه‌ریزی‌شده را پیاده‌سازی‌شده یا فعال تلقی نکنید.
+پشتیبانی حریم‌خصوصی‌محور GA4 به‌صورت یک قابلیت runtime فقط برای Production پیاده‌سازی شده است. این قابلیت تا پذیرش صریح تحلیل اختیاری توسط بازدیدکننده خاموش می‌ماند و در Staging، Development و Test اسکریپت Google بارگذاری یا رویداد تحلیلی ارسال نمی‌شود. برای مرز فعال و کارهای باقی‌مانده [roadmap](docs/roadmap/ROADMAP.md) را ببینید.

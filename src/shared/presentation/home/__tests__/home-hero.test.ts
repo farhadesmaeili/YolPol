@@ -6,7 +6,7 @@ import { getExportCapacityPolicy } from "@/composition/export-logistics/export-l
 import { formatHumanNumber } from "@/shared/presentation/bidi/bidi-isolate";
 import { supportedLocales } from "@/shared/types/locale";
 
-const routeSource = readFileSync("src/app/[locale]/page.tsx", "utf8");
+const routeSource = readFileSync("src/app/[locale]/(public)/page.tsx", "utf8");
 const componentSources = [
   "home-hero.tsx",
   "home-hero-background.tsx",

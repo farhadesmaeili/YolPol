@@ -8,6 +8,7 @@ import {describe, expect, it} from "vitest";
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const bootstrapPath = resolve(repositoryRoot, "deploy/bootstrap/yolpol-bootstrap.py");
 const bootstrap = readFileSync(bootstrapPath, "utf8");
+const deploymentPolicy = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-policy.py"), "utf8");
 const sudoers = readFileSync(resolve(repositoryRoot, "deploy/operations/sudoers.yolpol-deploy"), "utf8");
 const ci = readFileSync(resolve(repositoryRoot, ".github/workflows/ci.yml"), "utf8");
 const dockerComposeAvailable = spawnSync("docker", ["compose", "version"], {encoding: "utf8", timeout: 10_000}).status === 0;
@@ -96,6 +97,8 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).toContain("existing secret differs; use the explicit rotation command");
     expect(bootstrap).toContain('set(payload) != {"schemaVersion", "environment", "secrets"}');
     expect(bootstrap).not.toMatch(/print\([^\n]*(?:secret|payload|content|value)/iu);
+    expect(bootstrap).toContain("policy.production_expected_keys()");
+    expect(deploymentPolicy).toContain('"YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID": "G-76B2GKE2Q8"');
     for (const secret of [
       "production-postgres-exporter-uri",
       "production-postgres-exporter-user",
