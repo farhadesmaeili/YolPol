@@ -288,13 +288,150 @@ describe("Production deployment hardening", () => {
       const monitoringPolicy = runResolvedPolicy("monitoring", monitoringModel);
       expect(monitoringPolicy.status, monitoringPolicy.stderr).toBe(0);
 
-      const publicMonitoring = structuredClone(requireObject(monitoringModel));
-      const monitoringServices = requireObject(publicMonitoring.services);
-      const prometheus = requireObject(monitoringServices.prometheus);
-      const ports = prometheus.ports;
-      if (!Array.isArray(ports) || ports.length !== 1) throw new Error("Expected one Prometheus port.");
-      requireObject(ports[0]).host_ip = "0.0.0.0";
-      expect(runResolvedPolicy("monitoring", publicMonitoring).status).toBe(1);
+      const rejectMonitoringMutation = (
+        mutate: (model: Record<string, unknown>, services: Record<string, unknown>) => void,
+      ): void => {
+        const attacked = structuredClone(requireObject(monitoringModel));
+        const services = requireObject(attacked.services);
+        mutate(attacked, services);
+        expect(runResolvedPolicy("monitoring", attacked).status).toBe(1);
+      };
+
+      const mutateProxyPort = (mutate: (ports: unknown[]) => void): void => {
+        rejectMonitoringMutation((_model, services) => {
+          const proxy = requireObject(services["prometheus-admin-proxy"]);
+          const ports = proxy.ports;
+          if (!Array.isArray(ports) || ports.length !== 1) throw new Error("Expected one Prometheus administration proxy port.");
+          mutate(ports);
+        });
+      };
+
+      mutateProxyPort((ports) => { requireObject(ports[0]).host_ip = "0.0.0.0"; });
+      mutateProxyPort((ports) => { requireObject(ports[0]).published = "19090"; });
+      mutateProxyPort((ports) => { ports.push({...requireObject(ports[0]), published: "19090"}); });
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services["prometheus-admin-proxy"]).ports = [];
+      });
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services.prometheus).ports = [{
+          mode: "ingress", host_ip: "127.0.0.1", target: 9090, published: "9090", protocol: "tcp",
+        }];
+      });
+
+      for (const network of [
+        "prometheus_admin", "alert_egress", "staging_ingress", "staging_backend", "production_ingress", "production_backend", "attacker",
+      ]) {
+        rejectMonitoringMutation((_model, services) => {
+          requireObject(services.prometheus).networks = {
+            monitoring: null,
+            prometheus_proxy: null,
+            [network]: null,
+          };
+        });
+      }
+
+      for (const network of [
+        "monitoring", "alert_egress", "staging_ingress", "staging_backend", "production_ingress", "production_backend", "attacker",
+      ]) {
+        rejectMonitoringMutation((_model, services) => {
+          requireObject(services["prometheus-admin-proxy"]).networks = {
+            prometheus_proxy: null,
+            prometheus_admin: null,
+            [network]: null,
+          };
+        });
+      }
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services["prometheus-admin-proxy"]).networks = {prometheus_proxy: null};
+      });
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services["prometheus-admin-proxy"]).networks = {prometheus_admin: null};
+      });
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services.prometheus).networks = {monitoring: null};
+      });
+      rejectMonitoringMutation((_model, services) => {
+        requireObject(services.prometheus).networks = {prometheus_proxy: null};
+      });
+      for (const service of [
+        "alertmanager", "node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production",
+        "blackbox-exporter", "blackbox-exporter-production", "operations-exporter", "operations-exporter-production",
+      ]) {
+        rejectMonitoringMutation((_model, services) => {
+          const monitoredService = requireObject(services[service]);
+          monitoredService.networks = {...requireObject(monitoredService.networks), prometheus_proxy: null};
+        });
+      }
+
+      const proxyAttacks: readonly ((proxy: Record<string, unknown>) => void)[] = [
+        (proxy) => { proxy.privileged = true; },
+        (proxy) => { proxy.network_mode = "host"; },
+        (proxy) => { proxy.volumes = [{type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock", read_only: true}]; },
+        (proxy) => { proxy.volumes = [{type: "bind", source: "/tmp", target: "/host", read_only: true}]; },
+        (proxy) => { proxy.cap_add = ["NET_ADMIN"]; },
+        (proxy) => { proxy.cap_add = ["NET_BIND_SERVICE", "NET_ADMIN"]; },
+        (proxy) => { proxy.cap_add = []; },
+        (proxy) => { proxy.read_only = false; },
+        (proxy) => { proxy.security_opt = []; },
+        (proxy) => { proxy.cap_drop = []; },
+        (proxy) => { proxy.secrets = [{source: "alert_telegram_bot_token", target: "/run/secrets/token"}]; },
+        (proxy) => { proxy.environment = {EVIL: "true"}; },
+        (proxy) => { proxy.image = "caddy:latest"; },
+        (proxy) => { proxy.depends_on = {prometheus: {condition: "service_started"}}; },
+      ];
+      for (const attack of proxyAttacks) {
+        rejectMonitoringMutation((_model, services) => { attack(requireObject(services["prometheus-admin-proxy"])); });
+      }
+
+      const prometheusHardeningAttacks: readonly ((prometheus: Record<string, unknown>) => void)[] = [
+        (prometheus) => { prometheus.read_only = false; },
+        (prometheus) => { prometheus.cap_drop = []; },
+        (prometheus) => { prometheus.security_opt = []; },
+        (prometheus) => { prometheus.tmpfs = []; },
+        (prometheus) => { prometheus.mem_limit = "1073741824"; },
+        (prometheus) => { prometheus.cpus = 1; },
+        (prometheus) => { prometheus.pids_limit = 300; },
+        (prometheus) => { prometheus.restart = "always"; },
+        (prometheus) => { prometheus.volumes = []; },
+      ];
+      for (const attack of prometheusHardeningAttacks) {
+        rejectMonitoringMutation((_model, services) => { attack(requireObject(services.prometheus)); });
+      }
+
+      const administrativeNetworkAttacks: readonly ((network: Record<string, unknown>) => void)[] = [
+        (network) => { network.attachable = true; },
+        (network) => { network.enable_ipv6 = true; },
+        (network) => { network.driver = "host"; },
+        (network) => { requireObject(network.driver_opts)["com.docker.network.bridge.enable_icc"] = "true"; },
+        (network) => { requireObject(network.driver_opts)["com.docker.network.bridge.enable_ip_masquerade"] = "true"; },
+        (network) => { requireObject(network.driver_opts)["com.docker.network.bridge.gateway_mode_ipv4"] = "routed"; },
+        (network) => { requireObject(network.driver_opts)["com.docker.network.bridge.host_binding_ipv4"] = "0.0.0.0"; },
+      ];
+      for (const attack of administrativeNetworkAttacks) {
+        rejectMonitoringMutation((model) => {
+          attack(requireObject(requireObject(model.networks).prometheus_admin));
+        });
+      }
+      const proxyNetworkAttacks: readonly ((network: Record<string, unknown>) => void)[] = [
+        (network) => { network.internal = false; },
+        (network) => { network.attachable = true; },
+        (network) => { network.enable_ipv6 = true; },
+        (network) => { network.driver = "host"; },
+      ];
+      for (const attack of proxyNetworkAttacks) {
+        rejectMonitoringMutation((model) => {
+          attack(requireObject(requireObject(model.networks).prometheus_proxy));
+        });
+      }
+      rejectMonitoringMutation((model) => {
+        requireObject(model.networks).attacker = {name: "attacker", internal: false, external: false};
+      });
+      rejectMonitoringMutation((model) => {
+        delete requireObject(model.networks).prometheus_admin;
+      });
+      rejectMonitoringMutation((model) => {
+        delete requireObject(model.networks).prometheus_proxy;
+      });
 
       const writableSocket = structuredClone(requireObject(monitoringModel));
       const cadvisor = requireObject(requireObject(writableSocket.services).cadvisor);

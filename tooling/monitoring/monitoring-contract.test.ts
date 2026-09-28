@@ -90,10 +90,10 @@ function isInhibited(configuration: string, source: AlertLabels, target: AlertLa
 }
 
 describe("Monitoring and alerting deployment contract", () => {
-  it("defines one isolated ten-service monitoring project with only environment-specific collectors duplicated", () => {
+  it("defines one isolated eleven-service monitoring project with a dedicated Prometheus administration proxy", () => {
     expect(compose).toContain("name: yolpol-monitoring");
     const services = [
-      "prometheus", "alertmanager", "node-exporter", "cadvisor",
+      "prometheus", "prometheus-admin-proxy", "alertmanager", "node-exporter", "cadvisor",
       "postgres-exporter", "blackbox-exporter", "operations-exporter",
       "postgres-exporter-production", "blackbox-exporter-production", "operations-exporter-production",
     ];
@@ -103,11 +103,11 @@ describe("Monitoring and alerting deployment contract", () => {
       expect(serviceBlock(service)).toContain("cpus:");
       expect(serviceBlock(service)).toContain("<<: *service-security");
     }
-    for (const singleton of ["prometheus", "alertmanager", "node-exporter", "cadvisor"]) {
+    for (const singleton of ["prometheus", "prometheus-admin-proxy", "alertmanager", "node-exporter", "cadvisor"]) {
       expect(compose.match(new RegExp(`^  ${singleton}:$`, "gmu"))).toHaveLength(1);
     }
     expect(compose).toContain("logging: *json-logging");
-    for (const service of ["prometheus", "alertmanager", "node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production", "blackbox-exporter", "blackbox-exporter-production"]) {
+    for (const service of ["prometheus", "prometheus-admin-proxy", "alertmanager", "node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production", "blackbox-exporter", "blackbox-exporter-production"]) {
       expect(serviceBlock(service)).toMatch(/image: .+@sha256:[0-9a-f]{64}/u);
     }
     expect(compose).not.toMatch(/image:.*:latest/iu);
@@ -117,8 +117,23 @@ describe("Monitoring and alerting deployment contract", () => {
     expect(compose).not.toMatch(/^\s+build:/mu);
   });
 
-  it("publishes only loopback administration UIs and no exporter port", () => {
-    expect(serviceBlock("prometheus")).toContain("YOLPOL_MONITORING_BIND_ADDRESS:-127.0.0.1");
+  it("publishes Prometheus only through the loopback administration proxy", () => {
+    const prometheusService = serviceBlock("prometheus");
+    const proxyService = serviceBlock("prometheus-admin-proxy");
+    expect(prometheusService).not.toContain("ports:");
+    expect(prometheusService).not.toContain("prometheus_admin");
+    expect(proxyService).toContain("YOLPOL_MONITORING_BIND_ADDRESS:-127.0.0.1");
+    expect(proxyService).toContain("YOLPOL_PROMETHEUS_PORT:-9090");
+    expect(proxyService).toMatch(/command:\n      - caddy\n      - reverse-proxy/u);
+    expect(proxyService).toContain("http://prometheus:9090");
+    expect(proxyService).toContain('user: "65534:65534"');
+    expect(proxyService).toContain("<<: *service-security");
+    expect(proxyService).toContain("cap_add:\n      - NET_BIND_SERVICE");
+    expect(proxyService).toContain("/tmp:rw,noexec,nosuid,nodev,size=16m");
+    expect(proxyService).not.toContain("volumes:");
+    expect(proxyService).not.toContain("secrets:");
+    expect(proxyService).not.toContain("environment:");
+    expect(proxyService).not.toContain("docker.sock");
     expect(serviceBlock("alertmanager")).toContain("YOLPOL_MONITORING_BIND_ADDRESS:-127.0.0.1");
     for (const exporter of ["node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production", "blackbox-exporter", "blackbox-exporter-production", "operations-exporter", "operations-exporter-production"]) {
       expect(serviceBlock(exporter)).not.toContain("ports:");
@@ -127,6 +142,12 @@ describe("Monitoring and alerting deployment contract", () => {
 
   it("keeps scrape traffic internal and grants only required cross-project access", () => {
     expect(compose).toMatch(/monitoring:\n    internal: true/u);
+    expect(compose).toMatch(/prometheus_proxy:\n    driver: bridge\n    internal: true\n    attachable: false\n    enable_ipv6: false/u);
+    expect(compose).toMatch(/prometheus_admin:\n    driver: bridge\n    internal: false\n    attachable: false\n    enable_ipv6: false/u);
+    expect(compose).toContain('com.docker.network.bridge.enable_icc: "false"');
+    expect(compose).toContain('com.docker.network.bridge.enable_ip_masquerade: "false"');
+    expect(compose).toContain("com.docker.network.bridge.gateway_mode_ipv4: nat");
+    expect(compose).toContain("com.docker.network.bridge.host_binding_ipv4: 127.0.0.1");
     expect(compose).toContain("YOLPOL_MONITORING_STAGING_INGRESS_NETWORK:-yolpol-staging-ingress");
     expect(compose).toContain("YOLPOL_MONITORING_STAGING_BACKEND_NETWORK:-yolpol-staging_backend");
     expect(compose).toContain("YOLPOL_MONITORING_PRODUCTION_INGRESS_NETWORK:-yolpol-production-ingress");
@@ -144,6 +165,18 @@ describe("Monitoring and alerting deployment contract", () => {
     expect(serviceBlock("operations-exporter-production")).toContain("- production_backend");
     expect(serviceBlock("operations-exporter-production")).not.toContain("staging_backend");
     expect(serviceBlock("alertmanager")).toContain("- alert_egress");
+    expect(serviceBlock("prometheus")).toMatch(/networks:\n      - monitoring\n      - prometheus_proxy/u);
+    expect(serviceBlock("prometheus")).not.toContain("prometheus_admin");
+    expect(serviceBlock("prometheus-admin-proxy")).toMatch(/networks:\n      - prometheus_proxy\n      - prometheus_admin/u);
+    for (const network of ["monitoring", "alert_egress", "staging_ingress", "staging_backend", "production_ingress", "production_backend"]) {
+      expect(serviceBlock("prometheus-admin-proxy")).not.toMatch(new RegExp(`^      - ${network}$`, "mu"));
+    }
+    for (const service of [
+      "alertmanager", "node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production",
+      "blackbox-exporter", "blackbox-exporter-production", "operations-exporter", "operations-exporter-production",
+    ]) {
+      expect(serviceBlock(service)).not.toContain("prometheus_proxy");
+    }
     for (const service of ["prometheus", "node-exporter", "cadvisor", "postgres-exporter", "postgres-exporter-production", "blackbox-exporter", "blackbox-exporter-production", "operations-exporter", "operations-exporter-production"]) {
       expect(serviceBlock(service)).not.toContain("alert_egress");
     }

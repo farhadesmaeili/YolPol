@@ -9,6 +9,8 @@ const stagingIngressNetwork = `${prefix}-staging-ingress`;
 const productionIngressNetwork = `${prefix}-production-ingress`;
 const stagingBackendNetwork = `${prefix}-staging-backend`;
 const productionBackendNetwork = `${prefix}-production-backend`;
+const prometheusProxyNetwork = `${project}_prometheus_proxy`;
+const prometheusAdminNetwork = `${project}_prometheus_admin`;
 const stagingPostgresContainer = `${prefix}-staging-postgres`;
 const productionPostgresContainer = `${prefix}-production-postgres`;
 const stagingWebContainer = `${prefix}-staging-web`;
@@ -76,7 +78,7 @@ async function waitFor(description, operation, timeoutMilliseconds = 120_000) {
   let lastError;
   while (Date.now() < deadline) {
     try {
-      const result = operation();
+      const result = await operation();
       if (result) return result;
     } catch (error) {
       lastError = error;
@@ -128,8 +130,14 @@ function startWeb(container, network, alias) {
 }
 
 function serviceNetworks(service) {
-  const containerId = compose(["ps", "--quiet", service], {capture: true}).trim();
+  const containerId = serviceContainerId(service);
   return Object.keys(JSON.parse(docker(["inspect", "--format", "{{json .NetworkSettings.Networks}}", containerId], {capture: true})));
+}
+
+function serviceContainerId(service) {
+  const containerId = compose(["ps", "--quiet", service], {capture: true}).trim();
+  if (!containerId) throw new Error(`${service} has no running container.`);
+  return containerId;
 }
 
 async function main() {
@@ -168,6 +176,90 @@ async function main() {
 
   compose(["up", "--detach", "--no-build"]);
 
+  const prometheusContainerId = serviceContainerId("prometheus");
+  const proxyContainerId = serviceContainerId("prometheus-admin-proxy");
+  const readiness = await waitFor("Prometheus loopback administration path", async () => {
+    const response = await fetch("http://127.0.0.1:19090/-/ready");
+    if (!response.ok) return false;
+    const body = await response.text();
+    return body.includes("Prometheus Server is Ready.") ? body : false;
+  });
+  const proxyUpstreamReadiness = docker([
+    "exec", proxyContainerId, "wget", "-q", "-T", "5", "-O", "-", "http://prometheus:9090/-/ready",
+  ], {capture: true}).trim();
+  if (!proxyUpstreamReadiness.includes("Prometheus Server is Ready.")) {
+    throw new Error("Prometheus administration proxy could not reach Prometheus on the dedicated proxy network.");
+  }
+
+  docker(["exec", proxyContainerId, "/bin/sh", "-ec", "command -v getent >/dev/null"], {capture: true});
+  const isolatedMonitoringEndpoints = [
+    ["alertmanager", "9093"],
+    ["node-exporter", "9100"],
+    ["postgres-exporter", "9187"],
+  ];
+  for (const [service, port] of isolatedMonitoringEndpoints) {
+    let unexpectedlyResolved = false;
+    try {
+      docker(["exec", proxyContainerId, "getent", "hosts", service], {capture: true});
+      unexpectedlyResolved = true;
+    } catch {}
+    if (unexpectedlyResolved) {
+      throw new Error(`Prometheus administration proxy unexpectedly resolved ${service}.`);
+    }
+
+    let unexpectedlyConnected = false;
+    try {
+      docker(["exec", proxyContainerId, "wget", "-q", "-T", "5", "-O", "/dev/null", `http://${service}:${port}/`], {capture: true});
+      unexpectedlyConnected = true;
+    } catch {}
+    if (unexpectedlyConnected) {
+      throw new Error(`Prometheus administration proxy unexpectedly connected to ${service}:${port}.`);
+    }
+  }
+
+  const proxyRuntimePorts = JSON.parse(docker([
+    "inspect", "--format", "{{json .NetworkSettings.Ports}}", proxyContainerId,
+  ], {capture: true}));
+  const proxyBindings = proxyRuntimePorts["9090/tcp"];
+  if (!Array.isArray(proxyBindings) || proxyBindings.length !== 1
+    || proxyBindings[0]?.HostIp !== "127.0.0.1" || proxyBindings[0]?.HostPort !== "19090") {
+    throw new Error("Docker did not create the exact Prometheus loopback administration mapping.");
+  }
+  const dockerPort = docker(["port", proxyContainerId, "9090/tcp"], {capture: true}).trim();
+  if (dockerPort !== "127.0.0.1:19090") {
+    throw new Error(`Unexpected Prometheus administration port mapping: ${dockerPort}`);
+  }
+
+  const prometheusPortBindings = JSON.parse(docker([
+    "inspect", "--format", "{{json .HostConfig.PortBindings}}", prometheusContainerId,
+  ], {capture: true}));
+  if (prometheusPortBindings && Object.keys(prometheusPortBindings).length !== 0) {
+    throw new Error("Prometheus itself unexpectedly owns a host port binding.");
+  }
+
+  const administrativeNetwork = JSON.parse(docker(["network", "inspect", prometheusAdminNetwork], {capture: true}))[0];
+  const expectedAdministrativeOptions = {
+    "com.docker.network.bridge.enable_icc": "false",
+    "com.docker.network.bridge.enable_ip_masquerade": "false",
+    "com.docker.network.bridge.gateway_mode_ipv4": "nat",
+    "com.docker.network.bridge.host_binding_ipv4": "127.0.0.1",
+  };
+  if (administrativeNetwork?.Driver !== "bridge" || administrativeNetwork?.Internal !== false
+    || administrativeNetwork?.Attachable !== false || administrativeNetwork?.EnableIPv6 !== false
+    || Object.entries(expectedAdministrativeOptions).some(([key, value]) => administrativeNetwork?.Options?.[key] !== value)) {
+    throw new Error("Prometheus administrative network runtime options do not match the fail-closed contract.");
+  }
+
+  docker(["exec", proxyContainerId, "/bin/sh", "-ec", "command -v wget >/dev/null"], {capture: true});
+  let unexpectedProxyEgress = false;
+  try {
+    docker(["exec", proxyContainerId, "wget", "-q", "-T", "5", "-O", "/dev/null", "http://1.1.1.1/"], {capture: true});
+    unexpectedProxyEgress = true;
+  } catch {}
+  if (unexpectedProxyEgress) {
+    throw new Error("Prometheus administration proxy unexpectedly reached an external IPv4 address.");
+  }
+
   const targets = await waitFor("Prometheus targets", () => {
     const response = JSON.parse(helperFetch("http://prometheus:9090/api/v1/targets"));
     const activeTargets = response.data.activeTargets;
@@ -203,6 +295,11 @@ async function main() {
 
   const monitoringNetwork = `${project}_monitoring`;
   const expectedNetworks = new Map([
+    ["prometheus", [monitoringNetwork, prometheusProxyNetwork]],
+    ["prometheus-admin-proxy", [prometheusProxyNetwork, prometheusAdminNetwork]],
+    ["alertmanager", [monitoringNetwork, `${project}_alert_egress`]],
+    ["node-exporter", [monitoringNetwork]],
+    ["cadvisor", [monitoringNetwork]],
     ["postgres-exporter", [monitoringNetwork, stagingBackendNetwork]],
     ["operations-exporter", [monitoringNetwork, stagingBackendNetwork]],
     ["blackbox-exporter", [monitoringNetwork, stagingIngressNetwork]],
@@ -210,8 +307,10 @@ async function main() {
     ["operations-exporter-production", [monitoringNetwork, productionBackendNetwork]],
     ["blackbox-exporter-production", [monitoringNetwork, productionIngressNetwork]],
   ]);
+  const actualNetworks = new Map();
   for (const [service, expected] of expectedNetworks) {
     const actual = serviceNetworks(service).sort();
+    actualNetworks.set(service, actual);
     if (JSON.stringify(actual) !== JSON.stringify(expected.sort())) throw new Error(`${service} crossed an environment network boundary.`);
   }
 
@@ -239,6 +338,19 @@ async function main() {
   process.stdout.write(`${JSON.stringify({
     event: "monitoring.disposable_validation_succeeded",
     targets: targets.map((target) => ({job: target.labels.job, health: target.health})),
+    targetCount: targets.length,
+    healthyTargetCount: targets.filter((target) => target.health === "up").length,
+    blackboxProbeCount: probe.data.result.length,
+    successfulBlackboxProbeCount: probe.data.result.filter((series) => series.value[1] === "1").length,
+    prometheusLoopbackReadiness: readiness.trim(),
+    proxyUpstreamReadiness,
+    prometheusPortMapping: dockerPort,
+    prometheusOwnsHostBinding: false,
+    prometheusNetworks: actualNetworks.get("prometheus"),
+    proxyNetworks: actualNetworks.get("prometheus-admin-proxy"),
+    proxySharedMonitoringEndpointsResolvable: false,
+    proxySharedMonitoringEndpointsReachable: false,
+    proxyExternalIpv4Reachable: false,
     telegramDeliveryAttempted: false,
     namedVolumesDeleted: false,
   })}\n`);

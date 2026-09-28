@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 و قرارداد repository-side ایزوله برای Production Monitoring است. این وضعیت به معنی فعال‌شدن adapter واقعی storage، migration تغییریافته Production یا collectorهای Production Monitoring روی VPS نیست؛ provision نقش و secretهای Monitoring، cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی provider واقعی و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 و Monitoring ایزوله و فعال Staging/Production روی VPS در نسخه `v0.2.3` است. این مخزن همچنین اصلاح هنوز deployنشده‌ای را برای Docker Engine 29.8.0 دارد که هنگام اتصال انحصاری Prometheus به bridge داخلی، port لوپ‌بک درخواستی آن را ایجاد نکرد. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی provider واقعی storage و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 

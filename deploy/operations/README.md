@@ -143,7 +143,9 @@ Backup creation additionally requires at least 5 GiB available in the fixed back
 
 ## Monitoring and local access
 
-Prometheus and Alertmanager bind only `127.0.0.1`. This prevents network exposure but does not authenticate them: any local host account able to connect to loopback can reach those UIs. Keep host accounts trusted and minimal. Remote access remains disabled while SSH TCP forwarding is disabled; do not publish or proxy these ports without a separately reviewed authenticated design.
+The dedicated Prometheus administration proxy binds only `127.0.0.1:9090` and forwards to Prometheus over the internal `prometheus_proxy` network; Prometheus itself publishes no host port. Prometheus is the only other member of that network, and the proxy is not attached to the shared monitoring scrape network. Alertmanager binds only `127.0.0.1:9093`. This prevents ordinary network exposure but does not authenticate the UIs: any local host account able to connect to loopback can reach them. Keep host accounts trusted and minimal. Remote access remains disabled while SSH TCP forwarding is disabled; do not publish or proxy these ports through a public ingress without a separately reviewed authenticated design.
+
+The proxy's dedicated non-internal `prometheus_admin` bridge exists only because Docker Engine 29.8.0 did not materialize a host mapping for a container attached exclusively to an internal bridge. It is IPv4-only and non-attachable, disables inter-container communication and IP masquerading, and defaults host bindings to `127.0.0.1`. These controls suppress the ordinary bridge NAT egress path but are not described as an absolute egress firewall on a host with explicit routes for container subnets. Prometheus remains off this bridge and off `alert_egress`; the proxy has no secrets, persistent storage, Docker socket, application network, provider egress, or shared scrape-network membership. The proxy drops all capabilities except `NET_BIND_SERVICE`: the pinned upstream Caddy binary carries that file capability and Linux refuses to execute it when it is absent from the bounding set, even though this service listens on high container port 9090. Policy rejects both removal and expansion of that exact exception, and no low host port is published.
 
 cAdvisor's read-only Docker socket bind is still Docker-API access and must be treated as root-equivalent. Consequently Monitoring activation is root-only. After `/opt/yolpol/bin/yolpol-deploy validate` succeeds, root may run exactly:
 
@@ -157,12 +159,14 @@ cAdvisor's read-only Docker socket bind is still Docker-API access and must be t
   --env-file /opt/yolpol/monitoring/runtime.env \
   -f /opt/yolpol/monitoring/compose.yaml \
   up -d --no-build --no-deps \
-  prometheus alertmanager node-exporter cadvisor \
+  prometheus prometheus-admin-proxy alertmanager node-exporter cadvisor \
   postgres-exporter blackbox-exporter operations-exporter \
   postgres-exporter-production blackbox-exporter-production operations-exporter-production
 ```
 
 Never use an implicit whole-project `up`, add another service without updating the policy, or delegate this root procedure to `yolpol-operator`.
+
+For the Prometheus localhost-publication migration, install the approved release contracts through the normal bootstrap/control-plane path and validate them before mutation. The service/network change requires a controlled recreation of `prometheus` plus creation or recreation of `prometheus-admin-proxy`; use the same fixed Compose executable, project directory, environment file, and Compose file shown above with `up -d --no-build --no-deps --force-recreate prometheus prometheus-admin-proxy`. This operation must not use `down -v`, remove `prometheus_data`, or recreate unrelated collectors. Then confirm Prometheus is only on `yolpol-monitoring_monitoring` and `yolpol-monitoring_prometheus_proxy`, the proxy is only on `yolpol-monitoring_prometheus_proxy` and `yolpol-monitoring_prometheus_admin`, no other service joins `yolpol-monitoring_prometheus_proxy`, `docker port` reports only `127.0.0.1:9090`, and `curl -fsS http://127.0.0.1:9090/-/ready` returns `Prometheus Server is Ready.` Recheck 12/12 targets, 4/4 probes, and deployment-agent health before closing the rollout.
 
 ## Root bootstrap automation
 
@@ -186,9 +190,9 @@ The sudoers `ALL` before `(root)` is the host selector. `NOPASSWD:NOSETENV` appl
 
 ## Production monitoring boundary
 
-The single Monitoring project now has a repository-validated Production extension. It reuses shared Prometheus, Alertmanager, Node Exporter, and cAdvisor while giving Production dedicated PostgreSQL, Operations, and Blackbox collectors on only the Production backend or ingress network required by each function. Production secrets and the read-only `/opt/yolpol/production/backups` mount are distinct from Staging. The current single Operations Metrics image remains authenticated by the Staging release manifest, but the deployment controller and restricted internal action update only the Staging instance. Production collector activation or recreation remains a reviewed root operation with an explicit compatibility check; Production release authority is unchanged.
+The single Monitoring project is active for both Staging and Production on live release `v0.2.3`. It reuses shared Prometheus, Alertmanager, Node Exporter, and cAdvisor while giving Production dedicated PostgreSQL, Operations, and Blackbox collectors on only the Production backend or ingress network required by each function. Production secrets and the read-only `/opt/yolpol/production/backups` mount are distinct from Staging. The current single Operations Metrics image remains authenticated by the Staging release manifest, but the deployment controller and restricted internal action update only the Staging instance. Production collector recreation remains a reviewed root operation with an explicit compatibility check; Production release authority is unchanged.
 
-This repository state is not live activation. Root must later provision the least-privilege Production monitoring login and four fixed secret files, install the runtime/managed contracts, validate the resolved policy, and explicitly activate the three new collectors plus updated Prometheus. The operator receives no generic Monitoring action, Docker socket access, or wider sudo. The default Production backup-monitoring flag remains false. A public `https://yolpol.com` probe and an independent off-host watchdog remain deferred.
+The live ten-service monitoring topology has 12/12 targets up and 4/4 successful Blackbox probes, but Docker Engine 29.8.0 did not create the requested Prometheus localhost listener while Prometheus was attached only to the internal bridge. This repository change moves port ownership to the hardened `prometheus-admin-proxy`; it is not live until an approved release installs the updated contracts and root performs the controlled recreation. The operator receives no generic Monitoring action, Docker socket access, or wider sudo. The default Production backup-monitoring flag remains false. A public `https://yolpol.com` probe and an independent off-host watchdog remain separate.
 
 ## Shared-host ingress contract
 
