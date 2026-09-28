@@ -10,7 +10,7 @@ const frameSource = readFileSync(
   "src/shared/presentation/site-shell/public-site-frame.tsx",
   "utf8",
 );
-const layoutSource = readFileSync("src/app/[locale]/layout.tsx", "utf8");
+const layoutSource = readFileSync("src/app/[locale]/(public)/layout.tsx", "utf8");
 
 describe("public skip-to-content navigation", () => {
   it("is focus-revealed, keyboard accessible, and targets the public main landmark", () => {

@@ -5,6 +5,7 @@ import {
   primaryNavigation,
   publicProductCategories,
 } from "@/shared/config/site";
+import { AnalyticsSettingsButton } from "@/shared/presentation/analytics/analytics-consent-provider";
 import { FooterBackground } from "@/shared/presentation/site-shell/footer/footer-background";
 import { FooterBrand } from "@/shared/presentation/site-shell/footer/footer-brand";
 import { FooterCallToAction } from "@/shared/presentation/site-shell/footer/footer-call-to-action";
@@ -41,6 +42,7 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
               href,
               label: t(`footer.${id}`),
             }))}
+            settingsControl={<AnalyticsSettingsButton />}
           />
           <FooterLinkColumn
             id="footer-navigation"

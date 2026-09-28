@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type {ReactNode} from "react";
 
 import { Link } from "@/i18n/navigation";
 import { siteConfig } from "@/shared/config/site";
@@ -6,7 +7,7 @@ import { siteConfig } from "@/shared/config/site";
 const footerLinkClass =
   "group relative inline-flex min-h-11 items-center gap-3 text-sm text-stone-600 outline-none transition-colors duration-300 hover:text-stone-950 focus-visible:ring-2 focus-visible:ring-emerald-800 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb] motion-reduce:transition-none";
 
-export function FooterBrand({ homeLabel, legalItems }: { homeLabel: string; legalItems: readonly Readonly<{ href: string; label: string }>[] }) {
+export function FooterBrand({ homeLabel, legalItems, settingsControl }: { homeLabel: string; legalItems: readonly Readonly<{ href: string; label: string }>[]; settingsControl?: ReactNode }) {
   return (
     <section className="min-w-0 max-w-md text-start">
       <Link href="/" aria-label={homeLabel} className="group inline-flex max-w-full items-center gap-4 outline-none focus-visible:ring-2 focus-visible:ring-emerald-800 focus-visible:ring-offset-4 focus-visible:ring-offset-[#f3f1eb]">
@@ -37,6 +38,7 @@ export function FooterBrand({ homeLabel, legalItems }: { homeLabel: string; lega
             </Link>
           </li>
         ))}
+        {settingsControl ? <li>{settingsControl}</li> : null}
       </ul>
     </section>
   );

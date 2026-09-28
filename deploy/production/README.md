@@ -6,6 +6,10 @@ This directory is the repository-managed foundation for the canonical `https://y
 
 Production uses Compose project `yolpol-production`, `YOLPOL_DEPLOYMENT_ENVIRONMENT=production`, and `YOLPOL_APP_ORIGIN=https://yolpol.com`. The project name and origin are source-controlled and policy-validated; callers cannot select an environment, project, Compose file, runtime file, service, image, or host path.
 
+`YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID` is a required, non-secret Production runtime value. Compose maps it to `YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID` only in the `web` service; it is absent from Staging and every worker or operation container. The application still keeps Google Analytics disabled until a visitor explicitly grants analytics consent.
+
+Before activating Production GA4, an operator must verify the Google Analytics Web Stream setting **Enhanced Measurement -> Page views -> Show advanced settings -> Page changes based on browser history events** is disabled. YOLPOL emits its own allow-listed App Router `page_view` events; `send_page_view: false` does not disable that separate Google-side history setting. The repository does not configure or verify the Web Stream UI, and other Enhanced Measurement options do not need to be disabled for this prerequisite.
+
 Production owns distinct backend/provider networks and database volumes, `/opt/yolpol/production/runtime.env`, `/opt/yolpol/production/secrets`, `/opt/yolpol/production/backups`, database credentials, age recipient/recovery identity, Telegram bot/webhook secret, provider credentials, and `/opt/yolpol/releases/production/active` release authority. Its web service alone also joins fixed external network `yolpol-production-ingress` as `production-web`; that network carries no database or worker. None of Production's private state may be copied from, mounted by, or shared with Staging. Production may retain an older approved manifest while Staging advances; promoting Staging never rewrites Production authority or runtime refs.
 
 ## Filesystem contract

@@ -6,7 +6,7 @@ import { publicProductCategories } from "@/shared/config/site";
 import { formatHumanNumber } from "@/shared/presentation/bidi/bidi-isolate";
 import { supportedLocales } from "@/shared/types/locale";
 
-const routeSource = readFileSync("src/app/[locale]/products/page.tsx", "utf8");
+const routeSource = readFileSync("src/app/[locale]/(public)/products/page.tsx", "utf8");
 const componentFiles = [
   "product-catalog-page.tsx",
   "product-category-index.tsx",

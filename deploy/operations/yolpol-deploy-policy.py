@@ -106,6 +106,7 @@ PRODUCTION_FIXED_VALUES = {
     "YOLPOL_PRODUCTION_LOG_MAX_FILES": "3",
     "YOLPOL_PRODUCTION_WORKER_STOP_GRACE_PERIOD": "90s",
     "YOLPOL_PRODUCTION_TELEGRAM_WEBHOOK_PUBLIC_ORIGIN": "https://yolpol.com",
+    "YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID": "G-76B2GKE2Q8",
 }
 
 INGRESS_FIXED_VALUES = {
@@ -997,6 +998,7 @@ def _production_model_as_staging(model: dict[str, Any]) -> dict[str, Any]:
     web_environment = web.get("environment")
     require(isinstance(web_environment, dict), "Production web environment")
     web_environment.pop("INDEXNOW_KEY_FILE", None)
+    web_environment.pop("YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID", None)
     web_secrets = web.get("secrets")
     require(isinstance(web_secrets, list), "Production web secrets")
     web["secrets"] = [secret for secret in web_secrets if not (isinstance(secret, dict) and secret.get("source") == "indexnow_key")]
@@ -1173,6 +1175,12 @@ def validate_production_compose_model(
     }, "Production web secrets")
     web_environment = services["web"].get("environment")
     require(isinstance(web_environment, dict) and web_environment.get("INDEXNOW_KEY_FILE") == "/run/secrets/indexnow_key", "Production web IndexNow key path")
+    require(
+        isinstance(web_environment, dict)
+        and web_environment.get("YOLPOL_GOOGLE_ANALYTICS_MEASUREMENT_ID")
+        == runtime["YOLPOL_PRODUCTION_GOOGLE_ANALYTICS_MEASUREMENT_ID"],
+        "Production web Google Analytics measurement ID",
+    )
     require(
         normalized_service_networks(services["web"])
         == {"ingress": {"production-web"}, "backend": set()},

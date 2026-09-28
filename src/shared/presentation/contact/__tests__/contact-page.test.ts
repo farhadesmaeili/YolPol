@@ -8,7 +8,7 @@ const componentSource = readFileSync(
   "src/shared/presentation/contact/components/contact-page.tsx",
   "utf8",
 );
-const routeSource = readFileSync("src/app/[locale]/contact/page.tsx", "utf8");
+const routeSource = readFileSync("src/app/[locale]/(public)/contact/page.tsx", "utf8");
 
 describe("localized public Contact presentation", () => {
   it("renders both centralized phones without exposing the retained WhatsApp destination", () => {

@@ -411,4 +411,4 @@ The current verified remaining work includes:
 - distributed abuse controls, cross-client inquiry idempotency, and other items explicitly deferred by the roadmap;
 - public Product persistence, payments, a CMS, an administrative catalog/dashboard, and customer-acquisition automation.
 
-No analytics tracker is currently active. Consult the [roadmap](docs/roadmap/ROADMAP.md) for scope and sequencing; do not treat planned work as implemented or activated.
+Privacy-conscious GA4 support is implemented as a Production-only runtime feature. It remains off until the visitor explicitly accepts optional analytics, and Staging, Development, and Test never load the Google script or transmit analytics events. See the [roadmap](docs/roadmap/ROADMAP.md) for the active boundary and remaining work.
