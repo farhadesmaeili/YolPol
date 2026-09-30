@@ -2,17 +2,20 @@
 """Provider-neutral Phase C2 off-server durability contract.
 
 The installed controller imports this root-owned module directly.  No caller can
-select an adapter, destination, executable, URL, or evidence path.  A concrete
-remote adapter remains a separately reviewed activation.
+select an adapter, destination, executable, URL, or evidence path.  The reviewed
+Windows SFTP transport remains fail-closed after destination readback until a
+positive per-backup durable-write primitive is implemented.
 """
 
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
 import stat
+import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
@@ -21,13 +24,21 @@ from typing import Any, NoReturn, Protocol
 
 
 CONFIG_PATH = Path("/etc/yolpol/offserver-durability.json")
+SFTP_SECRET_DIRECTORY = Path("/etc/yolpol/offserver-durability")
+SFTP_KEY_PATH = SFTP_SECRET_DIRECTORY / "id_ed25519"
+SFTP_KNOWN_HOSTS_PATH = SFTP_SECRET_DIRECTORY / "known_hosts"
+SFTP_EXECUTABLE = Path("/usr/bin/sftp")
+VERIFICATION_TEMP_DIRECTORY = Path("/opt/yolpol/runtime/tmp")
 PRODUCTION_BACKUP_DIRECTORY = Path("/opt/yolpol/production/backups")
 EVIDENCE_DIRECTORY = Path("/opt/yolpol/runtime/offserver-durability-evidence")
 MAX_CONFIG_BYTES = 4_096
+MAX_PRIVATE_KEY_BYTES = 16_384
+MAX_KNOWN_HOSTS_BYTES = 65_536
 MAX_MANIFEST_BYTES = 65_536
 MAX_EVIDENCE_BYTES = 8_192
 MAX_EVIDENCE_AGE_SECONDS = 900
 MAX_CLOCK_SKEW_SECONDS = 30
+SFTP_TIMEOUT_SECONDS = 120
 
 BACKUP_ID = re.compile(r"^yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?$")
 DEPLOYMENT_ID = re.compile(r"^[1-9][0-9]{0,19}$")
@@ -35,6 +46,8 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 MIGRATION_FINGERPRINT = re.compile(r"^[A-Za-z0-9_.-]{1,128}:[0-9a-f]{64}$")
 REMOTE_IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
 CONFIRMATION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+SFTP_REMOTE_DIRECTORY = re.compile(r"^/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+){0,7}$")
+TAILSCALE_IPV4_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 
 EVIDENCE_KEYS = frozenset({
     "schemaVersion",
@@ -231,6 +244,14 @@ class RemoteDurabilityAdapter(Protocol):
 
     def copy_and_verify(self, pair: BackupPair, now_unix: int) -> RemoteDurabilityConfirmation:
         ...
+
+
+@dataclass(frozen=True)
+class WindowsSftpConfiguration:
+    host: str
+    port: int
+    username: str
+    remote_directory: str
 
 
 def inspect_backup_pair(source_directory: Path, backup_id: str) -> BackupPair:
@@ -508,17 +529,316 @@ def perform_durability(
     return validate_evidence_bytes(persisted, context, pair, now)
 
 
+def _configuration_unavailable(message: str, error: BaseException | None = None) -> NoReturn:
+    if error is None:
+        raise DurabilityUnavailable(message)
+    raise DurabilityUnavailable(message) from error
+
+
+def _validate_windows_sftp_configuration(value: dict[str, Any]) -> WindowsSftpConfiguration:
+    try:
+        _require_exact_keys(
+            value,
+            frozenset({
+                "schemaVersion", "state", "adapter", "host", "port", "username", "remoteDirectory",
+            }),
+            "durability configuration",
+        )
+        if value.get("adapter") != "windows-sftp-v1":
+            fail("durability adapter rejected")
+        host = value.get("host")
+        if not isinstance(host, str) or len(host) > 45:
+            fail("SFTP host rejected")
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError as error:
+            raise DurabilityError("SFTP host rejected") from error
+        if address.version != 4 or address not in TAILSCALE_IPV4_NETWORK or str(address) != host:
+            fail("SFTP host rejected")
+        port = _require_integer(value.get("port"), "SFTP port", minimum=1)
+        if port > 65_535:
+            fail("SFTP port rejected")
+        username = value.get("username")
+        if username != "yolpol-backup":
+            fail("SFTP username rejected")
+        remote_directory = value.get("remoteDirectory")
+        if (
+            not isinstance(remote_directory, str)
+            or len(remote_directory) > 128
+            or SFTP_REMOTE_DIRECTORY.fullmatch(remote_directory) is None
+        ):
+            fail("SFTP remote directory rejected")
+        return WindowsSftpConfiguration(
+            host=host,
+            port=port,
+            username=username,
+            remote_directory=remote_directory,
+        )
+    except DurabilityError as error:
+        _configuration_unavailable("remote durability configuration rejected", error)
+
+
+def _secure_root_file(path: Path, mode: int, maximum: int, label: str) -> os.stat_result:
+    try:
+        metadata = path.lstat()
+    except OSError as error:
+        _configuration_unavailable(f"{label} rejected", error)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_gid != 0
+        or stat.S_IMODE(metadata.st_mode) != mode
+        or metadata.st_size <= 0
+        or metadata.st_size > maximum
+    ):
+        _configuration_unavailable(f"{label} rejected")
+    return metadata
+
+
+def _secure_root_directory(path: Path, mode: int, label: str) -> None:
+    try:
+        metadata = path.lstat()
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        _configuration_unavailable(f"{label} rejected", error)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_gid != 0
+        or stat.S_IMODE(metadata.st_mode) != mode
+        or resolved != path
+    ):
+        _configuration_unavailable(f"{label} rejected")
+
+
+def _validate_sftp_executable() -> None:
+    try:
+        metadata = SFTP_EXECUTABLE.lstat()
+    except OSError as error:
+        _configuration_unavailable("SFTP executable rejected", error)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_gid != 0
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or not os.access(SFTP_EXECUTABLE, os.X_OK)
+    ):
+        _configuration_unavailable("SFTP executable rejected")
+
+
+def _validate_activation_files() -> None:
+    _secure_root_directory(SFTP_SECRET_DIRECTORY, 0o700, "SFTP trust directory")
+    _secure_root_file(SFTP_KEY_PATH, 0o600, MAX_PRIVATE_KEY_BYTES, "SFTP private key")
+    _secure_root_file(SFTP_KNOWN_HOSTS_PATH, 0o600, MAX_KNOWN_HOSTS_BYTES, "SFTP known hosts")
+    _secure_root_directory(VERIFICATION_TEMP_DIRECTORY, 0o700, "verification temporary directory")
+    _validate_sftp_executable()
+
+
+def _sftp_arguments(configuration: WindowsSftpConfiguration) -> list[str]:
+    return [
+        str(SFTP_EXECUTABLE),
+        "-F", "none",
+        "-b", "-",
+        "-oBatchMode=yes",
+        "-oStrictHostKeyChecking=yes",
+        "-oUpdateHostKeys=no",
+        f"-oUserKnownHostsFile={SFTP_KNOWN_HOSTS_PATH}",
+        f"-oGlobalKnownHostsFile={SFTP_KNOWN_HOSTS_PATH}",
+        f"-oIdentityFile={SFTP_KEY_PATH}",
+        "-oIdentitiesOnly=yes",
+        "-oPreferredAuthentications=publickey",
+        "-oPasswordAuthentication=no",
+        "-oKbdInteractiveAuthentication=no",
+        "-oChallengeResponseAuthentication=no",
+        "-oNumberOfPasswordPrompts=0",
+        "-oGSSAPIAuthentication=no",
+        "-oClearAllForwardings=yes",
+        "-oForwardAgent=no",
+        "-oForwardX11=no",
+        "-oPermitLocalCommand=no",
+        "-oRequestTTY=no",
+        "-oProxyCommand=none",
+        "-oProxyJump=none",
+        "-oHostKeyAlgorithms=ssh-ed25519",
+        "-oPubkeyAcceptedAlgorithms=ssh-ed25519",
+        "-oConnectTimeout=15",
+        "-oConnectionAttempts=1",
+        "-oServerAliveInterval=10",
+        "-oServerAliveCountMax=3",
+        "-P", str(configuration.port),
+        f"{configuration.username}@{configuration.host}",
+    ]
+
+
+def _run_sftp(configuration: WindowsSftpConfiguration, batch: bytes) -> None:
+    if not batch or len(batch) > 4_096 or not batch.endswith(b"\n"):
+        fail("SFTP operation rejected")
+    try:
+        result = subprocess.run(
+            _sftp_arguments(configuration),
+            input=batch,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=SFTP_TIMEOUT_SECONDS,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise DurabilityError("SFTP operation failed") from error
+    if result.returncode != 0:
+        fail("SFTP operation failed")
+
+
+def _quoted_local_sftp_path(path: Path) -> str:
+    text = str(path)
+    if "\x00" in text or "\r" in text or "\n" in text:
+        fail("SFTP local path rejected")
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _remote_object_directory(configuration: WindowsSftpConfiguration, backup_id: str) -> str:
+    _require_string(backup_id, BACKUP_ID, "backup identity")
+    return f"{configuration.remote_directory}/{backup_id}"
+
+
+def _stage_validated_file(
+    source: Path,
+    destination: Path,
+    expected_sha256: str,
+    *,
+    expected_size: int | None = None,
+    maximum_size: int | None = None,
+) -> int:
+    source_flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        source_flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        source_flags |= os.O_NOFOLLOW
+    destination_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_CLOEXEC"):
+        destination_flags |= os.O_CLOEXEC
+    source_descriptor = -1
+    destination_descriptor = -1
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        source_descriptor = os.open(source, source_flags)
+        source_metadata = os.fstat(source_descriptor)
+        if not stat.S_ISREG(source_metadata.st_mode):
+            fail("backup staging source rejected")
+        destination_descriptor = os.open(destination, destination_flags, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(destination_descriptor, 0o600)
+        with (
+            os.fdopen(source_descriptor, "rb", closefd=False) as source_stream,
+            os.fdopen(destination_descriptor, "wb", closefd=False) as destination_stream,
+        ):
+            while block := source_stream.read(1024 * 1024):
+                size += len(block)
+                if maximum_size is not None and size > maximum_size:
+                    fail("backup staging size rejected")
+                digest.update(block)
+                destination_stream.write(block)
+            destination_stream.flush()
+            os.fsync(destination_stream.fileno())
+    except DurabilityError:
+        raise
+    except OSError as error:
+        raise DurabilityError("backup staging failed") from error
+    finally:
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        if destination_descriptor >= 0:
+            os.close(destination_descriptor)
+    if size <= 0 or (expected_size is not None and size != expected_size) or digest.hexdigest() != expected_sha256:
+        fail("backup staging verification rejected")
+    return size
+
+
+class WindowsSftpDurabilityAdapter:
+    """Fixed SFTP transport/readback adapter without durable-write confirmation."""
+
+    def __init__(self, configuration: WindowsSftpConfiguration) -> None:
+        self.configuration = configuration
+
+    def copy_and_verify(self, pair: BackupPair, now_unix: int) -> RemoteDurabilityConfirmation:
+        object_directory = _remote_object_directory(self.configuration, pair.backup_id)
+        artifact_remote = f"{object_directory}/{pair.artifact_filename}"
+        manifest_remote = f"{object_directory}/{pair.manifest_filename}"
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix=f"verify-{pair.backup_id}-",
+                dir=VERIFICATION_TEMP_DIRECTORY,
+            ) as temporary_name:
+                temporary = Path(temporary_name)
+                os.chmod(temporary, 0o700)
+                artifact_staged = temporary / f"upload-{pair.artifact_filename}"
+                manifest_staged = temporary / f"upload-{pair.manifest_filename}"
+                artifact_readback = temporary / f"readback-{pair.artifact_filename}"
+                manifest_readback = temporary / f"readback-{pair.manifest_filename}"
+                _stage_validated_file(
+                    pair.artifact_path,
+                    artifact_staged,
+                    pair.artifact_sha256,
+                    expected_size=pair.artifact_size,
+                )
+                manifest_size = _stage_validated_file(
+                    pair.manifest_path,
+                    manifest_staged,
+                    pair.manifest_sha256,
+                    maximum_size=MAX_MANIFEST_BYTES,
+                )
+                upload = (
+                    f"mkdir {object_directory}\n"
+                    f"put {_quoted_local_sftp_path(artifact_staged)} {artifact_remote}.partial\n"
+                    f"put {_quoted_local_sftp_path(manifest_staged)} {manifest_remote}.partial\n"
+                    f"rename {artifact_remote}.partial {artifact_remote}\n"
+                    f"rename {manifest_remote}.partial {manifest_remote}\n"
+                ).encode("utf-8")
+                _run_sftp(self.configuration, upload)
+                readback = (
+                    f"get {artifact_remote} {_quoted_local_sftp_path(artifact_readback)}\n"
+                    f"get {manifest_remote} {_quoted_local_sftp_path(manifest_readback)}\n"
+                ).encode("utf-8")
+                _run_sftp(self.configuration, readback)
+                artifact_metadata = _regular_file(artifact_readback, temporary, "SFTP artifact readback")
+                manifest_metadata = _regular_file(manifest_readback, temporary, "SFTP manifest readback")
+                if artifact_metadata.st_size != pair.artifact_size:
+                    fail("SFTP artifact readback rejected")
+                if manifest_metadata.st_size != manifest_size:
+                    fail("SFTP manifest readback rejected")
+                if _sha256_file(artifact_readback) != pair.artifact_sha256:
+                    fail("SFTP artifact checksum rejected")
+                if _sha256_file(manifest_readback) != pair.manifest_sha256:
+                    fail("SFTP manifest checksum rejected")
+        except DurabilityError:
+            raise
+        except OSError as error:
+            raise DurabilityError("SFTP destination readback failed") from error
+
+        raise DurabilityUnavailable(
+            "SFTP destination readback succeeded but durable-write confirmation is unavailable",
+        )
+
+
 def _validate_configuration_bytes(data: bytes) -> dict[str, Any]:
     try:
         value = strict_object(data, MAX_CONFIG_BYTES, "durability configuration")
-        _require_exact_keys(value, frozenset({"schemaVersion", "state"}), "durability configuration")
         if canonical_bytes(value) != data:
             fail("non-canonical durability configuration rejected")
         _require_integer(value.get("schemaVersion"), "durability configuration schema version", expected=1)
     except DurabilityError as error:
         raise DurabilityUnavailable("remote durability configuration rejected") from error
-    if value.get("state") != "unconfigured":
-        raise DurabilityUnavailable("remote durability adapter is unavailable")
+    if value.get("state") == "unconfigured":
+        try:
+            _require_exact_keys(value, frozenset({"schemaVersion", "state"}), "durability configuration")
+        except DurabilityError as error:
+            raise DurabilityUnavailable("remote durability configuration rejected") from error
+    elif value.get("state") == "configured":
+        _validate_windows_sftp_configuration(value)
+    else:
+        raise DurabilityUnavailable("remote durability configuration rejected")
     return value
 
 
@@ -526,7 +846,12 @@ def _load_configuration(path: Path | None = None) -> dict[str, Any]:
     path = CONFIG_PATH if path is None else path
     try:
         metadata = path.lstat()
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or stat.S_IMODE(metadata.st_mode) != 0o600:
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != 0
+            or metadata.st_gid != 0
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
             raise DurabilityUnavailable("remote durability is not configured")
         data = path.read_bytes()
     except OSError as error:
@@ -535,10 +860,14 @@ def _load_configuration(path: Path | None = None) -> dict[str, Any]:
 
 
 def execute_production_durability(context: DurabilityContext) -> dict[str, Any]:
-    """Fail closed until a reviewed fixed provider adapter is implemented and activated."""
+    """Run the one reviewed adapter selected by the fixed root-owned configuration."""
     context.validate()
-    _load_configuration()
-    raise DurabilityUnavailable("remote durability adapter is unavailable")
+    value = _load_configuration()
+    if value.get("state") != "configured":
+        raise DurabilityUnavailable("remote durability adapter is unavailable")
+    configuration = _validate_windows_sftp_configuration(value)
+    _validate_activation_files()
+    return perform_durability(context, WindowsSftpDurabilityAdapter(configuration))
 
 
 def bounded_summary(evidence: dict[str, Any]) -> dict[str, Any]:
@@ -560,6 +889,8 @@ __all__ = [
     "DurabilityUnavailable",
     "RemoteDurabilityAdapter",
     "RemoteDurabilityConfirmation",
+    "WindowsSftpConfiguration",
+    "WindowsSftpDurabilityAdapter",
     "bounded_summary",
     "execute_production_durability",
     "inspect_backup_pair",

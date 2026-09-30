@@ -6,7 +6,7 @@ YOLPOL is a multilingual, SEO-first B2B wholesale sourcing platform. Its current
 
 Commercial activity is inquiry-only: the public site does not publish internal Product prices or provide checkout, payment, or direct online purchasing. The application is designed for self-hosting and favors static Server Components, crawlable locale-prefixed routes, and explicit operational boundaries.
 
-The current repository includes a healthy, separately isolated Production runtime, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core, and active isolated Staging/Production Monitoring on the VPS at `v0.2.3`. The repository also contains the not-yet-deployed fix for Docker Engine 29.8.0 failing to materialize Prometheus's loopback port while it was attached only to an internal bridge. Final public DNS/Cloudflare cutover, independent external monitoring, real remote-storage provider activation, and full disposable disaster-recovery proof remain separate work.
+The current repository is version `0.2.6` and includes a separately isolated Production contract, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core with fixed Windows SFTP transport and destination readback, and isolated Staging/Production Monitoring. Historical task records verify Production Monitoring activation at `v0.2.3`; this branch does not infer the currently deployed host version. The SFTP adapter remains fail-closed because positive per-backup durable-write confirmation is not implemented. The Prometheus loopback proxy fix is present in local release history from `v0.2.4` onward, but repository history alone does not prove its live rollout. Final public DNS/Cloudflare cutover, independent external monitoring, a real durable-write primitive plus live SFTP credential/trust provisioning, and full disposable disaster-recovery proof remain separate work.
 
 ## Key features
 
@@ -311,15 +311,15 @@ GitHub Release
 → exact immutable Production deployment without rebuilding
 ```
 
-Release `v0.2.2` at commit `48a566142bd0259c596314f6a01a92cc66d868ce` successfully exercised the authenticated Staging-to-Production runtime path. The Production runtime is provisioned and healthy, but runtime deployment is separate from public DNS/Cloudflare activation; the repository does not record the final public cutover as complete.
+Release `v0.2.2` at commit `48a566142bd0259c596314f6a01a92cc66d868ce` is the historical milestone that successfully exercised the authenticated Staging-to-Production runtime path and established a provisioned, healthy Production runtime. Runtime deployment is separate from public DNS/Cloudflare activation; the repository does not record the final public cutover as complete or infer the currently deployed release.
 
 The environments have independent databases, volumes, credentials, runtime files, release authorities, Telegram/provider configuration, and deployment state. Root owns release authority, secrets, policy, locks, journals, and the restricted wrapper. The normal operator receives neither unrestricted Docker access nor a general root shell.
 
 Known operational gates remain fail closed:
 
-- The Phase C2 repository contract is implemented and synthetically tested, but no real remote adapter is configured or activated.
+- The Phase C2 repository contract is implemented and synthetically tested, but Windows SFTP readback cannot provide the required positive durable-write confirmation and no live adapter is configured or activated.
 - Production-changing migration fingerprints therefore remain rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` before authority mutation.
-- The Production Monitoring repository contract is implemented and synthetically validated, but its database role, credentials, and VPS collectors are not activated; public/off-host monitoring remains separate.
+- Production Monitoring activation was verified at the `v0.2.3` milestone, but this branch does not prove the current live release or the released Prometheus proxy fix's host rollout; public/off-host monitoring remains separate.
 - No automatic restore exists.
 - Disposable rebuild and full disaster-recovery proof remain incomplete.
 - Final public DNS/Cloudflare cutover remains separately reviewed and controlled.
@@ -402,8 +402,8 @@ Use Node.js 22 and pnpm `11.14.0`, run `pnpm install` with the committed lockfil
 
 The current verified remaining work includes:
 
-- selection, review, configuration, and live activation of a real Phase C2 off-server durability adapter;
-- Production Monitoring role/secret provisioning, VPS activation, and independent external failure detection.
+- a positive per-backup durable-write primitive, followed by live credential/trust provisioning, destination validation, configuration, and activation of the Windows SFTP Phase C2 path;
+- live verification of the released Prometheus proxy contract and independent external failure detection;
 - final reviewed public DNS/Cloudflare cutover;
 - disposable rebuild and full disaster-recovery proof;
 - multilingual content review;

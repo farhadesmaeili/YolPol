@@ -1,6 +1,6 @@
 # YOLPOL Production deployment contract
 
-This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files installed below `/opt/yolpol/production`; repository source alone does not access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook. On the current VPS, the Production runtime, secrets, database, release authority, and application containers have been provisioned, and release `v0.2.2` is healthy. That runtime deployment is distinct from the separately approved public DNS/Cloudflare cutover, which is not claimed as complete.
+This directory is the repository-managed foundation for the canonical `https://yolpol.com` environment. It defines files installed below `/opt/yolpol/production`; repository source alone does not access a server, deploy containers, create credentials, change DNS, contact Cloudflare, obtain certificates, or register a Telegram webhook. Repository deployment records establish that the Production runtime, secrets, database, release authority, and application containers were provisioned and healthy at the `v0.2.2` milestone. Local Git history does not establish the currently deployed version. Runtime deployment remains distinct from the separately approved public DNS/Cloudflare cutover, which is not claimed as complete.
 
 ## Fixed identity and isolation
 
@@ -76,7 +76,7 @@ authenticated release and exact current/target validation
 -> encrypted Production backup
 -> identity-free backup verification
 -> deep verification
--> fixed provider-neutral off-server copy and independent destination verification
+-> fixed Windows OpenSSH SFTP copy over private Tailscale transport and exact destination readback
 -> durable-write confirmation and exact canonical evidence validation
 -> only then promote authority/runtime and deploy the database
 -> explicit migration only when the manifest/database gate requires it
@@ -112,7 +112,7 @@ The dedicated `yolpol-ingress` project serves the canonical apex and permanently
 
 Production's former gated local edge has been removed, so starting normal Production services cannot stop, rebind, or compete with Staging/shared ingress. A Production web container can be replaced on the stable external network without restarting ingress.
 
-Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The Production runtime, secrets, database, release authority, and application containers are now provisioned and healthy on `v0.2.2`. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. The Production Monitoring repository contract is implemented, but its VPS activation and a separately approved DNS/Cloudflare cutover remain outstanding; runtime health and shared ingress alone do not prove public Production activation.
+Task 0064 defines the shared ingress and migration/rollback contract, and the current VPS migration completed successfully on 2026-09-19. The `v0.2.2` deployment record established that the Production runtime, secrets, database, release authority, and application containers were provisioned and healthy; it is not a claim about the currently deployed release. The last verified repository record says the Cloudflare redirect `yolpol.com -> staging.yolpol.com` remained active, and this reconciliation has no evidence that it was removed. Task 0070 records Production Monitoring activation at the later `v0.2.3` milestone, while live verification of the released Prometheus proxy fix and a separately approved DNS/Cloudflare cutover remain outstanding. Runtime health and shared ingress alone do not prove public Production activation.
 
 ## Operator commands and root responsibilities
 
@@ -124,12 +124,12 @@ Root remains responsible for bootstrap, authenticated release promotion, runtime
 
 The repository's single `yolpol-monitoring` project now defines isolated Production PostgreSQL, Operations, and Blackbox collectors. They use Production-only secret files, join only the Production backend or ingress network required by their function, label signals `environment="production"`, and probe only internal `production-web` liveness/readiness. Shared Prometheus, Alertmanager, Node Exporter, cAdvisor, host alerts, and the one shared-ingress presence alert are not duplicated. Production backup monitoring remains disabled by default.
 
-This is a repository contract, not a live-state claim. The Production monitoring role, real credentials, host contract refresh, and root-controlled collector activation remain deferred. Public `https://yolpol.com` DNS/TLS monitoring remains deferred until cutover, and an independent off-host watchdog is still required for total VPS loss.
+This is primarily a repository contract. Task 0070 separately records that the Production monitoring role, credentials, host contract, and collectors were activated at the `v0.2.3` milestone; this branch does not infer their current deployed version. Public `https://yolpol.com` DNS/TLS monitoring remains deferred until cutover, and an independent off-host watchdog is still required for total VPS loss.
 
 ## Automation state and compatibility
 
-The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Task 0069 installs the root-owned Phase C2 core and evidence directory, but the repository intentionally supplies only an unconfigured adapter state. Production-changing migration fingerprints therefore remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` on the live path until a real provider is separately reviewed and activated. Public activation remains separately approved.
+The Phase B bootstrap installs the fixed tree, owners, modes, runtime schema, secret destinations, external ingress network, separate release authorities, and wrapper without inferring hidden state. The active Phase C1 workflow promotes an approved, same-fingerprint manifest to Production, pulls exact digests, replaces web/workers on stable networks, verifies readiness, and leaves shared ingress running. Task 0069 installs the root-owned Phase C2 core and evidence directory; Task 0071 adds fixed Windows SFTP transport/readback, its root-only directory, the unconfigured active JSON, and the OpenSSH client prerequisite. The repository does not provide positive per-backup durable-write confirmation, create the private key or pinned host key, or configure a destination. Production-changing migration fingerprints therefore remain blocked with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` even after successful readback. Public activation remains separately approved.
 
 ## Intentionally unsupported
 
-The repository contract and activated host path do not provide a real off-server backup store or schedule, live Production Monitoring activation, public/off-host Production probing, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials, upload a backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.
+The repository contract and activated host path do not provide a positive durable-write primitive, an activated off-server backup destination or schedule, remote retention/cleanup, verified rollout of the released Prometheus proxy fix, public/off-host Production probing, PITR, down migrations, automatic database rollback/restore cutover, arbitrary logs, arbitrary Compose, or shell access. The repository source does not itself create credentials or host trust, configure Windows/Tailscale, upload a real backup, activate changed-fingerprint Production migration, change DNS/Cloudflare, or perform public activation; those remain controlled external operations.

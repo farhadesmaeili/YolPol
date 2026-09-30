@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-مخزن فعلی شامل runtime سالم و مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 و Monitoring ایزوله و فعال Staging/Production روی VPS در نسخه `v0.2.3` است. این مخزن همچنین اصلاح هنوز deployنشده‌ای را برای Docker Engine 29.8.0 دارد که هنگام اتصال انحصاری Prometheus به bridge داخلی، port لوپ‌بک درخواستی آن را ایجاد نکرد. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی provider واقعی storage و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+نسخه مخزن فعلی `0.2.6` است و شامل قرارداد مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 همراه با transport ثابت Windows SFTP و readback مقصد، و Monitoring ایزوله Staging/Production است. سوابق تاریخی Taskها فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` را تأیید می‌کنند؛ این branch نسخه‌ای را که اکنون روی host deploy شده است استنتاج نمی‌کند. adapter مربوط به SFTP همچنان fail-closed است، زیرا تأیید مثبت durable-write برای هر backup پیاده‌سازی نشده است. اصلاح proxy لوپ‌بک Prometheus از `v0.2.4` به بعد در تاریخچه release محلی وجود دارد، اما تاریخچه مخزن به‌تنهایی rollout زنده آن را اثبات نمی‌کند. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، یک primitive واقعی برای durable-write همراه با provision زنده credential/trust مربوط به SFTP، و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 
@@ -311,15 +311,15 @@ GitHub Release
 → deployment دقیق و immutable در Production بدون rebuild
 ```
 
-release `v0.2.2` در commit `48a566142bd0259c596314f6a01a92cc66d868ce` مسیر احراز‌شده runtime از Staging به Production را با موفقیت طی کرده است. runtime مربوط به Production provision شده و سالم است، اما deployment runtime از فعال‌سازی عمومی DNS/Cloudflare جداست و مخزن cutover نهایی عمومی را تکمیل‌شده ثبت نمی‌کند.
+release `v0.2.2` در commit `48a566142bd0259c596314f6a01a92cc66d868ce` یک milestone تاریخی است که مسیر احراز‌شده runtime از Staging به Production و provision و سلامت runtime مربوط به Production را تأیید کرد. deployment runtime از فعال‌سازی عمومی DNS/Cloudflare جداست و مخزن نه cutover نهایی عمومی را تکمیل‌شده ثبت می‌کند و نه release فعلی deployشده را استنتاج می‌کند.
 
 Staging و Production دارای database، volume، credential، runtime file، release authority، تنظیمات Telegram/provider و deployment state مستقل هستند. root مالک release authority، secretها، policy، lock، journal و wrapper محدود است. اپراتور عادی نه دسترسی نامحدود Docker دارد و نه shell عمومی root.
 
 gateهای عملیاتی زیر همچنان fail-closed باقی می‌مانند:
 
-- قرارداد repository-side مربوط به Phase C2 پیاده‌سازی و با داده synthetic آزمایش شده است، اما adapter واقعی remote پیکربندی یا فعال نشده است.
+- قرارداد repository-side مربوط به Phase C2 پیاده‌سازی و با داده synthetic آزمایش شده است، اما readback در Windows SFTP تأیید مثبت durable-write موردنیاز را فراهم نمی‌کند و هیچ adapter زنده‌ای پیکربندی یا فعال نشده است.
 - در نتیجه migration fingerprint تغییریافته برای Production همچنان پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
-- قرارداد repository-side مربوط به Production Monitoring پیاده‌سازی و به‌صورت synthetic اعتبارسنجی شده است، اما نقش database، credentialها و collectorهای VPS آن فعال نشده‌اند؛ monitoring عمومی و off-host نیز جدا باقی می‌ماند.
+- فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` تأیید شده است، اما این branch نسخه live فعلی یا rollout اصلاح منتشرشده proxy مربوط به Prometheus را اثبات نمی‌کند؛ monitoring عمومی و off-host نیز جدا باقی می‌ماند.
 - automatic restore وجود ندارد.
 - disposable rebuild و اثبات کامل disaster recovery کامل نشده‌اند.
 - cutover نهایی عمومی DNS/Cloudflare نیازمند بازبینی و کنترل جداگانه است.
@@ -402,8 +402,8 @@ develop
 
 کارهای باقی‌مانده‌ای که در وضعیت فعلی تأیید شده‌اند عبارت‌اند از:
 
-- انتخاب، بازبینی، پیکربندی و فعال‌سازی زنده adapter واقعی off-server durability در Phase C2؛
-- provision نقش/secretهای Production Monitoring، فعال‌سازی آن روی VPS و تشخیص مستقل خرابی بیرونی؛
+- یک primitive مثبت durable-write برای هر backup و سپس provision زنده credential/trust، اعتبارسنجی مقصد، پیکربندی و فعال‌سازی مسیر Windows SFTP در Phase C2؛
+- اعتبارسنجی زنده قرارداد منتشرشده proxy مربوط به Prometheus و تشخیص مستقل خرابی بیرونی؛
 - cutover نهایی و بازبینی‌شده عمومی DNS/Cloudflare؛
 - disposable rebuild و اثبات کامل disaster recovery؛
 - بازبینی محتوای همه زبان‌ها؛
