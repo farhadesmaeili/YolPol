@@ -125,7 +125,7 @@ export class GoogleAnalyticsClient {
 
 export type GoogleTagWindow = Window &
   typeof globalThis & {
-    dataLayer?: unknown[][];
+    dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
   };
 
@@ -134,8 +134,10 @@ export function createGoogleAnalyticsBrowserAdapter(
 ): GoogleAnalyticsBrowserAdapter {
   function ensureQueue(): void {
     browserWindow.dataLayer ??= [];
-    browserWindow.gtag ??= (...args: unknown[]) => {
-      browserWindow.dataLayer?.push(args);
+    browserWindow.gtag ??= function gtag() {
+      // Google's canonical queue requires the intrinsic arguments object; a rest parameter creates an Array.
+      // eslint-disable-next-line prefer-rest-params
+      browserWindow.dataLayer?.push(arguments);
     };
   }
 

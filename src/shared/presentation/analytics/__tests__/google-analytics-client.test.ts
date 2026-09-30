@@ -121,6 +121,27 @@ describe("Google Analytics browser client", () => {
 });
 
 describe("Google Analytics browser adapter", () => {
+  it("queues commands with Google's canonical arguments-object semantics", () => {
+    const browserWindow = {
+      document: {title: "Public page"},
+      location: {origin: "https://yolpol.com", hostname: "yolpol.com", pathname: "/en"},
+    } as unknown as GoogleTagWindow;
+    const adapter = createGoogleAnalyticsBrowserAdapter(browserWindow);
+    const command = ["event", "page_view", {
+      page_location: "https://yolpol.com/en",
+      page_path: "/en",
+      page_title: "Public page",
+    }] as const satisfies GoogleTagCommand;
+
+    adapter.send(command);
+
+    const queuedCommand = browserWindow.dataLayer?.[0];
+    expect(queuedCommand).toBeDefined();
+    expect(Array.isArray(queuedCommand)).toBe(false);
+    expect(Object.prototype.toString.call(queuedCommand)).toBe("[object Arguments]");
+    expect(Array.from(queuedCommand as ArrayLike<unknown>)).toEqual(command);
+  });
+
   it("deduplicates the real external-script insertion by validated measurement ID", () => {
     const scripts: Array<{async: boolean; src: string; dataset: Record<string, string>}> = [];
     const document = {
