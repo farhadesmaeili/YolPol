@@ -7,6 +7,8 @@ import importlib.util
 import json
 import os
 import shutil
+import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -269,6 +271,18 @@ class OffserverDurabilityTests(unittest.TestCase):
         }
         return durability.DurabilityContext(**values)
 
+    def configured_value(self, **overrides: object) -> dict[str, object]:
+        return {
+            "schemaVersion": 1,
+            "state": "configured",
+            "adapter": "windows-sftp-v1",
+            "host": "100.100.100.100",
+            "port": 22,
+            "username": "yolpol-backup",
+            "remoteDirectory": "/production",
+            **overrides,
+        }
+
     def pair(self, source: Path) -> None:
         artifact = source / f"{self.BACKUP_ID}.dump.age"
         artifact.write_bytes(b"synthetic encrypted archive")
@@ -412,6 +426,358 @@ class OffserverDurabilityTests(unittest.TestCase):
         content = durability.canonical_bytes({"schemaVersion": True, "state": "unconfigured"})
         with self.assertRaises(durability.DurabilityUnavailable):
             durability._validate_configuration_bytes(content)
+
+    def test_exact_windows_sftp_configuration_is_accepted(self) -> None:
+        value = self.configured_value()
+        self.assertEqual(
+            durability._validate_configuration_bytes(durability.canonical_bytes(value)),
+            value,
+        )
+        configuration = durability._validate_windows_sftp_configuration(value)
+        self.assertEqual(configuration.host, "100.100.100.100")
+        self.assertEqual(configuration.remote_directory, "/production")
+
+    def test_malformed_unknown_and_unsupported_configuration_fails_closed(self) -> None:
+        invalid = {
+            "malformed": b"{\n",
+            "duplicate": b'{"schemaVersion":1,"schemaVersion":1,"state":"unconfigured"}\n',
+            "unknown-unconfigured": durability.canonical_bytes({
+                "schemaVersion": 1, "state": "unconfigured", "unknown": True,
+            }),
+            "unsupported-state": durability.canonical_bytes({
+                "schemaVersion": 1, "state": "enabled",
+            }),
+            "unsupported-adapter": durability.canonical_bytes(self.configured_value(adapter="other")),
+            "unknown-configured": durability.canonical_bytes(self.configured_value(unknown=True)),
+        }
+        for label, content in invalid.items():
+            with self.subTest(label=label), self.assertRaises(durability.DurabilityUnavailable):
+                durability._validate_configuration_bytes(content)
+
+    def test_unsafe_windows_sftp_destination_values_fail_closed(self) -> None:
+        invalid = {
+            "dns-host": {"host": "backup.internal"},
+            "public-ip": {"host": "203.0.113.10"},
+            "noncanonical-ip": {"host": "100.064.0.1"},
+            "boolean-port": {"port": True},
+            "zero-port": {"port": 0},
+            "large-port": {"port": 65_536},
+            "other-user": {"username": "administrator"},
+            "relative-directory": {"remoteDirectory": "production"},
+            "root-directory": {"remoteDirectory": "/"},
+            "traversal-directory": {"remoteDirectory": "/production/../other"},
+            "space-directory": {"remoteDirectory": "/production backups"},
+        }
+        for label, override in invalid.items():
+            with self.subTest(label=label), self.assertRaises(durability.DurabilityUnavailable):
+                durability._validate_configuration_bytes(
+                    durability.canonical_bytes(self.configured_value(**override)),
+                )
+
+    def test_missing_and_insecure_activation_files_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing"
+            with self.assertRaises(durability.DurabilityUnavailable):
+                durability._secure_root_file(missing, 0o600, 16_384, "SFTP private key")
+            with self.assertRaises(durability.DurabilityUnavailable):
+                durability._secure_root_file(missing, 0o600, 65_536, "SFTP known hosts")
+
+        wrong_owner = Mock(
+            st_mode=stat.S_IFREG | 0o600,
+            st_uid=1000,
+            st_gid=0,
+            st_size=32,
+        )
+        wrong_mode = Mock(
+            st_mode=stat.S_IFREG | 0o644,
+            st_uid=0,
+            st_gid=0,
+            st_size=32,
+        )
+        for label, metadata in (("owner", wrong_owner), ("mode", wrong_mode)):
+            with self.subTest(label=label), patch.object(Path, "lstat", return_value=metadata):
+                with self.assertRaises(durability.DurabilityUnavailable):
+                    durability._secure_root_file(Path("fixed"), 0o600, 16_384, "SFTP private key")
+                with self.assertRaises(durability.DurabilityUnavailable):
+                    durability._secure_root_file(Path("fixed"), 0o600, 65_536, "SFTP known hosts")
+
+    def test_insecure_configuration_ownership_and_mode_fail_closed(self) -> None:
+        valid = durability.canonical_bytes(self.configured_value())
+        for label, metadata in (
+            ("owner", Mock(st_mode=stat.S_IFREG | 0o600, st_uid=1000, st_gid=0)),
+            ("group", Mock(st_mode=stat.S_IFREG | 0o600, st_uid=0, st_gid=1000)),
+            ("mode", Mock(st_mode=stat.S_IFREG | 0o644, st_uid=0, st_gid=0)),
+        ):
+            with (
+                self.subTest(label=label),
+                patch.object(Path, "lstat", return_value=metadata),
+                patch.object(Path, "read_bytes", return_value=valid),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._load_configuration(Path("fixed-config"))
+
+    def test_missing_or_insecure_sftp_executable_fails_closed(self) -> None:
+        missing = Mock(side_effect=FileNotFoundError())
+        with patch.object(Path, "lstat", missing), self.assertRaises(durability.DurabilityUnavailable):
+            durability._validate_sftp_executable()
+        insecure = Mock(
+            st_mode=stat.S_IFREG | 0o775,
+            st_uid=0,
+            st_gid=0,
+        )
+        with (
+            patch.object(Path, "lstat", return_value=insecure),
+            patch.object(durability.os, "access", return_value=True),
+            self.assertRaises(durability.DurabilityUnavailable),
+        ):
+            durability._validate_sftp_executable()
+
+    def test_sftp_process_uses_only_fixed_strict_noninteractive_options(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+        )
+        with patch.object(durability.subprocess, "run", return_value=Mock(returncode=0)) as run:
+            durability._run_sftp(configuration, b"pwd\n")
+        arguments = run.call_args.args[0]
+        options = set(arguments)
+        self.assertEqual(arguments[0], str(durability.SFTP_EXECUTABLE))
+        self.assertIn("-oBatchMode=yes", options)
+        self.assertIn("-oStrictHostKeyChecking=yes", options)
+        self.assertIn("-oUpdateHostKeys=no", options)
+        self.assertIn("-oPasswordAuthentication=no", options)
+        self.assertIn("-oKbdInteractiveAuthentication=no", options)
+        self.assertIn("-oPreferredAuthentications=publickey", options)
+        self.assertIn("-oClearAllForwardings=yes", options)
+        self.assertIn("-oProxyCommand=none", options)
+        self.assertNotIn("sshpass", " ".join(arguments).lower())
+        self.assertNotIn("-oStrictHostKeyChecking=no", options)
+        self.assertNotIn("-oUserKnownHostsFile=/dev/null", options)
+        self.assertFalse(run.call_args.kwargs["shell"])
+        self.assertEqual(run.call_args.kwargs["timeout"], durability.SFTP_TIMEOUT_SECONDS)
+        self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+
+    def test_sftp_timeout_fails_closed(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+        )
+        with patch.object(
+            durability.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(["/usr/bin/sftp"], durability.SFTP_TIMEOUT_SECONDS),
+        ), self.assertRaises(durability.DurabilityError):
+            durability._run_sftp(configuration, b"pwd\n")
+
+    @staticmethod
+    def _readback_local_paths(batch: bytes) -> list[Path]:
+        result = []
+        for line in batch.decode("utf-8").splitlines():
+            quoted = line.split(" ", 2)[2]
+            value = quoted[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            result.append(Path(value))
+        return result
+
+    def test_windows_sftp_exact_readback_cannot_publish_durability_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            calls: list[bytes] = []
+
+            def fake_sftp(_configuration: object, batch: bytes) -> None:
+                calls.append(batch)
+                if len(calls) == 2:
+                    artifact, manifest = self._readback_local_paths(batch)
+                    artifact.write_bytes(pair.artifact_path.read_bytes())
+                    manifest.write_bytes(pair.manifest_path.read_bytes())
+
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                self.assertRaisesRegex(
+                    durability.DurabilityUnavailable,
+                    "durable-write confirmation is unavailable",
+                ),
+            ):
+                durability.perform_durability(
+                    self.context(),
+                    durability.WindowsSftpDurabilityAdapter(configuration),
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+            self.assertEqual(len(calls), 2)
+            self.assertIn(f"mkdir /production/{self.BACKUP_ID}\n".encode(), calls[0])
+            self.assertIn(b".partial", calls[0])
+            self.assertEqual(list(evidence.iterdir()), [])
+            self.assertEqual(list(verification.iterdir()), [])
+
+    def test_configured_production_entrypoint_readback_still_cannot_publish_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            calls = 0
+
+            def fake_sftp(_configuration: object, batch: bytes) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    artifact, manifest = self._readback_local_paths(batch)
+                    artifact.write_bytes(pair.artifact_path.read_bytes())
+                    manifest.write_bytes(pair.manifest_path.read_bytes())
+
+            perform_durability = durability.perform_durability
+
+            def perform_with_test_paths(
+                context: object,
+                adapter: object,
+            ) -> dict[str, object]:
+                return perform_durability(
+                    context,
+                    adapter,
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "_load_configuration", return_value=self.configured_value()),
+                patch.object(durability, "_validate_activation_files") as activation,
+                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(durability, "perform_durability", side_effect=perform_with_test_paths),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability.execute_production_durability(self.context())
+            activation.assert_called_once_with()
+            self.assertEqual(calls, 2)
+            self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_windows_sftp_upload_and_readback_batch_failures_publish_no_evidence(self) -> None:
+        failures = ("upload-batch", "readback-batch")
+        for failure in failures:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                source, _, evidence = self.directories(Path(directory))
+                verification = Path(directory) / "verification"
+                verification.mkdir()
+                configuration = durability.WindowsSftpConfiguration(
+                    host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+                )
+                calls = 0
+
+                def fail_sftp(_configuration: object, _batch: bytes) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if failure == "upload-batch" or calls == 2:
+                        raise durability.DurabilityError("synthetic SFTP failure")
+
+                with (
+                    patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                    patch.object(durability, "_run_sftp", side_effect=fail_sftp),
+                    self.assertRaises(durability.DurabilityError),
+                ):
+                    durability.perform_durability(
+                        self.context(),
+                        durability.WindowsSftpDurabilityAdapter(configuration),
+                        source_directory=source,
+                        evidence_directory=evidence,
+                        now_unix=self.NOW,
+                    )
+                self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_windows_sftp_existing_object_directory_collision_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+
+            def reject_existing_directory(_configuration: object, batch: bytes) -> None:
+                self.assertTrue(batch.startswith(f"mkdir /production/{self.BACKUP_ID}\n".encode()))
+                raise durability.DurabilityError("synthetic existing object directory")
+
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "_run_sftp", side_effect=reject_existing_directory),
+                self.assertRaises(durability.DurabilityError),
+            ):
+                durability.perform_durability(
+                    self.context(),
+                    durability.WindowsSftpDurabilityAdapter(configuration),
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+            self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_windows_sftp_checksum_mismatches_publish_no_evidence(self) -> None:
+        for mismatch in ("artifact", "manifest"):
+            with self.subTest(mismatch=mismatch), tempfile.TemporaryDirectory() as directory:
+                source, _, evidence = self.directories(Path(directory))
+                verification = Path(directory) / "verification"
+                verification.mkdir()
+                pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+                calls = 0
+
+                def fake_sftp(_configuration: object, batch: bytes) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if calls == 2:
+                        artifact, manifest = self._readback_local_paths(batch)
+                        artifact_bytes = pair.artifact_path.read_bytes()
+                        manifest_bytes = pair.manifest_path.read_bytes()
+                        artifact.write_bytes(
+                            bytes([artifact_bytes[0] ^ 1]) + artifact_bytes[1:]
+                            if mismatch == "artifact" else artifact_bytes,
+                        )
+                        manifest.write_bytes(
+                            bytes([manifest_bytes[0] ^ 1]) + manifest_bytes[1:]
+                            if mismatch == "manifest" else manifest_bytes,
+                        )
+
+                configuration = durability.WindowsSftpConfiguration(
+                    host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+                )
+                with (
+                    patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                    patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                    self.assertRaises(durability.DurabilityError),
+                ):
+                    durability.perform_durability(
+                        self.context(),
+                        durability.WindowsSftpDurabilityAdapter(configuration),
+                        source_directory=source,
+                        evidence_directory=evidence,
+                        now_unix=self.NOW,
+                    )
+                self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_remote_backup_identity_and_path_traversal_are_impossible(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+        )
+        for backup_id in ("../backup", "yolpol-production-20270115T120000Z/other"):
+            with self.subTest(backup_id=backup_id), self.assertRaises(durability.DurabilityError):
+                durability._remote_object_directory(configuration, backup_id)
+
+    def test_unconfigured_state_still_fails_closed_before_activation_files(self) -> None:
+        with (
+            patch.object(durability, "_load_configuration", return_value={
+                "schemaVersion": 1, "state": "unconfigured",
+            }),
+            patch.object(durability, "_validate_activation_files") as activation,
+            self.assertRaises(durability.DurabilityUnavailable),
+        ):
+            durability.execute_production_durability(self.context())
+        activation.assert_not_called()
 
     @unittest.skipIf(os.name == "nt", "Windows symlink creation requires optional privileges")
     def test_source_and_destination_symlinks_and_path_escape_fail_closed(self) -> None:

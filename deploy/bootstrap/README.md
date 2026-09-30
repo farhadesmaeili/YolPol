@@ -1,8 +1,8 @@
 # YOLPOL Server Bootstrap Automation
 
-This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, the narrow Task 0066 authenticated-control-plane installation, and the Task 0069 root-owned Phase C2 module/evidence foundation. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The Phase C1 control plane has since been activated separately on the current VPS; the Phase C2 remote adapter has not.
+This directory implements Phase B server bootstrap, the Task 0067 supported-host expansion, the narrow Task 0066 authenticated-control-plane installation, the Task 0069 root-owned Phase C2 module/evidence foundation, and the non-activating Task 0071 Windows SFTP filesystem/prerequisite contract. It converts one supported clean host into the fixed YOLPOL host foundation and installs the reviewed repository contracts. It is root-only and deliberately separate from `/opt/yolpol/bin/yolpol-deploy`, the narrow unattended command surface. The Phase C1 control plane has since been activated separately on the current VPS; Phase C2 still lacks positive durable-write confirmation as well as adapter configuration, key, pinned host key, and destination activation.
 
-Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, upload a backup, activate a remote storage provider, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
+Bootstrap does not deploy a release, start Compose services, run migrations, restore a database, upload a backup, configure Windows or Tailscale, provision an SFTP key or pinned host key, activate remote durability, activate Production, alter DNS or Cloudflare, request certificates, register a Telegram webhook, remove legacy rollback state, generate credentials, or enable/start the deployment timer. Release authentication and routine promotion are implemented separately by the now-active Phase C1 control-plane contract.
 
 ## Supported host
 
@@ -40,7 +40,7 @@ The normal operator remains UID/GID `1001:1001`, has no supplementary groups, ha
 /opt/yolpol/bin/yolpol-deploy
 ```
 
-Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. Task 0069 adds `/opt/yolpol/runtime/offserver-durability-evidence` as `root:root 0700`, the root-only durability module, and a non-activating `unconfigured` example. It adds no sudo command, provider credential, or operator-writable path. See `deploy/control-plane/README.md`.
+Task 0066 adds the isolated non-login `yolpol-deployment-agent` UID/GID `1002:1002`. It has no supplementary groups or Docker access and may invoke only `yolpol-deploy apply-staging-intent` and `yolpol-deploy apply-production-intent`. Task 0069 adds `/opt/yolpol/runtime/offserver-durability-evidence` as `root:root 0700` and the root-only durability module. Task 0071 adds `/etc/yolpol/offserver-durability` as `root:root 0700`, creates a missing `/etc/yolpol/offserver-durability.json` as canonical `unconfigured` `root:root 0600`, retains the non-activating example, and installs/checks `/usr/bin/sftp` through `openssh-client`. It creates neither `id_ed25519` nor `known_hosts` and adds no sudo command, provider credential, or operator-writable path. See `deploy/control-plane/README.md` and `docs/tasks/0071-windows-sftp-offserver-durability.md`.
 
 ## Commands
 
@@ -88,7 +88,7 @@ Then use the installed root-only command to install independently approved input
 7. Prove foundation convergence by running source-only `apply` again from the same authenticated fixed source followed by base `check`.
 8. When provisioning Production, separately promote an authenticated Production release, install Production runtime and secrets, and run `check-production` after explicit approval.
 
-The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures. On the current VPS, bootstrap convergence and deployment-timer activation have completed; Production Monitoring remains separate and inactive.
+The sequence prepares host state only. Root-controlled ingress/Monitoring activation and enabling the installed release-deployment timer remain separate reviewed procedures. Repository records establish bootstrap convergence, deployment-timer activation, and the later `v0.2.3` Production Monitoring activation milestone; this bootstrap document does not infer the currently deployed release.
 
 ## Runtime installation
 

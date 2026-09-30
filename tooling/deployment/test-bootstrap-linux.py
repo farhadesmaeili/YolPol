@@ -22,6 +22,7 @@ from unittest import mock
 
 BOOTSTRAP_PATH = Path("/opt/yolpol/bin/yolpol-bootstrap")
 POLICY_PATH = Path("/opt/yolpol/bin/yolpol-deploy-policy")
+DURABILITY_PATH = Path("/opt/yolpol/bin/yolpol-offserver-durability")
 
 
 def load_module(name: str, path: Path):
@@ -38,6 +39,7 @@ def load_module(name: str, path: Path):
 
 bootstrap = load_module("yolpol_bootstrap_test", BOOTSTRAP_PATH)
 policy = load_module("yolpol_policy_test", POLICY_PATH)
+durability = load_module("yolpol_offserver_durability_test", DURABILITY_PATH)
 
 
 def release_artifacts(version: str, git_sha: str) -> tuple[bytes, bytes]:
@@ -188,6 +190,44 @@ class BootstrapTests(unittest.TestCase):
         writable.chmod(0o777)
         with self.assertRaisesRegex(bootstrap.BootstrapError, "writable or non-root"):
             bootstrap.ensure_directory(bootstrap.DirectoryContract(str(writable / "child"), 0, 0, 0o700))
+
+    def test_offserver_sftp_bootstrap_contract_is_unconfigured_and_root_only(self) -> None:
+        directories = {contract.path: contract for contract in bootstrap.DIRECTORIES}
+        trust = directories["/etc/yolpol/offserver-durability"]
+        self.assertEqual((trust.uid, trust.gid, trust.mode), (0, 0, 0o700))
+        states = {path: (mode, content) for path, mode, content in bootstrap.STATE_FILES}
+        self.assertEqual(
+            states["/etc/yolpol/offserver-durability.json"],
+            (0o600, b'{"schemaVersion":1,"state":"unconfigured"}\n'),
+        )
+        managed_destinations = {contract.destination for contract in bootstrap.MANAGED_FILES}
+        self.assertNotIn("/etc/yolpol/offserver-durability/id_ed25519", managed_destinations)
+        self.assertNotIn("/etc/yolpol/offserver-durability/known_hosts", managed_destinations)
+        self.assertTrue(bootstrap.command_exists("/usr/bin/sftp"))
+
+    def test_system_openssh_accepts_every_fixed_sftp_option(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100",
+            port=22,
+            username="yolpol-backup",
+            remote_directory="/production",
+        )
+        arguments = durability._sftp_arguments(configuration)
+        arguments[arguments.index("-P") + 1] = "1"
+        arguments[-1] = "yolpol-backup@127.0.0.1"
+        result = subprocess.run(
+            arguments,
+            input=b"",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=5,
+        )
+        diagnostics = result.stderr.decode("utf-8", "replace").lower()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("bad configuration option", diagnostics)
+        self.assertNotIn("unsupported option", diagnostics)
+        self.assertNotIn("unknown option", diagnostics)
 
     def test_atomic_file_install_is_repeatable_and_requires_explicit_replacement(self) -> None:
         target = self.temporary / "contract"
