@@ -3,8 +3,9 @@
 
 The installed controller imports this root-owned module directly.  No caller can
 select an adapter, destination, executable, URL, or evidence path.  The reviewed
-Windows SFTP transport remains fail-closed after destination readback until a
-positive per-backup durable-write primitive is implemented.
+Windows SFTP adapter validates exact final-store readback and an independently
+published canonical Windows volume-flush receipt, then fails closed because the
+VPS cannot authenticate the helper provenance of that unsigned receipt.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import re
 import stat
@@ -35,10 +37,20 @@ MAX_CONFIG_BYTES = 4_096
 MAX_PRIVATE_KEY_BYTES = 16_384
 MAX_KNOWN_HOSTS_BYTES = 65_536
 MAX_MANIFEST_BYTES = 65_536
+MAX_DURABILITY_RECEIPT_BYTES = 4_096
 MAX_EVIDENCE_BYTES = 8_192
 MAX_EVIDENCE_AGE_SECONDS = 900
 MAX_CLOCK_SKEW_SECONDS = 30
 SFTP_TIMEOUT_SECONDS = 120
+SFTP_RECEIPT_POLL_TIMEOUT_SECONDS = 180
+SFTP_RECEIPT_POLL_INTERVAL_SECONDS = 5
+SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS = 15
+SFTP_RECEIPT_MAX_ATTEMPTS = 37
+
+SFTP_PRODUCTION_DIRECTORY = "/production"
+SFTP_DURABLE_DIRECTORY = "/durable"
+SFTP_RECEIPT_DIRECTORY = "/durability-receipts"
+WINDOWS_DURABILITY_CONFIRMATION = "windows-flushfilebuffers-volume-v1"
 
 BACKUP_ID = re.compile(r"^yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?$")
 DEPLOYMENT_ID = re.compile(r"^[1-9][0-9]{0,19}$")
@@ -46,8 +58,18 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 MIGRATION_FINGERPRINT = re.compile(r"^[A-Za-z0-9_.-]{1,128}:[0-9a-f]{64}$")
 REMOTE_IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
 CONFIRMATION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-SFTP_REMOTE_DIRECTORY = re.compile(r"^/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+){0,7}$")
 TAILSCALE_IPV4_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+
+WINDOWS_RECEIPT_KEYS = frozenset({
+    "artifactSha256",
+    "artifactSize",
+    "backupId",
+    "durabilityConfirmation",
+    "manifestSha256",
+    "manifestSize",
+    "remoteObjectSetId",
+    "schemaVersion",
+})
 
 EVIDENCE_KEYS = frozenset({
     "schemaVersion",
@@ -223,6 +245,7 @@ class BackupPair:
     artifact_sha256: str
     manifest_path: Path
     manifest_filename: str
+    manifest_size: int
     manifest_sha256: str
 
 
@@ -354,6 +377,7 @@ def inspect_backup_pair(source_directory: Path, backup_id: str) -> BackupPair:
         artifact_sha256=actual_artifact_sha256,
         manifest_path=manifest_path,
         manifest_filename=manifest_filename,
+        manifest_size=manifest_metadata.st_size,
         manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
     )
 
@@ -562,11 +586,7 @@ def _validate_windows_sftp_configuration(value: dict[str, Any]) -> WindowsSftpCo
         if username != "yolpol-backup":
             fail("SFTP username rejected")
         remote_directory = value.get("remoteDirectory")
-        if (
-            not isinstance(remote_directory, str)
-            or len(remote_directory) > 128
-            or SFTP_REMOTE_DIRECTORY.fullmatch(remote_directory) is None
-        ):
+        if remote_directory != SFTP_PRODUCTION_DIRECTORY:
             fail("SFTP remote directory rejected")
         return WindowsSftpConfiguration(
             host=host,
@@ -670,9 +690,16 @@ def _sftp_arguments(configuration: WindowsSftpConfiguration) -> list[str]:
     ]
 
 
-def _run_sftp(configuration: WindowsSftpConfiguration, batch: bytes) -> None:
+def _run_sftp(
+    configuration: WindowsSftpConfiguration,
+    batch: bytes,
+    *,
+    timeout_seconds: int = SFTP_TIMEOUT_SECONDS,
+) -> None:
     if not batch or len(batch) > 4_096 or not batch.endswith(b"\n"):
         fail("SFTP operation rejected")
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or timeout_seconds < 1:
+        fail("SFTP timeout rejected")
     try:
         result = subprocess.run(
             _sftp_arguments(configuration),
@@ -681,7 +708,7 @@ def _run_sftp(configuration: WindowsSftpConfiguration, batch: bytes) -> None:
             stderr=subprocess.DEVNULL,
             check=False,
             shell=False,
-            timeout=SFTP_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
             env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
         )
     except (OSError, subprocess.SubprocessError) as error:
@@ -699,7 +726,95 @@ def _quoted_local_sftp_path(path: Path) -> str:
 
 def _remote_object_directory(configuration: WindowsSftpConfiguration, backup_id: str) -> str:
     _require_string(backup_id, BACKUP_ID, "backup identity")
+    if configuration.remote_directory != SFTP_PRODUCTION_DIRECTORY:
+        fail("SFTP remote directory rejected")
     return f"{configuration.remote_directory}/{backup_id}"
+
+
+def _durable_object_directory(backup_id: str) -> str:
+    _require_string(backup_id, BACKUP_ID, "backup identity")
+    return f"{SFTP_DURABLE_DIRECTORY}/{backup_id}"
+
+
+def _receipt_remote_path(backup_id: str) -> str:
+    _require_string(backup_id, BACKUP_ID, "backup identity")
+    return f"{SFTP_RECEIPT_DIRECTORY}/{backup_id}.json"
+
+
+def _windows_remote_object_set_id(backup_id: str) -> str:
+    _require_string(backup_id, BACKUP_ID, "backup identity")
+    return f"windows-sftp-v1:{SFTP_DURABLE_DIRECTORY}/{backup_id}"
+
+
+def _validate_windows_receipt(data: bytes, pair: BackupPair) -> dict[str, Any]:
+    value = strict_object(data, MAX_DURABILITY_RECEIPT_BYTES, "Windows durability receipt")
+    if canonical_bytes(value) != data:
+        fail("non-canonical Windows durability receipt rejected")
+    _require_exact_keys(value, WINDOWS_RECEIPT_KEYS, "Windows durability receipt")
+    _require_integer(value.get("schemaVersion"), "Windows durability receipt schema version", expected=1)
+    if value.get("backupId") != pair.backup_id:
+        fail("Windows durability receipt backup identity rejected")
+    if value.get("artifactSha256") != pair.artifact_sha256:
+        fail("Windows durability receipt artifact checksum rejected")
+    if value.get("manifestSha256") != pair.manifest_sha256:
+        fail("Windows durability receipt manifest checksum rejected")
+    artifact_size = _require_integer(
+        value.get("artifactSize"),
+        "Windows durability receipt artifact size",
+        minimum=1,
+    )
+    if artifact_size != pair.artifact_size:
+        fail("Windows durability receipt artifact size rejected")
+    manifest_size = _require_integer(
+        value.get("manifestSize"),
+        "Windows durability receipt manifest size",
+        minimum=1,
+    )
+    if manifest_size != pair.manifest_size:
+        fail("Windows durability receipt manifest size rejected")
+    if value.get("durabilityConfirmation") != WINDOWS_DURABILITY_CONFIRMATION:
+        fail("Windows durability receipt confirmation rejected")
+    if value.get("remoteObjectSetId") != _windows_remote_object_set_id(pair.backup_id):
+        fail("Windows durability receipt remote identity rejected")
+    return value
+
+
+def _poll_windows_receipt(
+    configuration: WindowsSftpConfiguration,
+    pair: BackupPair,
+    temporary: Path,
+) -> dict[str, Any]:
+    receipt_remote = _receipt_remote_path(pair.backup_id)
+    deadline = time.monotonic() + SFTP_RECEIPT_POLL_TIMEOUT_SECONDS
+    for attempt in range(1, SFTP_RECEIPT_MAX_ATTEMPTS + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        receipt_local = temporary / f"receipt-{attempt}.json"
+        batch = f"get {receipt_remote} {_quoted_local_sftp_path(receipt_local)}\n".encode("utf-8")
+        try:
+            _run_sftp(
+                configuration,
+                batch,
+                timeout_seconds=max(
+                    1,
+                    min(SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS, math.ceil(remaining)),
+                ),
+            )
+        except DurabilityError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or attempt == SFTP_RECEIPT_MAX_ATTEMPTS:
+                break
+            time.sleep(min(SFTP_RECEIPT_POLL_INTERVAL_SECONDS, remaining))
+            continue
+        metadata = _regular_file(receipt_local, temporary, "Windows durability receipt readback")
+        if metadata.st_size > MAX_DURABILITY_RECEIPT_BYTES:
+            fail("Windows durability receipt readback rejected")
+        try:
+            return _validate_windows_receipt(receipt_local.read_bytes(), pair)
+        except OSError as error:
+            raise DurabilityError("Windows durability receipt readback rejected") from error
+    raise DurabilityUnavailable("Windows durability receipt is unavailable")
 
 
 def _stage_validated_file(
@@ -757,7 +872,7 @@ def _stage_validated_file(
 
 
 class WindowsSftpDurabilityAdapter:
-    """Fixed SFTP transport/readback adapter without durable-write confirmation."""
+    """Fixed SFTP transport plus Windows receipt and final-store verification."""
 
     def __init__(self, configuration: WindowsSftpConfiguration) -> None:
         self.configuration = configuration
@@ -766,6 +881,9 @@ class WindowsSftpDurabilityAdapter:
         object_directory = _remote_object_directory(self.configuration, pair.backup_id)
         artifact_remote = f"{object_directory}/{pair.artifact_filename}"
         manifest_remote = f"{object_directory}/{pair.manifest_filename}"
+        durable_directory = _durable_object_directory(pair.backup_id)
+        durable_artifact_remote = f"{durable_directory}/{pair.artifact_filename}"
+        durable_manifest_remote = f"{durable_directory}/{pair.manifest_filename}"
         try:
             with tempfile.TemporaryDirectory(
                 prefix=f"verify-{pair.backup_id}-",
@@ -775,18 +893,19 @@ class WindowsSftpDurabilityAdapter:
                 os.chmod(temporary, 0o700)
                 artifact_staged = temporary / f"upload-{pair.artifact_filename}"
                 manifest_staged = temporary / f"upload-{pair.manifest_filename}"
-                artifact_readback = temporary / f"readback-{pair.artifact_filename}"
-                manifest_readback = temporary / f"readback-{pair.manifest_filename}"
+                artifact_readback = temporary / f"durable-{pair.artifact_filename}"
+                manifest_readback = temporary / f"durable-{pair.manifest_filename}"
                 _stage_validated_file(
                     pair.artifact_path,
                     artifact_staged,
                     pair.artifact_sha256,
                     expected_size=pair.artifact_size,
                 )
-                manifest_size = _stage_validated_file(
+                _stage_validated_file(
                     pair.manifest_path,
                     manifest_staged,
                     pair.manifest_sha256,
+                    expected_size=pair.manifest_size,
                     maximum_size=MAX_MANIFEST_BYTES,
                 )
                 upload = (
@@ -797,16 +916,17 @@ class WindowsSftpDurabilityAdapter:
                     f"rename {manifest_remote}.partial {manifest_remote}\n"
                 ).encode("utf-8")
                 _run_sftp(self.configuration, upload)
+                _poll_windows_receipt(self.configuration, pair, temporary)
                 readback = (
-                    f"get {artifact_remote} {_quoted_local_sftp_path(artifact_readback)}\n"
-                    f"get {manifest_remote} {_quoted_local_sftp_path(manifest_readback)}\n"
+                    f"get {durable_artifact_remote} {_quoted_local_sftp_path(artifact_readback)}\n"
+                    f"get {durable_manifest_remote} {_quoted_local_sftp_path(manifest_readback)}\n"
                 ).encode("utf-8")
                 _run_sftp(self.configuration, readback)
                 artifact_metadata = _regular_file(artifact_readback, temporary, "SFTP artifact readback")
                 manifest_metadata = _regular_file(manifest_readback, temporary, "SFTP manifest readback")
                 if artifact_metadata.st_size != pair.artifact_size:
                     fail("SFTP artifact readback rejected")
-                if manifest_metadata.st_size != manifest_size:
+                if manifest_metadata.st_size != pair.manifest_size:
                     fail("SFTP manifest readback rejected")
                 if _sha256_file(artifact_readback) != pair.artifact_sha256:
                     fail("SFTP artifact checksum rejected")
@@ -817,8 +937,11 @@ class WindowsSftpDurabilityAdapter:
         except OSError as error:
             raise DurabilityError("SFTP destination readback failed") from error
 
+        # SFTP authenticates the server, not the Windows helper execution or its
+        # runtime ACL observations. An unsigned receipt therefore cannot prove
+        # durable-write authority to this process, even after exact readback.
         raise DurabilityUnavailable(
-            "SFTP destination readback succeeded but durable-write confirmation is unavailable",
+            "Windows receipt authentication is unavailable; no durability evidence was published"
         )
 
 
