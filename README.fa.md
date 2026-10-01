@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-نسخه مخزن فعلی `0.2.6` است و شامل قرارداد مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 همراه با transport ثابت Windows SFTP و readback مقصد، و Monitoring ایزوله Staging/Production است. سوابق تاریخی Taskها فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` را تأیید می‌کنند؛ این branch نسخه‌ای را که اکنون روی host deploy شده است استنتاج نمی‌کند. adapter مربوط به SFTP همچنان fail-closed است، زیرا تأیید مثبت durable-write برای هر backup پیاده‌سازی نشده است. اصلاح proxy لوپ‌بک Prometheus از `v0.2.4` به بعد در تاریخچه release محلی وجود دارد، اما تاریخچه مخزن به‌تنهایی rollout زنده آن را اثبات نمی‌کند. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، یک primitive واقعی برای durable-write همراه با provision زنده credential/trust مربوط به SFTP، و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+نسخه مخزن فعلی `0.2.6` است و شامل قرارداد مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 همراه با transport ثابت Windows SFTP، helper ویندوزی برای durable copy و receipt پس از volume flush، readback نهایی از durable store، و Monitoring ایزوله Staging/Production است. سوابق تاریخی Taskها فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` را تأیید می‌کنند؛ این branch نسخه‌ای را که اکنون روی host deploy شده است استنتاج نمی‌کند. مسیر کامل Phase C2 همچنان fail-closed است: هیچ نصب زنده Windows پیکربندی نشده و receipt امضانشده Windows تا زمان وجود یک مرجع receipt احراز‌شده یا سازوکار اعتماد قابل‌اعتبارسنجی از VPS عمداً برای evidence مثبت پذیرفته نمی‌شود. اصلاح proxy لوپ‌بک Prometheus از `v0.2.4` به بعد در تاریخچه release محلی وجود دارد، اما تاریخچه مخزن به‌تنهایی rollout زنده آن را اثبات نمی‌کند. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی زنده Phase C2 و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 
@@ -317,7 +317,7 @@ Staging و Production دارای database، volume، credential، runtime file،
 
 gateهای عملیاتی زیر همچنان fail-closed باقی می‌مانند:
 
-- قرارداد repository-side مربوط به Phase C2 پیاده‌سازی و با داده synthetic آزمایش شده است، اما readback در Windows SFTP تأیید مثبت durable-write موردنیاز را فراهم نمی‌کند و هیچ adapter زنده‌ای پیکربندی یا فعال نشده است.
+- قرارداد repository-side مربوط به Phase C2، helper ویندوزی durable copy/volume-flush receipt، اعتبارسنجی سخت‌گیرانه receipt و readback نهایی durable store پیاده‌سازی و با تست‌های synthetic/static پوشش داده شده‌اند، اما هیچ helper یا adapter زنده‌ای روی Windows نصب، پیکربندی یا فعال نشده است. adapter ویندوز حتی پس از receipt/readback موفق نیز fail-closed می‌ماند، زیرا receipt امضانشده provenance اجرای helper را برای VPS احراز نمی‌کند.
 - در نتیجه migration fingerprint تغییریافته برای Production همچنان پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
 - فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` تأیید شده است، اما این branch نسخه live فعلی یا rollout اصلاح منتشرشده proxy مربوط به Prometheus را اثبات نمی‌کند؛ monitoring عمومی و off-host نیز جدا باقی می‌ماند.
 - automatic restore وجود ندارد.
@@ -402,7 +402,7 @@ develop
 
 کارهای باقی‌مانده‌ای که در وضعیت فعلی تأیید شده‌اند عبارت‌اند از:
 
-- یک primitive مثبت durable-write برای هر backup و سپس provision زنده credential/trust، اعتبارسنجی مقصد، پیکربندی و فعال‌سازی مسیر Windows SFTP در Phase C2؛
+- یک مرجع receipt احراز‌شده (یا provenance قابل‌اعتبارسنجی اجرای helper از VPS)، سپس نصب زنده directory/ACL و helper با LocalSystem روی Windows، provision کردن credential/trust، اعتبارسنجی native flush و مرزهای SFTP، پیکربندی و فعال‌سازی مسیر Windows SFTP در Phase C2؛
 - اعتبارسنجی زنده قرارداد منتشرشده proxy مربوط به Prometheus و تشخیص مستقل خرابی بیرونی؛
 - cutover نهایی و بازبینی‌شده عمومی DNS/Cloudflare؛
 - disposable rebuild و اثبات کامل disaster recovery؛

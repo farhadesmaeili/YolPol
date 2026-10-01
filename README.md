@@ -6,7 +6,7 @@ YOLPOL is a multilingual, SEO-first B2B wholesale sourcing platform. Its current
 
 Commercial activity is inquiry-only: the public site does not publish internal Product prices or provide checkout, payment, or direct online purchasing. The application is designed for self-hosting and favors static Server Components, crawlable locale-prefixed routes, and explicit operational boundaries.
 
-The current repository is version `0.2.6` and includes a separately isolated Production contract, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core with fixed Windows SFTP transport and destination readback, and isolated Staging/Production Monitoring. Historical task records verify Production Monitoring activation at `v0.2.3`; this branch does not infer the currently deployed host version. The SFTP adapter remains fail-closed because positive per-backup durable-write confirmation is not implemented. The Prometheus loopback proxy fix is present in local release history from `v0.2.4` onward, but repository history alone does not prove its live rollout. Final public DNS/Cloudflare cutover, independent external monitoring, a real durable-write primitive plus live SFTP credential/trust provisioning, and full disposable disaster-recovery proof remain separate work.
+The current repository is version `0.2.6` and includes a separately isolated Production contract, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core with fixed Windows SFTP transport, a Windows durable-copy/volume-flush receipt helper, and final durable-store readback, plus isolated Staging/Production Monitoring. Historical task records verify Production Monitoring activation at `v0.2.3`; this branch does not infer the currently deployed host version. The complete Phase C2 path remains fail-closed: no live Windows installation is configured, and the unsigned Windows receipt is deliberately ineligible for positive evidence until an authenticated receipt authority or equivalent VPS-verifiable trust mechanism exists. The Prometheus loopback proxy fix is present in local release history from `v0.2.4` onward, but repository history alone does not prove its live rollout. Final public DNS/Cloudflare cutover, independent external monitoring, live Phase C2 activation, and full disposable disaster-recovery proof remain separate work.
 
 ## Key features
 
@@ -317,7 +317,7 @@ The environments have independent databases, volumes, credentials, runtime files
 
 Known operational gates remain fail closed:
 
-- The Phase C2 repository contract is implemented and synthetically tested, but Windows SFTP readback cannot provide the required positive durable-write confirmation and no live adapter is configured or activated.
+- The Phase C2 repository contract, Windows durable-copy/volume-flush receipt helper, strict receipt validation, and final durable-store readback are implemented and synthetically/static tested, but no live Windows helper or adapter is installed, configured, or activated. The Windows adapter also remains fail-closed after successful receipt/readback because the unsigned receipt cannot authenticate helper provenance to the VPS.
 - Production-changing migration fingerprints therefore remain rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` before authority mutation.
 - Production Monitoring activation was verified at the `v0.2.3` milestone, but this branch does not prove the current live release or the released Prometheus proxy fix's host rollout; public/off-host monitoring remains separate.
 - No automatic restore exists.
@@ -402,7 +402,7 @@ Use Node.js 22 and pnpm `11.14.0`, run `pnpm install` with the committed lockfil
 
 The current verified remaining work includes:
 
-- a positive per-backup durable-write primitive, followed by live credential/trust provisioning, destination validation, configuration, and activation of the Windows SFTP Phase C2 path;
+- an authenticated receipt authority (or equivalent VPS-verifiable helper provenance), followed by live Windows directory/ACL and LocalSystem helper installation, credential/trust provisioning, native flush and SFTP-boundary validation, configuration, and activation of the Windows SFTP Phase C2 path;
 - live verification of the released Prometheus proxy contract and independent external failure detection;
 - final reviewed public DNS/Cloudflare cutover;
 - disposable rebuild and full disaster-recovery proof;
