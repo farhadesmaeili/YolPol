@@ -9,23 +9,37 @@ $DurableRoot = 'E:\yolpol-backups\durable'
 $ReceiptRoot = 'E:\yolpol-backups\durability-receipts'
 $InstalledHelperPath = 'C:\ProgramData\YOLPOL\offserver-durability\yolpol-durable-write.ps1'
 $BackupAccountName = 'yolpol-backup'
+$ReceiptSigningDomain = 'YOLPOL-WINDOWS-DURABILITY-RECEIPT-V1'
 $BackupIdPattern = '^yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?$'
 $DurabilityConfirmation = 'windows-flushfilebuffers-volume-v1'
 $MaximumProductionDirectories = 128
 $MaximumEntriesPerBackupDirectory = 4
 $MaximumReceiptBytes = 4096
+$ReceiptSignatureBytes = 384
 $BufferSize = 1MB
 
 Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 public static class YolpolWindowsDurabilityNative
 {
+    private const string RECEIPT_SIGNING_KEY_NAME = "YOLPOL-Offserver-Durability-Receipt-v1";
+    private const string RECEIPT_SIGNING_PROVIDER = "Microsoft Software Key Storage Provider";
+    private const int RECEIPT_SIGNING_KEY_BITS = 3072;
+    private const int RECEIPT_SIGNATURE_BYTES = 384;
+    private const string NCRYPT_SECURITY_DESCR_PROPERTY = "Security Descr";
+    private const int OWNER_SECURITY_INFORMATION = 0x00000001;
+    private const int DACL_SECURITY_INFORMATION = 0x00000004;
+    private const int NCRYPT_SILENT_FLAG = 0x00000040;
+    private const int MAXIMUM_SECURITY_DESCRIPTOR_BYTES = 65536;
     private const uint GENERIC_READ = 0x80000000;
     private const uint GENERIC_WRITE = 0x40000000;
     private const uint FILE_SHARE_READ = 0x00000001;
@@ -111,9 +125,236 @@ public static class YolpolWindowsDurabilityNative
     [DllImport("Netapi32.dll")]
     private static extern int NetApiBufferFree(IntPtr buffer);
 
+    [DllImport("ncrypt.dll", CharSet = CharSet.Unicode)]
+    private static extern int NCryptGetProperty(
+        SafeNCryptKeyHandle objectHandle,
+        string propertyName,
+        byte[] output,
+        int outputSize,
+        out int resultSize,
+        int flags);
+
     private static Win32Exception Error(string operation, int error)
     {
         return new Win32Exception(error, operation + " failed");
+    }
+
+    public static void AssertLocalSystem()
+    {
+        using (WindowsIdentity identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query))
+        {
+            SecurityIdentifier user = identity.User;
+            if (user == null || !user.IsWellKnown(WellKnownSidType.LocalSystemSid))
+            {
+                throw new UnauthorizedAccessException("The helper must execute as LocalSystem");
+            }
+        }
+    }
+
+    private static byte[] GetReceiptSigningKeySecurityDescriptor(CngKey key)
+    {
+        int flags = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | NCRYPT_SILENT_FLAG;
+        int requiredSize;
+        int status = NCryptGetProperty(
+            key.Handle,
+            NCRYPT_SECURITY_DESCR_PROPERTY,
+            null,
+            0,
+            out requiredSize,
+            flags);
+        if (status != 0)
+        {
+            throw new CryptographicException(
+                "The receipt signing key security descriptor is unavailable (NCrypt status 0x" +
+                status.ToString("X8") + ")");
+        }
+        if (requiredSize <= 0 || requiredSize > MAXIMUM_SECURITY_DESCRIPTOR_BYTES)
+        {
+            throw new CryptographicException("The receipt signing key security descriptor size is invalid");
+        }
+
+        byte[] securityDescriptor = new byte[requiredSize];
+        int actualSize;
+        status = NCryptGetProperty(
+            key.Handle,
+            NCRYPT_SECURITY_DESCR_PROPERTY,
+            securityDescriptor,
+            securityDescriptor.Length,
+            out actualSize,
+            flags);
+        if (status != 0 || actualSize != securityDescriptor.Length)
+        {
+            throw new CryptographicException(
+                "The receipt signing key security descriptor read failed (NCrypt status 0x" +
+                status.ToString("X8") + ")");
+        }
+        return securityDescriptor;
+    }
+
+    public static void ValidateReceiptSigningKeySecurityDescriptor(byte[] securityDescriptor)
+    {
+        if (securityDescriptor == null ||
+            securityDescriptor.Length == 0 ||
+            securityDescriptor.Length > MAXIMUM_SECURITY_DESCRIPTOR_BYTES)
+        {
+            throw new CryptographicException("The receipt signing key security descriptor is invalid");
+        }
+
+        RawSecurityDescriptor descriptor;
+        try
+        {
+            descriptor = new RawSecurityDescriptor(securityDescriptor, 0);
+        }
+        catch (Exception error)
+        {
+            throw new CryptographicException(
+                "The receipt signing key security descriptor cannot be parsed",
+                error);
+        }
+
+        SecurityIdentifier localSystem = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        SecurityIdentifier administrators = new SecurityIdentifier(
+            WellKnownSidType.BuiltinAdministratorsSid,
+            null);
+        if (descriptor.Owner == null || !descriptor.Owner.Equals(localSystem))
+        {
+            throw new CryptographicException("The receipt signing key owner is not LocalSystem");
+        }
+        if ((descriptor.ControlFlags & ControlFlags.DiscretionaryAclPresent) == 0 ||
+            descriptor.DiscretionaryAcl == null)
+        {
+            throw new CryptographicException("The receipt signing key DACL is null");
+        }
+        if ((descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) == 0)
+        {
+            throw new CryptographicException("The receipt signing key DACL is not protected");
+        }
+
+        CommonSecurityDescriptor commonDescriptor;
+        try
+        {
+            commonDescriptor = new CommonSecurityDescriptor(false, false, securityDescriptor, 0);
+        }
+        catch (Exception error)
+        {
+            throw new CryptographicException(
+                "The receipt signing key security descriptor cannot be normalized",
+                error);
+        }
+        if (!commonDescriptor.IsDiscretionaryAclCanonical)
+        {
+            throw new CryptographicException("The receipt signing key DACL is not canonical");
+        }
+        if (descriptor.DiscretionaryAcl.Count != 2)
+        {
+            throw new CryptographicException("The receipt signing key DACL has an unexpected ACE count");
+        }
+
+        bool localSystemSeen = false;
+        bool administratorsSeen = false;
+        for (int index = 0; index < descriptor.DiscretionaryAcl.Count; index++)
+        {
+            CommonAce ace = descriptor.DiscretionaryAcl[index] as CommonAce;
+            if (ace == null ||
+                ace.IsCallback ||
+                ace.AceQualifier != AceQualifier.AccessAllowed ||
+                ace.AceFlags != AceFlags.None ||
+                ace.AccessMask == 0)
+            {
+                throw new CryptographicException("The receipt signing key DACL has an unknown ACE shape");
+            }
+
+            if (ace.SecurityIdentifier.Equals(localSystem) && !localSystemSeen)
+            {
+                localSystemSeen = true;
+            }
+            else if (ace.SecurityIdentifier.Equals(administrators) && !administratorsSeen)
+            {
+                administratorsSeen = true;
+            }
+            else
+            {
+                throw new CryptographicException("The receipt signing key DACL grants an unapproved SID");
+            }
+        }
+        if (!localSystemSeen || !administratorsSeen)
+        {
+            throw new CryptographicException(
+                "The receipt signing key DACL must contain exactly LocalSystem and BUILTIN Administrators");
+        }
+    }
+
+    private static CngKey OpenValidatedReceiptSigningKey()
+    {
+        CngProvider provider = new CngProvider(RECEIPT_SIGNING_PROVIDER);
+        CngKey key = CngKey.Open(
+            RECEIPT_SIGNING_KEY_NAME,
+            provider,
+            CngKeyOpenOptions.MachineKey);
+        try
+        {
+            if (!string.Equals(key.Provider.Provider, RECEIPT_SIGNING_PROVIDER, StringComparison.Ordinal) ||
+                !string.Equals(key.Algorithm.Algorithm, CngAlgorithm.Rsa.Algorithm, StringComparison.Ordinal) ||
+                !key.AlgorithmGroup.Equals(CngAlgorithmGroup.Rsa) ||
+                key.KeySize != RECEIPT_SIGNING_KEY_BITS ||
+                !key.IsMachineKey ||
+                key.IsEphemeral ||
+                key.KeyUsage != CngKeyUsages.Signing ||
+                key.ExportPolicy != CngExportPolicies.None)
+            {
+                throw new CryptographicException("The fixed receipt signing key contract is not satisfied");
+            }
+            ValidateReceiptSigningKeySecurityDescriptor(GetReceiptSigningKeySecurityDescriptor(key));
+            return key;
+        }
+        catch
+        {
+            key.Dispose();
+            throw;
+        }
+    }
+
+    public static byte[] SignReceipt(byte[] message)
+    {
+        AssertLocalSystem();
+        using (CngKey key = OpenValidatedReceiptSigningKey())
+        using (RSACng rsa = new RSACng(key))
+        {
+            byte[] signature = rsa.SignData(
+                message,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pss);
+            if (signature.Length != RECEIPT_SIGNATURE_BYTES ||
+                !rsa.VerifyData(
+                    message,
+                    signature,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pss))
+            {
+                throw new CryptographicException("Receipt signature self-verification failed");
+            }
+            return signature;
+        }
+    }
+
+    public static void VerifyReceipt(byte[] message, byte[] signature)
+    {
+        if (signature == null || signature.Length != RECEIPT_SIGNATURE_BYTES)
+        {
+            throw new CryptographicException("Receipt signature length is invalid");
+        }
+        using (CngKey key = OpenValidatedReceiptSigningKey())
+        using (RSACng rsa = new RSACng(key))
+        {
+            if (!rsa.VerifyData(
+                message,
+                signature,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pss))
+            {
+                throw new CryptographicException("Receipt signature verification failed");
+            }
+        }
     }
 
     public static FileStream OpenPlainRead(string path, int bufferSize)
@@ -673,6 +914,42 @@ function Get-CanonicalReceiptBytes {
     return $content
 }
 
+function Get-ReceiptSigningMessage {
+    param([byte[]]$ReceiptBytes)
+
+    $domainBytes = [System.Text.Encoding]::ASCII.GetBytes($ReceiptSigningDomain)
+    $message = [byte[]]::new($domainBytes.Length + 1 + $ReceiptBytes.Length)
+    [System.Buffer]::BlockCopy($domainBytes, 0, $message, 0, $domainBytes.Length)
+    $message[$domainBytes.Length] = 0
+    [System.Buffer]::BlockCopy(
+        $ReceiptBytes,
+        0,
+        $message,
+        $domainBytes.Length + 1,
+        $ReceiptBytes.Length
+    )
+    return $message
+}
+
+function Write-SignaturePartial {
+    param(
+        [string]$Path,
+        [byte[]]$Signature
+    )
+
+    if ($Signature.Length -ne $ReceiptSignatureBytes) {
+        throw 'Receipt signature length is invalid'
+    }
+    $stream = [YolpolWindowsDurabilityNative]::CreateNewWriteThrough($Path, $BufferSize)
+    try {
+        $stream.Write($Signature, 0, $Signature.Length)
+        $stream.Flush($true)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Read-PlainBoundedBytes {
     param(
         [string]$Path,
@@ -700,15 +977,16 @@ function Read-PlainBoundedBytes {
 function Assert-EqualBytes {
     param(
         [byte[]]$Expected,
-        [byte[]]$Actual
+        [byte[]]$Actual,
+        [string]$Label = 'Existing completed receipt'
     )
 
     if ($Expected.Length -ne $Actual.Length) {
-        throw 'Existing completed receipt mismatch'
+        throw "$Label mismatch"
     }
     for ($index = 0; $index -lt $Expected.Length; $index++) {
         if ($Expected[$index] -ne $Actual[$index]) {
-            throw 'Existing completed receipt mismatch'
+            throw "$Label mismatch"
         }
     }
 }
@@ -718,6 +996,7 @@ if (-not $drive.IsReady -or $drive.DriveType -ne [System.IO.DriveType]::Fixed -o
     throw 'The fixed E: NTFS volume contract is not satisfied'
 }
 
+[YolpolWindowsDurabilityNative]::AssertLocalSystem()
 $trust = Assert-WindowsTrustBoundary
 $production = $trust.Production
 
@@ -750,18 +1029,39 @@ foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
     $durableDirectory = [System.IO.Path]::Combine($DurableRoot, $backupId)
     $receiptFinal = [System.IO.Path]::Combine($ReceiptRoot, "$backupId.json")
     $receiptPartial = "$receiptFinal.partial"
+    $signatureFinal = [System.IO.Path]::Combine($ReceiptRoot, "$backupId.sig")
+    $signaturePartial = "$signatureFinal.partial"
 
     if ([System.IO.File]::Exists($receiptPartial) -or [System.IO.Directory]::Exists($receiptPartial)) {
         throw 'A durability receipt partial collision requires manual review'
     }
-    if ([System.IO.File]::Exists($receiptFinal)) {
+    if ([System.IO.File]::Exists($signaturePartial) -or [System.IO.Directory]::Exists($signaturePartial)) {
+        throw 'A durability receipt signature partial collision requires manual review'
+    }
+    if ([System.IO.Directory]::Exists($receiptFinal) -or [System.IO.Directory]::Exists($signatureFinal)) {
+        throw 'A durability receipt or signature final collision requires manual review'
+    }
+    $receiptExists = [System.IO.File]::Exists($receiptFinal)
+    $signatureExists = [System.IO.File]::Exists($signatureFinal)
+    if ($receiptExists -ne $signatureExists) {
+        throw 'A durability receipt/signature orphan requires manual review'
+    }
+    if ($receiptExists) {
         $existingReceipt = [System.IO.FileInfo]::new($receiptFinal)
         if ((Test-ReparsePoint $existingReceipt) -or $existingReceipt.Length -le 0 -or $existingReceipt.Length -gt $MaximumReceiptBytes) {
             throw 'An existing durability receipt is invalid'
         }
+        $existingSignature = [System.IO.FileInfo]::new($signatureFinal)
+        if ((Test-ReparsePoint $existingSignature) -or $existingSignature.Length -ne $ReceiptSignatureBytes) {
+            throw 'An existing durability receipt signature is invalid'
+        }
         Assert-CanonicalAcl -Path $receiptFinal -Directory $false `
             -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
             -AdministratorsSid $trust.AdministratorsSid -Label 'Existing durability receipt' `
+            -RequireProtected $false
+        Assert-CanonicalAcl -Path $signatureFinal -Directory $false `
+            -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+            -AdministratorsSid $trust.AdministratorsSid -Label 'Existing durability receipt signature' `
             -RequireProtected $false
         $existingDurable = Assert-PlainDirectory $durableDirectory 'Existing durable backup directory'
         Assert-CanonicalAcl -Path $durableDirectory -Directory $true `
@@ -790,6 +1090,12 @@ foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
         $expectedReceipt = Get-CanonicalReceiptBytes $backupId $existingArtifact $existingManifest
         $actualReceipt = Read-PlainBoundedBytes $receiptFinal $MaximumReceiptBytes
         Assert-EqualBytes $expectedReceipt $actualReceipt
+        $actualSignature = Read-PlainBoundedBytes $signatureFinal $ReceiptSignatureBytes
+        if ($actualSignature.Length -ne $ReceiptSignatureBytes) {
+            throw 'An existing durability receipt signature has the wrong length'
+        }
+        $existingSigningMessage = Get-ReceiptSigningMessage $actualReceipt
+        [YolpolWindowsDurabilityNative]::VerifyReceipt($existingSigningMessage, $actualSignature)
         continue
     }
     if ([System.IO.Directory]::Exists($durableDirectory) -or [System.IO.File]::Exists($durableDirectory)) {
@@ -845,10 +1151,18 @@ foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
     [YolpolWindowsDurabilityNative]::FlushFixedVolume()
 
     $receiptBytes = Get-CanonicalReceiptBytes $backupId $artifactVerified $manifestVerified
+    $signingMessage = Get-ReceiptSigningMessage $receiptBytes
+    $signatureBytes = [YolpolWindowsDurabilityNative]::SignReceipt($signingMessage)
+    Write-SignaturePartial $signaturePartial $signatureBytes
+    Assert-CanonicalAcl -Path $signaturePartial -Directory $false `
+        -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+        -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt signature partial' `
+        -RequireProtected $false
     Write-ReceiptPartial $receiptPartial $receiptBytes
     Assert-CanonicalAcl -Path $receiptPartial -Directory $false `
         -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
         -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt partial' `
         -RequireProtected $false
+    [YolpolWindowsDurabilityNative]::MoveNewNoReplace($signaturePartial, $signatureFinal)
     [YolpolWindowsDurabilityNative]::MoveNewNoReplace($receiptPartial, $receiptFinal)
 }

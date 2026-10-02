@@ -533,6 +533,160 @@ class OffserverDurabilityTests(unittest.TestCase):
         ):
             durability._validate_sftp_executable()
 
+    def test_missing_or_insecure_windows_verification_key_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.pem"
+            with (
+                patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", missing),
+                patch.object(durability, "_secure_root_directory"),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._validate_windows_receipt_verification_authority()
+
+        insecure_values = (
+            Mock(st_mode=stat.S_IFREG | 0o600, st_uid=1000, st_gid=0, st_size=512),
+            Mock(st_mode=stat.S_IFREG | 0o644, st_uid=0, st_gid=0, st_size=512),
+            Mock(st_mode=stat.S_IFDIR | 0o600, st_uid=0, st_gid=0, st_size=512),
+        )
+        for metadata in insecure_values:
+            with (
+                patch.object(durability, "_secure_root_directory"),
+                patch.object(Path, "lstat", return_value=metadata),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._validate_windows_receipt_verification_authority()
+
+    def test_missing_or_insecure_openssl_executable_fails_closed(self) -> None:
+        with patch.object(Path, "lstat", side_effect=FileNotFoundError()), self.assertRaises(
+            durability.DurabilityUnavailable,
+        ):
+            durability._validate_openssl_executable()
+        insecure = Mock(st_mode=stat.S_IFREG | 0o775, st_uid=0, st_gid=0)
+        with (
+            patch.object(Path, "lstat", return_value=insecure),
+            patch.object(durability.os, "access", return_value=True),
+            self.assertRaises(durability.DurabilityUnavailable),
+        ):
+            durability._validate_openssl_executable()
+
+    def test_invalid_public_pem_and_syntactically_valid_invalid_der_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            public_key = Path(directory) / "public.pem"
+            public_key.write_text(
+                "-----BEGIN PUBLIC KEY-----\nnot-base64!\n-----END PUBLIC KEY-----\n",
+                encoding="ascii",
+            )
+            with (
+                patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._validate_windows_receipt_public_key_content()
+
+            public_key.write_text(
+                "-----BEGIN PUBLIC KEY-----\n"
+                + base64.b64encode(b"syntactically-valid-base64-not-a-DER-key").decode("ascii")
+                + "\n-----END PUBLIC KEY-----\n",
+                encoding="ascii",
+            )
+            with patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key):
+                durability._validate_windows_receipt_public_key_content()
+            with (
+                patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key),
+                patch.object(durability, "_secure_root_directory"),
+                patch.object(durability, "_secure_root_file"),
+                patch.object(durability, "_validate_openssl_executable"),
+                patch.object(
+                    durability.subprocess,
+                    "run",
+                    return_value=Mock(returncode=1, stdout=b""),
+                ),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._validate_windows_receipt_verification_authority()
+
+    def test_openssl_public_key_preflight_uses_only_fixed_bounded_policy(self) -> None:
+        valid_output = (
+            b"Key is valid\n"
+            b"Public-Key: (3072 bit)\n"
+            b"Modulus:\n"
+            b"    00:01\n"
+            b"Exponent: 65537 (0x10001)\n"
+        )
+        with patch.object(
+            durability.subprocess,
+            "run",
+            return_value=Mock(returncode=0, stdout=valid_output),
+        ) as run:
+            durability._run_openssl_public_key_preflight()
+        self.assertEqual(run.call_args.args[0], [
+            str(durability.OPENSSL_EXECUTABLE),
+            "pkey",
+            "-pubin",
+            "-in",
+            str(durability.WINDOWS_RECEIPT_PUBLIC_KEY_PATH),
+            "-pubcheck",
+            "-text_pub",
+            "-noout",
+        ])
+        self.assertFalse(run.call_args.kwargs["shell"])
+        self.assertEqual(run.call_args.kwargs["timeout"], durability.OPENSSL_TIMEOUT_SECONDS)
+        self.assertEqual(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stdout"], subprocess.PIPE)
+        self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        self.assertEqual(
+            run.call_args.kwargs["env"],
+            {"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+
+        for label, result in (
+            ("command failure", Mock(returncode=1, stdout=b"")),
+            (
+                "wrong algorithm",
+                Mock(
+                    returncode=0,
+                    stdout=(
+                        b"Key is valid\nPublic-Key: (256 bit)\npub:\n    01\nASN1 OID: prime256v1\n"
+                    ),
+                ),
+            ),
+            (
+                "wrong RSA size",
+                Mock(
+                    returncode=0,
+                    stdout=(
+                        b"Key is valid\nPublic-Key: (2048 bit)\nModulus:\n    00:01\n"
+                        b"Exponent: 65537 (0x10001)\n"
+                    ),
+                ),
+            ),
+            (
+                "oversized output",
+                Mock(
+                    returncode=0,
+                    stdout=b"x" * (durability.MAX_OPENSSL_PUBLIC_KEY_OUTPUT_BYTES + 1),
+                ),
+            ),
+        ):
+            with (
+                self.subTest(label=label),
+                patch.object(durability.subprocess, "run", return_value=result),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._run_openssl_public_key_preflight()
+
+        with (
+            patch.object(
+                durability.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(
+                    ["/usr/bin/openssl"],
+                    durability.OPENSSL_TIMEOUT_SECONDS,
+                ),
+            ),
+            self.assertRaises(durability.DurabilityUnavailable),
+        ):
+            durability._run_openssl_public_key_preflight()
+
     def test_sftp_process_uses_only_fixed_strict_noninteractive_options(self) -> None:
         configuration = durability.WindowsSftpConfiguration(
             host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
@@ -569,6 +723,43 @@ class OffserverDurabilityTests(unittest.TestCase):
         ), self.assertRaises(durability.DurabilityError):
             durability._run_sftp(configuration, b"pwd\n")
 
+    def test_openssl_verification_uses_only_fixed_pinned_policy(self) -> None:
+        signature = Path("fixed-signature.sig")
+        message = Path("fixed-message.bin")
+        with patch.object(durability.subprocess, "run", return_value=Mock(returncode=0)) as run:
+            durability._run_openssl_receipt_verification(signature, message)
+        self.assertEqual(run.call_args.args[0], [
+            str(durability.OPENSSL_EXECUTABLE),
+            "dgst",
+            "-sha256",
+            "-verify",
+            str(durability.WINDOWS_RECEIPT_PUBLIC_KEY_PATH),
+            "-signature",
+            str(signature),
+            "-sigopt",
+            "rsa_padding_mode:pss",
+            "-sigopt",
+            "rsa_mgf1_md:sha256",
+            "-sigopt",
+            "rsa_pss_saltlen:digest",
+            str(message),
+        ])
+        self.assertFalse(run.call_args.kwargs["shell"])
+        self.assertEqual(run.call_args.kwargs["timeout"], durability.OPENSSL_TIMEOUT_SECONDS)
+        self.assertEqual(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        self.assertEqual(
+            run.call_args.kwargs["env"],
+            {"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+
+        with (
+            patch.object(durability.subprocess, "run", return_value=Mock(returncode=1)),
+            self.assertRaises(durability.DurabilityError),
+        ):
+            durability._run_openssl_receipt_verification(signature, message)
+
     @staticmethod
     def _readback_local_paths(batch: bytes) -> list[Path]:
         result = []
@@ -591,9 +782,17 @@ class OffserverDurabilityTests(unittest.TestCase):
             **overrides,
         }
 
-    def _publish_receipt_readback(self, batch: bytes, pair: object) -> None:
-        [receipt] = self._readback_local_paths(batch)
+    def _publish_receipt_readback(
+        self,
+        batch: bytes,
+        pair: object,
+        signature: bytes | None = None,
+    ) -> None:
+        receipt, signature_path = self._readback_local_paths(batch)
         receipt.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
+        signature_path.write_bytes(
+            signature if signature is not None else b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES,
+        )
 
     def _publish_durable_readback(self, batch: bytes, pair: object) -> None:
         artifact, manifest = self._readback_local_paths(batch)
@@ -658,8 +857,9 @@ class OffserverDurabilityTests(unittest.TestCase):
                     nonlocal calls
                     calls += 1
                     if calls == 2:
-                        [receipt] = self._readback_local_paths(batch)
+                        receipt, signature = self._readback_local_paths(batch)
                         receipt.write_bytes(content)
+                        signature.write_bytes(b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
 
                 configuration = durability.WindowsSftpConfiguration(
                     host="100.100.100.100",
@@ -715,6 +915,7 @@ class OffserverDurabilityTests(unittest.TestCase):
             for invocation in run.call_args_list:
                 batch = invocation.args[1]
                 self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.json ".encode(), batch)
+                self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.sig ".encode(), batch)
                 self.assertLessEqual(
                     invocation.kwargs["timeout_seconds"],
                     durability.SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS,
@@ -729,14 +930,222 @@ class OffserverDurabilityTests(unittest.TestCase):
             durability._receipt_remote_path(self.BACKUP_ID),
             f"/durability-receipts/{self.BACKUP_ID}.json",
         )
+        self.assertEqual(
+            durability._receipt_signature_remote_path(self.BACKUP_ID),
+            f"/durability-receipts/{self.BACKUP_ID}.sig",
+        )
         for backup_id in ("../backup", "yolpol-production-20270115T120000Z/other"):
             with self.subTest(backup_id=backup_id):
                 with self.assertRaises(durability.DurabilityError):
                     durability._durable_object_directory(backup_id)
                 with self.assertRaises(durability.DurabilityError):
                     durability._receipt_remote_path(backup_id)
+                with self.assertRaises(durability.DurabilityError):
+                    durability._receipt_signature_remote_path(backup_id)
 
-    def test_windows_sftp_receipt_and_readback_cannot_publish_without_authenticated_authority(self) -> None:
+    def test_missing_or_wrong_length_receipt_signature_fails_closed(self) -> None:
+        for label, signature in (("missing", None), ("wrong-length", b"s" * 383)):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                source = temporary / "source"
+                source.mkdir()
+                self.pair(source)
+                pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+                configuration = durability.WindowsSftpConfiguration(
+                    host="100.100.100.100",
+                    port=22,
+                    username="yolpol-backup",
+                    remote_directory="/production",
+                )
+
+                def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
+                    receipt, signature_path = self._readback_local_paths(batch)
+                    receipt.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
+                    if signature is not None:
+                        signature_path.write_bytes(signature)
+
+                with (
+                    patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                    self.assertRaises(durability.DurabilityError),
+                ):
+                    durability._poll_windows_receipt(configuration, pair, temporary)
+
+    def test_receipt_signature_verification_stages_exact_domain_separated_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            signature = temporary / "receipt.sig"
+            signature.write_bytes(b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+            receipt = b'{"canonical":"receipt"}\n'
+
+            def inspect_message(signature_path: Path, message_path: Path) -> None:
+                self.assertEqual(signature_path, signature)
+                self.assertEqual(
+                    message_path.read_bytes(),
+                    durability.WINDOWS_RECEIPT_DOMAIN_SEPARATOR + receipt,
+                )
+
+            with (
+                patch.object(durability, "_validate_windows_receipt_verification_authority"),
+                patch.object(
+                    durability,
+                    "_run_openssl_receipt_verification",
+                    side_effect=inspect_message,
+                ) as verify,
+            ):
+                durability._verify_windows_receipt_signature(receipt, signature, temporary)
+            verify.assert_called_once()
+
+    def test_openssl_rsa_pss_interoperability_rejects_modified_or_replayed_data(self) -> None:
+        executable = shutil.which("openssl")
+        self.assertIsNotNone(executable, "OpenSSL is required by the bootstrap target contract")
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            private_key = temporary / "ephemeral-test-private.pem"
+            public_key = temporary / "ephemeral-test-public.pem"
+            message = temporary / "message.bin"
+            signature = temporary / "signature.bin"
+            receipt = durability.canonical_bytes({"backupId": self.BACKUP_ID})
+            message.write_bytes(durability.WINDOWS_RECEIPT_DOMAIN_SEPARATOR + receipt)
+            for arguments in (
+                [
+                    executable,
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:3072",
+                    "-out",
+                    str(private_key),
+                ],
+                [executable, "pkey", "-in", str(private_key), "-pubout", "-out", str(public_key)],
+                [
+                    executable,
+                    "dgst",
+                    "-sha256",
+                    "-sign",
+                    str(private_key),
+                    "-sigopt",
+                    "rsa_padding_mode:pss",
+                    "-sigopt",
+                    "rsa_mgf1_md:sha256",
+                    "-sigopt",
+                    "rsa_pss_saltlen:digest",
+                    "-out",
+                    str(signature),
+                    str(message),
+                ],
+            ):
+                result = subprocess.run(
+                    arguments,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    shell=False,
+                    timeout=30,
+                )
+                self.assertEqual(result.returncode, 0)
+            self.assertEqual(signature.stat().st_size, durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+
+            with (
+                patch.object(durability, "OPENSSL_EXECUTABLE", Path(executable)),
+                patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key),
+            ):
+                # The exact /usr/bin/openssl preflight runs in the Debian target test below.
+                if os.name != "nt":
+                    durability._run_openssl_public_key_preflight()
+                durability._run_openssl_receipt_verification(signature, message)
+
+                modified_signature = temporary / "modified-signature.bin"
+                signature_bytes = signature.read_bytes()
+                modified_signature.write_bytes(bytes([signature_bytes[0] ^ 1]) + signature_bytes[1:])
+                with self.assertRaises(durability.DurabilityError):
+                    durability._run_openssl_receipt_verification(modified_signature, message)
+
+                different_receipt = temporary / "different-receipt.bin"
+                different_receipt.write_bytes(
+                    durability.WINDOWS_RECEIPT_DOMAIN_SEPARATOR
+                    + durability.canonical_bytes({"backupId": self.BACKUP_ID + "0"}),
+                )
+                with self.assertRaises(durability.DurabilityError):
+                    durability._run_openssl_receipt_verification(signature, different_receipt)
+
+            with patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key):
+                durability._validate_windows_receipt_public_key_content()
+            with (
+                patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", private_key),
+                self.assertRaises(durability.DurabilityUnavailable),
+            ):
+                durability._validate_windows_receipt_public_key_content()
+
+    def test_windows_authenticated_receipt_and_exact_readback_publish_positive_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            calls: list[bytes] = []
+            events: list[str] = []
+
+            def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
+                calls.append(batch)
+                if len(calls) == 1:
+                    events.append("upload")
+                elif len(calls) == 2:
+                    events.append("receipt-and-signature")
+                    self._publish_receipt_readback(batch, pair)
+                elif len(calls) == 3:
+                    events.append("durable-readback")
+                    self._publish_durable_readback(batch, pair)
+
+            def verify_signature(receipt_data: bytes, signature_path: Path, temporary: Path) -> None:
+                self.assertEqual(receipt_data, durability.canonical_bytes(self.receipt_value(pair)))
+                self.assertEqual(signature_path.read_bytes(), b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+                self.assertEqual(signature_path.parent, temporary)
+                events.append("signature-verified")
+
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(
+                    durability,
+                    "_verify_windows_receipt_signature",
+                    side_effect=verify_signature,
+                ) as verify,
+            ):
+                result = durability.perform_durability(
+                    self.context(),
+                    durability.WindowsSftpDurabilityAdapter(configuration),
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+            verify.assert_called_once()
+            self.assertEqual(len(calls), 3)
+            self.assertEqual(
+                events,
+                ["upload", "receipt-and-signature", "signature-verified", "durable-readback"],
+            )
+            self.assertIn(f"mkdir /production/{self.BACKUP_ID}\n".encode(), calls[0])
+            self.assertIn(b".partial", calls[0])
+            self.assertNotIn(b"/durable", calls[0])
+            self.assertNotIn(b"/durability-receipts", calls[0])
+            self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.json ".encode(), calls[1])
+            self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.sig ".encode(), calls[1])
+            self.assertIn(f"get /durable/{self.BACKUP_ID}/{pair.artifact_filename} ".encode(), calls[2])
+            for read_batch in calls[1:]:
+                self.assertTrue(all(line.startswith(b"get ") for line in read_batch.splitlines()))
+            self.assertEqual(result["durabilityConfirmation"], durability.WINDOWS_DURABILITY_CONFIRMATION)
+            self.assertEqual(result["remoteObjectSetId"], durability._windows_remote_object_set_id(pair.backup_id))
+            self.assertTrue(result["destinationVerified"])
+            self.assertTrue(result["durableWriteConfirmed"])
+            self.assertEqual(len(list(evidence.iterdir())), 1)
+            self.assertEqual(list(verification.iterdir()), [])
+
+    def test_windows_signature_verification_failure_publishes_no_evidence_or_readback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source, _, evidence = self.directories(Path(directory))
             verification = Path(directory) / "verification"
@@ -747,20 +1156,23 @@ class OffserverDurabilityTests(unittest.TestCase):
             def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
                 calls.append(batch)
                 if len(calls) == 2:
-                    self._publish_receipt_readback(batch, pair)
-                elif len(calls) == 3:
-                    self._publish_durable_readback(batch, pair)
+                    self._publish_receipt_readback(batch, pair, b"w" * 384)
 
             configuration = durability.WindowsSftpConfiguration(
-                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+                host="100.100.100.100",
+                port=22,
+                username="yolpol-backup",
+                remote_directory="/production",
             )
             with (
                 patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
                 patch.object(durability, "_run_sftp", side_effect=fake_sftp),
-                self.assertRaisesRegex(
-                    durability.DurabilityUnavailable,
-                    "Windows receipt authentication is unavailable",
+                patch.object(
+                    durability,
+                    "_verify_windows_receipt_signature",
+                    side_effect=durability.DurabilityError("synthetic invalid signature"),
                 ),
+                self.assertRaises(durability.DurabilityError),
             ):
                 durability.perform_durability(
                     self.context(),
@@ -769,19 +1181,10 @@ class OffserverDurabilityTests(unittest.TestCase):
                     evidence_directory=evidence,
                     now_unix=self.NOW,
                 )
-            self.assertEqual(len(calls), 3)
-            self.assertIn(f"mkdir /production/{self.BACKUP_ID}\n".encode(), calls[0])
-            self.assertIn(b".partial", calls[0])
-            self.assertNotIn(b"/durable", calls[0])
-            self.assertNotIn(b"/durability-receipts", calls[0])
-            self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.json ".encode(), calls[1])
-            self.assertIn(f"get /durable/{self.BACKUP_ID}/{pair.artifact_filename} ".encode(), calls[2])
-            for read_batch in calls[1:]:
-                self.assertTrue(all(line.startswith(b"get ") for line in read_batch.splitlines()))
+            self.assertEqual(len(calls), 2)
             self.assertEqual(list(evidence.iterdir()), [])
-            self.assertEqual(list(verification.iterdir()), [])
 
-    def test_configured_production_entrypoint_stays_disabled_without_authenticated_authority(self) -> None:
+    def test_configured_production_entrypoint_accepts_authenticated_authority(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source, _, evidence = self.directories(Path(directory))
             verification = Path(directory) / "verification"
@@ -816,16 +1219,14 @@ class OffserverDurabilityTests(unittest.TestCase):
                 patch.object(durability, "_load_configuration", return_value=self.configured_value()),
                 patch.object(durability, "_validate_activation_files") as activation,
                 patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(durability, "_verify_windows_receipt_signature"),
                 patch.object(durability, "perform_durability", side_effect=perform_with_test_paths),
-                self.assertRaisesRegex(
-                    durability.DurabilityUnavailable,
-                    "Windows receipt authentication is unavailable",
-                ),
             ):
-                durability.execute_production_durability(self.context())
+                result = durability.execute_production_durability(self.context())
             activation.assert_called_once_with()
             self.assertEqual(calls, 3)
-            self.assertEqual(list(evidence.iterdir()), [])
+            self.assertEqual(result["durabilityConfirmation"], durability.WINDOWS_DURABILITY_CONFIRMATION)
+            self.assertEqual(len(list(evidence.iterdir())), 1)
 
     def test_windows_sftp_upload_receipt_and_readback_failures_publish_no_evidence(self) -> None:
         failures = ("upload-batch", "receipt", "readback-batch")
@@ -850,6 +1251,7 @@ class OffserverDurabilityTests(unittest.TestCase):
                 with (
                     patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
                     patch.object(durability, "_run_sftp", side_effect=fail_sftp),
+                    patch.object(durability, "_verify_windows_receipt_signature"),
                     patch.object(
                         durability,
                         "_poll_windows_receipt",
@@ -934,6 +1336,7 @@ class OffserverDurabilityTests(unittest.TestCase):
                 with (
                     patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
                     patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                    patch.object(durability, "_verify_windows_receipt_signature"),
                     self.assertRaises(durability.DurabilityError),
                 ):
                     durability.perform_durability(

@@ -1,5 +1,7 @@
 # Task 0072: Windows Durable-write Receipt
 
+> Subsequent repository status: Task 0073 implements fixed authenticated provenance for this unchanged canonical receipt by publishing a detached RSA-PSS signature and verifying it with a pinned VPS public key. The unsigned/future-authentication statements below record the Task 0072 boundary at completion; live activation still has not occurred.
+
 ## Status and activation boundary
 
 The Windows durable-copy helper, canonical receipt protocol, bounded VPS receipt polling, and final durable-store readback are implemented in the repository and covered by synthetic/static tests. The helper also contains fail-closed runtime path, hard-link, local-account, group-membership, installation-path, owner, and DACL validation. They are **not live**. This task did not create Windows directories, apply ACLs, install a Scheduled Task, run the helper as LocalSystem, refresh VPS contracts, configure the active adapter, provision a client key or host key, upload a Production backup, change Tailscale, or change Production or Staging.

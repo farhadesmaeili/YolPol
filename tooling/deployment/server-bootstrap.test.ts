@@ -94,7 +94,15 @@ describe("server bootstrap automation", () => {
   it("keeps Windows SFTP activation material root-owned, fixed, and absent from examples", () => {
     expect(durability).toContain('SFTP_KEY_PATH = SFTP_SECRET_DIRECTORY / "id_ed25519"');
     expect(durability).toContain('SFTP_KNOWN_HOSTS_PATH = SFTP_SECRET_DIRECTORY / "known_hosts"');
+    expect(durability).toContain(
+      'WINDOWS_RECEIPT_PUBLIC_KEY_PATH = SFTP_SECRET_DIRECTORY / "windows-receipt-rsa-v1.pem"',
+    );
     expect(durability).toContain('SFTP_EXECUTABLE = Path("/usr/bin/sftp")');
+    expect(durability).toContain('OPENSSL_EXECUTABLE = Path("/usr/bin/openssl")');
+    expect(durability).toContain('_validate_fixed_executable(OPENSSL_EXECUTABLE, "OpenSSL executable")');
+    expect(durability).toContain('"rsa_padding_mode:pss"');
+    expect(durability).toContain('"rsa_mgf1_md:sha256"');
+    expect(durability).toContain('"rsa_pss_saltlen:digest"');
     expect(durability).toContain('"-oBatchMode=yes"');
     expect(durability).toContain('"-oStrictHostKeyChecking=yes"');
     expect(durability).toContain('"-oUpdateHostKeys=no"');
@@ -106,6 +114,7 @@ describe("server bootstrap automation", () => {
     expect(durabilityExample).not.toMatch(/private|password|token|BEGIN OPENSSH PRIVATE KEY/u);
     expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/id_ed25519"');
     expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/known_hosts"');
+    expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/windows-receipt-rsa-v1.pem"');
   });
 
   it("keeps runtime, secrets, and release authorities closed and separated", () => {

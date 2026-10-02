@@ -203,7 +203,12 @@ class BootstrapTests(unittest.TestCase):
         managed_destinations = {contract.destination for contract in bootstrap.MANAGED_FILES}
         self.assertNotIn("/etc/yolpol/offserver-durability/id_ed25519", managed_destinations)
         self.assertNotIn("/etc/yolpol/offserver-durability/known_hosts", managed_destinations)
+        self.assertNotIn(
+            "/etc/yolpol/offserver-durability/windows-receipt-rsa-v1.pem",
+            managed_destinations,
+        )
         self.assertTrue(bootstrap.command_exists("/usr/bin/sftp"))
+        self.assertTrue(bootstrap.command_exists("/usr/bin/openssl"))
 
     def test_system_openssh_accepts_every_fixed_sftp_option(self) -> None:
         configuration = durability.WindowsSftpConfiguration(
@@ -228,6 +233,68 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn("bad configuration option", diagnostics)
         self.assertNotIn("unsupported option", diagnostics)
         self.assertNotIn("unknown option", diagnostics)
+
+    def test_system_openssl_accepts_fixed_receipt_rsa_pss_policy(self) -> None:
+        private_key = self.temporary / "ephemeral-private.pem"
+        public_key = self.temporary / "ephemeral-public.pem"
+        message = self.temporary / "message.bin"
+        signature = self.temporary / "signature.bin"
+        message.write_bytes(
+            durability.WINDOWS_RECEIPT_DOMAIN_SEPARATOR
+            + b'{"backupId":"yolpol-production-20270115T120000Z-abcdef0"}\n'
+        )
+        commands = (
+            [
+                "/usr/bin/openssl",
+                "genpkey",
+                "-algorithm",
+                "RSA",
+                "-pkeyopt",
+                "rsa_keygen_bits:3072",
+                "-out",
+                str(private_key),
+            ],
+            [
+                "/usr/bin/openssl",
+                "pkey",
+                "-in",
+                str(private_key),
+                "-pubout",
+                "-out",
+                str(public_key),
+            ],
+            [
+                "/usr/bin/openssl",
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private_key),
+                "-sigopt",
+                "rsa_padding_mode:pss",
+                "-sigopt",
+                "rsa_mgf1_md:sha256",
+                "-sigopt",
+                "rsa_pss_saltlen:digest",
+                "-out",
+                str(signature),
+                str(message),
+            ],
+        )
+        for arguments in commands:
+            result = subprocess.run(
+                arguments,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0)
+        self.assertEqual(signature.stat().st_size, durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+        with mock.patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key):
+            durability._run_openssl_public_key_preflight()
+            durability._run_openssl_receipt_verification(signature, message)
 
     def test_atomic_file_install_is_repeatable_and_requires_explicit_replacement(self) -> None:
         target = self.temporary / "contract"
