@@ -1,3 +1,4 @@
+import {spawnSync} from "node:child_process";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {describe, expect, it} from "vitest";
@@ -11,6 +12,7 @@ const adapter = readFileSync(
   resolve(repositoryRoot, "deploy/operations/yolpol-offserver-durability.py"),
   "utf8",
 );
+const windowsIt = process.platform === "win32" ? it : it.skip;
 
 describe("Windows durable-write helper repository contract", () => {
   it("uses only fixed roots, fixed identities, and a validated Production backup identity", () => {
@@ -62,6 +64,9 @@ describe("Windows durable-write helper repository contract", () => {
     expect(helper).toContain("while (($count = $source.Read($buffer, 0, $buffer.Length)) -gt 0)");
     expect(helper).toContain("$destination.Flush($true)");
     expect(helper).toContain("partial collision requires manual review");
+    expect(helper).toContain("receipt signature partial collision requires manual review");
+    expect(helper).toContain("receipt/signature orphan requires manual review");
+    expect(helper).toContain("if ($receiptExists -ne $signatureExists)");
     expect(helper).toContain("durable backup directory collision requires manual review");
     expect(helper).toContain("$existingEntries = Get-BoundedEntries $existingDurable 2");
     expect(helper).toContain("Assert-EqualBytes $expectedReceipt $actualReceipt");
@@ -70,7 +75,7 @@ describe("Windows durable-write helper repository contract", () => {
   it("requires protected canonical ACLs before scanning or accepting an existing receipt", () => {
     const trustCheck = helper.indexOf("$trust = Assert-WindowsTrustBoundary");
     const productionScan = helper.indexOf("$productionEntries = Get-BoundedEntries");
-    const existingReceipt = helper.indexOf("if ([System.IO.File]::Exists($receiptFinal))");
+    const existingReceipt = helper.indexOf("if ($receiptExists)");
 
     expect(helper).toContain("AreAccessRulesProtected");
     expect(helper).toContain("AreAccessRulesCanonical");
@@ -105,11 +110,13 @@ describe("Windows durable-write helper repository contract", () => {
   });
 
   it("rejects unsafe surviving leaf ACLs on existing and newly published durable state", () => {
-    const receiptBranch = helper.indexOf("if ([System.IO.File]::Exists($receiptFinal))");
+    const receiptBranch = helper.indexOf("if ($receiptExists)");
     const existingReceiptAcl = helper.indexOf(
       "-AdministratorsSid $trust.AdministratorsSid -Label 'Existing durability receipt'",
     );
     const existingReceiptRead = helper.indexOf("Read-PlainBoundedBytes $receiptFinal");
+    const existingSignatureAcl = helper.indexOf("-Label 'Existing durability receipt signature'");
+    const existingSignatureVerify = helper.indexOf("VerifyReceipt($existingSigningMessage, $actualSignature)");
     const newArtifactAcl = helper.indexOf("-Label 'Durable artifact partial'");
     const artifactPublication = helper.indexOf("MoveNewNoReplace($artifactPartial, $artifactFinal)");
     const receiptPartialAcl = helper.indexOf("-Label 'Durability receipt partial'");
@@ -121,6 +128,8 @@ describe("Windows durable-write helper repository contract", () => {
     expect(receiptBranch).toBeGreaterThanOrEqual(0);
     expect(existingReceiptAcl).toBeGreaterThan(receiptBranch);
     expect(existingReceiptRead).toBeGreaterThan(existingReceiptAcl);
+    expect(existingSignatureAcl).toBeGreaterThan(existingReceiptAcl);
+    expect(existingSignatureVerify).toBeGreaterThan(existingReceiptRead);
     expect(newArtifactAcl).toBeGreaterThan(existingReceiptRead);
     expect(artifactPublication).toBeGreaterThan(newArtifactAcl);
     expect(receiptPartialAcl).toBeGreaterThan(artifactPublication);
@@ -136,13 +145,17 @@ describe("Windows durable-write helper repository contract", () => {
     expect(helper).toContain("@($systemFullFile, $administratorsFullFile)");
   });
 
-  it("publishes the fixed receipt only after destination verification and volume flush", () => {
+  it("signs exact receipt bytes and publishes signature before the final receipt marker", () => {
     const artifactMove = helper.indexOf("MoveNewNoReplace($artifactPartial, $artifactFinal)");
     const manifestMove = helper.indexOf("MoveNewNoReplace($manifestPartial, $manifestFinal)");
     const finalVerification = helper.indexOf("$manifestVerified = Get-PlainFileDigest $manifestFinal");
     const volumeFlush = helper.indexOf("[YolpolWindowsDurabilityNative]::FlushFixedVolume()");
     const receiptBuild = helper.indexOf("$receiptBytes = Get-CanonicalReceiptBytes", volumeFlush);
+    const signingMessage = helper.indexOf("$signingMessage = Get-ReceiptSigningMessage $receiptBytes");
+    const signature = helper.indexOf("SignReceipt($signingMessage)");
+    const signaturePartialWrite = helper.indexOf("Write-SignaturePartial $signaturePartial $signatureBytes");
     const receiptPartialWrite = helper.indexOf("Write-ReceiptPartial $receiptPartial $receiptBytes");
+    const signaturePublication = helper.indexOf("MoveNewNoReplace($signaturePartial, $signatureFinal)");
     const receiptPublication = helper.indexOf("MoveNewNoReplace($receiptPartial, $receiptFinal)");
 
     expect(artifactMove).toBeGreaterThanOrEqual(0);
@@ -150,8 +163,14 @@ describe("Windows durable-write helper repository contract", () => {
     expect(finalVerification).toBeGreaterThan(manifestMove);
     expect(volumeFlush).toBeGreaterThan(finalVerification);
     expect(receiptBuild).toBeGreaterThan(volumeFlush);
-    expect(receiptPartialWrite).toBeGreaterThan(receiptBuild);
-    expect(receiptPublication).toBeGreaterThan(receiptPartialWrite);
+    expect(signingMessage).toBeGreaterThan(receiptBuild);
+    expect(signature).toBeGreaterThan(signingMessage);
+    expect(signaturePartialWrite).toBeGreaterThan(signature);
+    expect(helper).toMatch(/function Write-SignaturePartial[\s\S]*?CreateNewWriteThrough\(\$Path, \$BufferSize\)[\s\S]*?\$stream\.Flush\(\$true\)/u);
+    expect(receiptPartialWrite).toBeGreaterThan(signaturePartialWrite);
+    expect(signaturePublication).toBeGreaterThan(receiptPartialWrite);
+    expect(receiptPublication).toBeGreaterThan(signaturePublication);
+    expect(helper.slice(receiptPublication)).not.toMatch(/Get-PlainFileDigest|FlushFixedVolume|SignReceipt|Assert-CanonicalAcl/u);
     expect(helper).toContain("windows-flushfilebuffers-volume-v1");
     expect(helper).toContain("windows-sftp-v1:/durable/$BackupId");
     expect(helper).toContain("[System.Text.UTF8Encoding]::new($false)");
@@ -159,15 +178,119 @@ describe("Windows durable-write helper repository contract", () => {
     expect(helper).toContain("same-volume rename only publishes a new name");
   });
 
-  it("keeps the unauthenticated Windows receipt path unable to publish positive evidence", () => {
-    const receiptReadback = adapter.indexOf("_poll_windows_receipt(self.configuration, pair, temporary)");
+  it("requires signature verification and final readback before positive confirmation", () => {
+    const receiptReadback = adapter.indexOf("_poll_windows_receipt(");
+    const signatureVerification = adapter.indexOf("_verify_windows_receipt_signature(");
     const durableReadback = adapter.indexOf("_sha256_file(manifest_readback) != pair.manifest_sha256");
-    const trustFailure = adapter.indexOf("Windows receipt authentication is unavailable");
+    const positiveConfirmation = adapter.indexOf("durable_write_confirmed=True", durableReadback);
 
     expect(receiptReadback).toBeGreaterThanOrEqual(0);
-    expect(durableReadback).toBeGreaterThan(receiptReadback);
-    expect(trustFailure).toBeGreaterThan(durableReadback);
-    expect(adapter.slice(receiptReadback, trustFailure)).not.toContain("durable_write_confirmed=True");
+    expect(signatureVerification).toBeGreaterThan(receiptReadback);
+    expect(durableReadback).toBeGreaterThan(signatureVerification);
+    expect(positiveConfirmation).toBeGreaterThan(durableReadback);
+    expect(adapter).not.toContain("Windows receipt authentication is unavailable");
+  });
+
+  it("pins a LocalSystem-only non-exportable RSA-3072 CNG signing authority and RSA-PSS SHA-256", () => {
+    expect(helper).toContain('RECEIPT_SIGNING_KEY_NAME = "YOLPOL-Offserver-Durability-Receipt-v1"');
+    expect(helper).toContain('RECEIPT_SIGNING_PROVIDER = "Microsoft Software Key Storage Provider"');
+    expect(helper).toContain("CngKeyOpenOptions.MachineKey");
+    expect(helper).toContain("CngAlgorithm.Rsa.Algorithm");
+    expect(helper).toContain("key.AlgorithmGroup.Equals(CngAlgorithmGroup.Rsa)");
+    expect(helper).toContain("key.KeySize != RECEIPT_SIGNING_KEY_BITS");
+    expect(helper).toContain("!key.IsMachineKey");
+    expect(helper).toContain("key.IsEphemeral");
+    expect(helper).toContain("key.KeyUsage != CngKeyUsages.Signing");
+    expect(helper).toContain("key.ExportPolicy != CngExportPolicies.None");
+    expect(helper).toContain("WellKnownSidType.LocalSystemSid");
+    expect(helper).toContain("HashAlgorithmName.SHA256");
+    expect(helper).toContain("RSASignaturePadding.Pss");
+    expect(helper).toContain("signature.Length != RECEIPT_SIGNATURE_BYTES");
+    expect(helper).toContain("$ReceiptSignatureBytes = 384");
+    expect(helper).toContain("$ReceiptSigningDomain = 'YOLPOL-WINDOWS-DURABILITY-RECEIPT-V1'");
+    expect(helper).toContain("$message[$domainBytes.Length] = 0");
+    expect(helper).not.toMatch(/CngKey\.Create|New-SelfSignedCertificate|ExportSubjectPublicKeyInfo/iu);
+  });
+
+  it("retrieves and fail-closed validates the persisted CNG key security descriptor", () => {
+    expect(helper).toContain('NCRYPT_SECURITY_DESCR_PROPERTY = "Security Descr"');
+    expect(helper).toContain("OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | NCRYPT_SILENT_FLAG");
+    expect(helper.match(/NCryptGetProperty\(/gu)).toHaveLength(3);
+    expect(helper).toContain("status != 0");
+    expect(helper).toContain("RawSecurityDescriptor(securityDescriptor, 0)");
+    expect(helper).toContain("CommonSecurityDescriptor(false, false, securityDescriptor, 0)");
+    expect(helper).toContain("WellKnownSidType.LocalSystemSid");
+    expect(helper).toContain("WellKnownSidType.BuiltinAdministratorsSid");
+    expect(helper).toContain("!descriptor.Owner.Equals(localSystem)");
+    expect(helper).toContain("ControlFlags.DiscretionaryAclPresent");
+    expect(helper).toContain("descriptor.DiscretionaryAcl == null");
+    expect(helper).toContain("ControlFlags.DiscretionaryAclProtected");
+    expect(helper).toContain("!commonDescriptor.IsDiscretionaryAclCanonical");
+    expect(helper).toContain("descriptor.DiscretionaryAcl.Count != 2");
+    expect(helper).toContain("ace.AceQualifier != AceQualifier.AccessAllowed");
+    expect(helper).toContain("ace.AceFlags != AceFlags.None");
+    expect(helper).toContain("ace.AccessMask == 0");
+    expect(helper).toContain("The receipt signing key DACL grants an unapproved SID");
+    expect(helper).toContain(
+      "ValidateReceiptSigningKeySecurityDescriptor(GetReceiptSigningKeySecurityDescriptor(key))",
+    );
+    expect(helper).not.toContain("NCryptSetProperty");
+  });
+
+  windowsIt("accepts only the synthetic LocalSystem/Administrators descriptor contract", () => {
+    const command = String.raw`
+$content = Get-Content -LiteralPath $env:YOLPOL_TEST_HELPER_PATH -Raw
+$sourceMatch = [regex]::Match(
+  $content,
+  "Add-Type -TypeDefinition @'\r?\n(?<source>[\s\S]*?)\r?\n'@")
+if (-not $sourceMatch.Success) { throw 'Embedded C# source not found' }
+Add-Type -TypeDefinition $sourceMatch.Groups['source'].Value -ErrorAction Stop
+function Convert-SddlToBytes([string] $Sddl) {
+  $descriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new($Sddl)
+  $bytes = [byte[]]::new($descriptor.BinaryLength)
+  $descriptor.GetBinaryForm($bytes, 0)
+  return $bytes
+}
+[YolpolWindowsDurabilityNative]::ValidateReceiptSigningKeySecurityDescriptor(
+  (Convert-SddlToBytes 'O:SYD:P(A;;GA;;;SY)(A;;GA;;;BA)'))
+$rejected = @(
+  'O:SY',
+  'O:BAD:P(A;;GA;;;SY)(A;;GA;;;BA)',
+  'O:SYD:(A;;GA;;;SY)(A;;GA;;;BA)',
+  'O:SYD:P(A;;GA;;;SY)(D;;GA;;;BA)',
+  'O:SYD:P(A;;GA;;;BA)(A;ID;GA;;;SY)',
+  'O:SYD:P(A;;GA;;;SY)(A;;GA;;;BU)',
+  'O:SYD:P(A;;GA;;;SY)(A;;GA;;;WD)',
+  'O:SYD:P(A;;GA;;;SY)(A;;GA;;;AU)',
+  'O:SYD:P(A;;GA;;;SY)(A;;GA;;;S-1-5-21-1-2-3-1001)'
+)
+foreach ($sddl in $rejected) {
+  $didReject = $false
+  try {
+    [YolpolWindowsDurabilityNative]::ValidateReceiptSigningKeySecurityDescriptor(
+      (Convert-SddlToBytes $sddl))
+  } catch {
+    $didReject = $true
+  }
+  if (-not $didReject) { throw "Descriptor was unexpectedly accepted: $sddl" }
+}`;
+    const result = spawnSync(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          YOLPOL_TEST_HELPER_PATH: resolve(
+            repositoryRoot,
+            "deploy/windows/offserver-durability/yolpol-durable-write.ps1",
+          ),
+        },
+        timeout: 20_000,
+      },
+    );
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it("has no network, remote command, overwrite, delete, or cleanup path", () => {

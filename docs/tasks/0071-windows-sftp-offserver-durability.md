@@ -1,5 +1,7 @@
 # Task 0071: Windows SFTP Off-server Durability Adapter
 
+> Subsequent repository status: Task 0073 implements fixed authenticated Windows receipt provenance with a detached RSA-PSS signature and pinned VPS verification key. The unsigned/future-authentication statements below record the Task 0071 boundary at completion; live activation still has not occurred.
+
 ## Status and activation boundary
 
 The fixed transport and destination-readback implementation for `windows-sftp-v1` is complete and synthetically tested. Positive per-backup durable-write confirmation is **not implemented**, so this adapter does not yet satisfy the complete Task 0069 durability contract even when configured. Live activation is **not done**. This task did not access or change the VPS, Windows, Tailscale, GitHub, Production, a real backup, a real credential, or a real host key. The repository still defaults to canonical `{"schemaVersion":1,"state":"unconfigured"}`, and changed-fingerprint Production promotion remains fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`.

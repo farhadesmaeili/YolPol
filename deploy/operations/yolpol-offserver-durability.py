@@ -2,14 +2,15 @@
 """Provider-neutral Phase C2 off-server durability contract.
 
 The installed controller imports this root-owned module directly.  No caller can
-select an adapter, destination, executable, URL, or evidence path.  The reviewed
-Windows SFTP adapter validates exact final-store readback and an independently
-published canonical Windows volume-flush receipt, then fails closed because the
-VPS cannot authenticate the helper provenance of that unsigned receipt.
+select an adapter, destination, executable, URL, trust key, or evidence path.
+The reviewed Windows SFTP adapter authenticates the exact canonical Windows
+volume-flush receipt with one pinned verification authority before independently
+validating the final durable-store pair.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import ipaddress
 import json
@@ -29,15 +30,21 @@ CONFIG_PATH = Path("/etc/yolpol/offserver-durability.json")
 SFTP_SECRET_DIRECTORY = Path("/etc/yolpol/offserver-durability")
 SFTP_KEY_PATH = SFTP_SECRET_DIRECTORY / "id_ed25519"
 SFTP_KNOWN_HOSTS_PATH = SFTP_SECRET_DIRECTORY / "known_hosts"
+WINDOWS_RECEIPT_PUBLIC_KEY_PATH = SFTP_SECRET_DIRECTORY / "windows-receipt-rsa-v1.pem"
 SFTP_EXECUTABLE = Path("/usr/bin/sftp")
+OPENSSL_EXECUTABLE = Path("/usr/bin/openssl")
 VERIFICATION_TEMP_DIRECTORY = Path("/opt/yolpol/runtime/tmp")
 PRODUCTION_BACKUP_DIRECTORY = Path("/opt/yolpol/production/backups")
 EVIDENCE_DIRECTORY = Path("/opt/yolpol/runtime/offserver-durability-evidence")
 MAX_CONFIG_BYTES = 4_096
 MAX_PRIVATE_KEY_BYTES = 16_384
 MAX_KNOWN_HOSTS_BYTES = 65_536
+MAX_WINDOWS_RECEIPT_PUBLIC_KEY_BYTES = 8_192
+MAX_OPENSSL_PUBLIC_KEY_OUTPUT_BYTES = 8_192
 MAX_MANIFEST_BYTES = 65_536
 MAX_DURABILITY_RECEIPT_BYTES = 4_096
+WINDOWS_RECEIPT_SIGNATURE_BYTES = 384
+WINDOWS_RECEIPT_PUBLIC_KEY_BITS = 3_072
 MAX_EVIDENCE_BYTES = 8_192
 MAX_EVIDENCE_AGE_SECONDS = 900
 MAX_CLOCK_SKEW_SECONDS = 30
@@ -51,6 +58,8 @@ SFTP_PRODUCTION_DIRECTORY = "/production"
 SFTP_DURABLE_DIRECTORY = "/durable"
 SFTP_RECEIPT_DIRECTORY = "/durability-receipts"
 WINDOWS_DURABILITY_CONFIRMATION = "windows-flushfilebuffers-volume-v1"
+WINDOWS_RECEIPT_DOMAIN_SEPARATOR = b"YOLPOL-WINDOWS-DURABILITY-RECEIPT-V1\x00"
+OPENSSL_TIMEOUT_SECONDS = 15
 
 BACKUP_ID = re.compile(r"^yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?$")
 DEPLOYMENT_ID = re.compile(r"^[1-9][0-9]{0,19}$")
@@ -631,27 +640,135 @@ def _secure_root_directory(path: Path, mode: int, label: str) -> None:
         _configuration_unavailable(f"{label} rejected")
 
 
-def _validate_sftp_executable() -> None:
+def _validate_fixed_executable(path: Path, label: str) -> None:
     try:
-        metadata = SFTP_EXECUTABLE.lstat()
+        metadata = path.lstat()
     except OSError as error:
-        _configuration_unavailable("SFTP executable rejected", error)
+        _configuration_unavailable(f"{label} rejected", error)
     if (
         not stat.S_ISREG(metadata.st_mode)
         or metadata.st_uid != 0
         or metadata.st_gid != 0
         or stat.S_IMODE(metadata.st_mode) & 0o022
-        or not os.access(SFTP_EXECUTABLE, os.X_OK)
+        or not os.access(path, os.X_OK)
     ):
-        _configuration_unavailable("SFTP executable rejected")
+        _configuration_unavailable(f"{label} rejected")
+
+
+def _validate_sftp_executable() -> None:
+    _validate_fixed_executable(SFTP_EXECUTABLE, "SFTP executable")
+
+
+def _validate_openssl_executable() -> None:
+    _validate_fixed_executable(OPENSSL_EXECUTABLE, "OpenSSL executable")
+
+
+def _validate_windows_receipt_public_key_content() -> None:
+    try:
+        data = WINDOWS_RECEIPT_PUBLIC_KEY_PATH.read_bytes()
+        text = data.decode("ascii", "strict")
+    except (OSError, UnicodeError) as error:
+        _configuration_unavailable("Windows receipt verification public key rejected", error)
+    normalized = text.replace("\r\n", "\n")
+    if "\r" in normalized:
+        _configuration_unavailable("Windows receipt verification public key rejected")
+    lines = normalized.splitlines()
+    if (
+        len(lines) < 3
+        or lines[0] != "-----BEGIN PUBLIC KEY-----"
+        or lines[-1] != "-----END PUBLIC KEY-----"
+    ):
+        _configuration_unavailable("Windows receipt verification public key rejected")
+    body_lines = lines[1:-1]
+    if any(
+        not line
+        or len(line) > 64
+        or re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", line) is None
+        for line in body_lines
+    ):
+        _configuration_unavailable("Windows receipt verification public key rejected")
+    try:
+        decoded = base64.b64decode("".join(body_lines), validate=True)
+    except ValueError as error:
+        _configuration_unavailable("Windows receipt verification public key rejected", error)
+    if not decoded:
+        _configuration_unavailable("Windows receipt verification public key rejected")
+
+
+def _validate_openssl_public_key_output(output: bytes) -> None:
+    if not output or len(output) > MAX_OPENSSL_PUBLIC_KEY_OUTPUT_BYTES:
+        _configuration_unavailable("Windows receipt verification public key rejected")
+    try:
+        lines = output.decode("ascii", "strict").splitlines()
+    except UnicodeError as error:
+        _configuration_unavailable("Windows receipt verification public key rejected", error)
+    if lines and lines[0] == "Key is valid":
+        lines = lines[1:]
+    if (
+        len(lines) < 4
+        or lines[0] != f"Public-Key: ({WINDOWS_RECEIPT_PUBLIC_KEY_BITS} bit)"
+        or lines[1] != "Modulus:"
+        or not lines[-1].startswith("Exponent: ")
+    ):
+        _configuration_unavailable("Windows receipt verification public key rejected")
+
+
+def _run_openssl_public_key_preflight() -> None:
+    try:
+        result = subprocess.run(
+            [
+                str(OPENSSL_EXECUTABLE),
+                "pkey",
+                "-pubin",
+                "-in",
+                str(WINDOWS_RECEIPT_PUBLIC_KEY_PATH),
+                "-pubcheck",
+                "-text_pub",
+                "-noout",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=OPENSSL_TIMEOUT_SECONDS,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        _configuration_unavailable("Windows receipt verification public key rejected", error)
+    if result.returncode != 0:
+        _configuration_unavailable("Windows receipt verification public key rejected")
+    _validate_openssl_public_key_output(result.stdout)
+
+
+def _validate_windows_receipt_verification_authority() -> None:
+    _secure_root_directory(SFTP_SECRET_DIRECTORY, 0o700, "SFTP trust directory")
+    _secure_root_file(
+        WINDOWS_RECEIPT_PUBLIC_KEY_PATH,
+        0o600,
+        MAX_WINDOWS_RECEIPT_PUBLIC_KEY_BYTES,
+        "Windows receipt verification public key",
+    )
+    _validate_windows_receipt_public_key_content()
+    _validate_openssl_executable()
+    _run_openssl_public_key_preflight()
 
 
 def _validate_activation_files() -> None:
     _secure_root_directory(SFTP_SECRET_DIRECTORY, 0o700, "SFTP trust directory")
     _secure_root_file(SFTP_KEY_PATH, 0o600, MAX_PRIVATE_KEY_BYTES, "SFTP private key")
     _secure_root_file(SFTP_KNOWN_HOSTS_PATH, 0o600, MAX_KNOWN_HOSTS_BYTES, "SFTP known hosts")
+    _secure_root_file(
+        WINDOWS_RECEIPT_PUBLIC_KEY_PATH,
+        0o600,
+        MAX_WINDOWS_RECEIPT_PUBLIC_KEY_BYTES,
+        "Windows receipt verification public key",
+    )
+    _validate_windows_receipt_public_key_content()
     _secure_root_directory(VERIFICATION_TEMP_DIRECTORY, 0o700, "verification temporary directory")
     _validate_sftp_executable()
+    _validate_openssl_executable()
+    _run_openssl_public_key_preflight()
 
 
 def _sftp_arguments(configuration: WindowsSftpConfiguration) -> list[str]:
@@ -741,6 +858,11 @@ def _receipt_remote_path(backup_id: str) -> str:
     return f"{SFTP_RECEIPT_DIRECTORY}/{backup_id}.json"
 
 
+def _receipt_signature_remote_path(backup_id: str) -> str:
+    _require_string(backup_id, BACKUP_ID, "backup identity")
+    return f"{SFTP_RECEIPT_DIRECTORY}/{backup_id}.sig"
+
+
 def _windows_remote_object_set_id(backup_id: str) -> str:
     _require_string(backup_id, BACKUP_ID, "backup identity")
     return f"windows-sftp-v1:{SFTP_DURABLE_DIRECTORY}/{backup_id}"
@@ -783,15 +905,20 @@ def _poll_windows_receipt(
     configuration: WindowsSftpConfiguration,
     pair: BackupPair,
     temporary: Path,
-) -> dict[str, Any]:
+) -> tuple[bytes, Path]:
     receipt_remote = _receipt_remote_path(pair.backup_id)
+    signature_remote = _receipt_signature_remote_path(pair.backup_id)
     deadline = time.monotonic() + SFTP_RECEIPT_POLL_TIMEOUT_SECONDS
     for attempt in range(1, SFTP_RECEIPT_MAX_ATTEMPTS + 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
         receipt_local = temporary / f"receipt-{attempt}.json"
-        batch = f"get {receipt_remote} {_quoted_local_sftp_path(receipt_local)}\n".encode("utf-8")
+        signature_local = temporary / f"receipt-{attempt}.sig"
+        batch = (
+            f"get {receipt_remote} {_quoted_local_sftp_path(receipt_local)}\n"
+            f"get {signature_remote} {_quoted_local_sftp_path(signature_local)}\n"
+        ).encode("utf-8")
         try:
             _run_sftp(
                 configuration,
@@ -810,11 +937,90 @@ def _poll_windows_receipt(
         metadata = _regular_file(receipt_local, temporary, "Windows durability receipt readback")
         if metadata.st_size > MAX_DURABILITY_RECEIPT_BYTES:
             fail("Windows durability receipt readback rejected")
+        signature_metadata = _regular_file(
+            signature_local,
+            temporary,
+            "Windows durability receipt signature readback",
+        )
+        if signature_metadata.st_size != WINDOWS_RECEIPT_SIGNATURE_BYTES:
+            fail("Windows durability receipt signature length rejected")
         try:
-            return _validate_windows_receipt(receipt_local.read_bytes(), pair)
+            receipt_data = receipt_local.read_bytes()
+            _validate_windows_receipt(receipt_data, pair)
+            return receipt_data, signature_local
         except OSError as error:
             raise DurabilityError("Windows durability receipt readback rejected") from error
     raise DurabilityUnavailable("Windows durability receipt is unavailable")
+
+
+def _write_verification_message(path: Path, receipt_data: bytes) -> None:
+    descriptor = -1
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb", closefd=False) as stream:
+            stream.write(WINDOWS_RECEIPT_DOMAIN_SEPARATOR)
+            stream.write(receipt_data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise DurabilityError("Windows durability receipt verification staging failed") from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _run_openssl_receipt_verification(signature_path: Path, message_path: Path) -> None:
+    arguments = [
+        str(OPENSSL_EXECUTABLE),
+        "dgst",
+        "-sha256",
+        "-verify",
+        str(WINDOWS_RECEIPT_PUBLIC_KEY_PATH),
+        "-signature",
+        str(signature_path),
+        "-sigopt",
+        "rsa_padding_mode:pss",
+        "-sigopt",
+        "rsa_mgf1_md:sha256",
+        "-sigopt",
+        "rsa_pss_saltlen:digest",
+        str(message_path),
+    ]
+    try:
+        result = subprocess.run(
+            arguments,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=OPENSSL_TIMEOUT_SECONDS,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise DurabilityError("Windows durability receipt signature verification failed") from error
+    if result.returncode != 0:
+        fail("Windows durability receipt signature verification failed")
+
+
+def _verify_windows_receipt_signature(
+    receipt_data: bytes,
+    signature_path: Path,
+    temporary: Path,
+) -> None:
+    signature_metadata = _regular_file(
+        signature_path,
+        temporary,
+        "Windows durability receipt signature readback",
+    )
+    if signature_metadata.st_size != WINDOWS_RECEIPT_SIGNATURE_BYTES:
+        fail("Windows durability receipt signature length rejected")
+    _validate_windows_receipt_verification_authority()
+    message_path = temporary / "windows-receipt-verification-message.bin"
+    _write_verification_message(message_path, receipt_data)
+    _run_openssl_receipt_verification(signature_path, message_path)
 
 
 def _stage_validated_file(
@@ -916,7 +1122,16 @@ class WindowsSftpDurabilityAdapter:
                     f"rename {manifest_remote}.partial {manifest_remote}\n"
                 ).encode("utf-8")
                 _run_sftp(self.configuration, upload)
-                _poll_windows_receipt(self.configuration, pair, temporary)
+                receipt_data, signature_path = _poll_windows_receipt(
+                    self.configuration,
+                    pair,
+                    temporary,
+                )
+                _verify_windows_receipt_signature(
+                    receipt_data,
+                    signature_path,
+                    temporary,
+                )
                 readback = (
                     f"get {durable_artifact_remote} {_quoted_local_sftp_path(artifact_readback)}\n"
                     f"get {durable_manifest_remote} {_quoted_local_sftp_path(manifest_readback)}\n"
@@ -937,11 +1152,16 @@ class WindowsSftpDurabilityAdapter:
         except OSError as error:
             raise DurabilityError("SFTP destination readback failed") from error
 
-        # SFTP authenticates the server, not the Windows helper execution or its
-        # runtime ACL observations. An unsigned receipt therefore cannot prove
-        # durable-write authority to this process, even after exact readback.
-        raise DurabilityUnavailable(
-            "Windows receipt authentication is unavailable; no durability evidence was published"
+        return RemoteDurabilityConfirmation(
+            backup_id=pair.backup_id,
+            artifact_sha256=pair.artifact_sha256,
+            manifest_sha256=pair.manifest_sha256,
+            destination_verified=True,
+            verification_source="destination",
+            durable_write_confirmed=True,
+            durability_confirmation=WINDOWS_DURABILITY_CONFIRMATION,
+            remote_object_set_id=_windows_remote_object_set_id(pair.backup_id),
+            verified_at_unix=now_unix,
         )
 
 
