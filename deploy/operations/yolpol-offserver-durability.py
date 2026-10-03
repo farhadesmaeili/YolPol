@@ -914,6 +914,7 @@ def _run_bounded_sftp_get(
         result = subprocess.run(
             [
                 str(PRLIMIT_EXECUTABLE),
+                "--core=0:0",
                 f"--fsize={maximum_size}:{maximum_size}",
                 "--",
                 *_sftp_arguments(configuration),

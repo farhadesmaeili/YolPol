@@ -273,6 +273,25 @@ class BootstrapTests(unittest.TestCase):
     def test_real_prlimit_contains_exact_and_oversize_local_sftp_downloads(self) -> None:
         server = Path("/usr/lib/openssh/sftp-server")
         self.assertTrue(server.is_file(), "test-only openssh-sftp-server package is required")
+        inherited_core_limit = subprocess.run(
+            [
+                "/usr/bin/prlimit",
+                "--core=0:0",
+                "--",
+                "/usr/bin/python3",
+                "-c",
+                "import resource; print(*resource.getrlimit(resource.RLIMIT_CORE))",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=15,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+        self.assertEqual(inherited_core_limit.returncode, 0)
+        self.assertEqual(inherited_core_limit.stdout, b"0 0\n")
         source = self.temporary / "bounded-source.bin"
         exact = self.temporary / "bounded-exact.bin"
         limited = self.temporary / "bounded-limited.bin"
@@ -283,6 +302,7 @@ class BootstrapTests(unittest.TestCase):
             return subprocess.run(
                 [
                     "/usr/bin/prlimit",
+                    "--core=0:0",
                     f"--fsize={limit}:{limit}",
                     "--",
                     "/usr/bin/sftp",

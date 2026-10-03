@@ -122,6 +122,7 @@ The final target operating model treats servers as disposable and rebuildable. S
 - [x] Implement and synthetically/static test the Windows durable-copy/volume-flush receipt and final durable-store readback contract
 - [x] Implement and adversarially test fixed authenticated Windows receipt provenance with detached RSA-PSS signatures
 - [x] Contain every VPS-side SFTP readback with an exact per-object `RLIMIT_FSIZE` and pre-stage temporary-capacity admission
+- [x] Disable core dumps for every bounded SFTP readback child with fixed inherited `RLIMIT_CORE=(0,0)` containment
 - [ ] Provision live Windows roots/ACLs/LocalSystem task and CNG/SFTP keys plus pinned host/public-key trust, validate native flush and SFTP boundaries, configure the destination, and accept the complete path before Production-changing migrations
 - [x] Implement and synthetically validate the isolated Production Monitoring repository contract
 - [x] Record the reviewed Production Monitoring activation milestone at `v0.2.3`

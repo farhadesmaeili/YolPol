@@ -736,6 +736,9 @@ class OffserverDurabilityTests(unittest.TestCase):
         self.assertNotIn("sshpass", " ".join(arguments).lower())
         self.assertNotIn("-oStrictHostKeyChecking=no", options)
         self.assertNotIn("-oUserKnownHostsFile=/dev/null", options)
+        self.assertNotIn(str(durability.PRLIMIT_EXECUTABLE), arguments)
+        self.assertFalse(any(argument.startswith("--core=") for argument in arguments))
+        self.assertFalse(any(argument.startswith("--fsize=") for argument in arguments))
         self.assertFalse(run.call_args.kwargs["shell"])
         self.assertEqual(run.call_args.kwargs["timeout"], durability.SFTP_TIMEOUT_SECONDS)
         self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
@@ -764,12 +767,13 @@ class OffserverDurabilityTests(unittest.TestCase):
                     durability.MAX_DURABILITY_RECEIPT_BYTES,
                 )
         arguments = run.call_args.args[0]
-        self.assertEqual(arguments[:3], [
+        self.assertEqual(arguments[:4], [
             str(durability.PRLIMIT_EXECUTABLE),
+            "--core=0:0",
             f"--fsize={durability.MAX_DURABILITY_RECEIPT_BYTES}:{durability.MAX_DURABILITY_RECEIPT_BYTES}",
             "--",
         ])
-        self.assertEqual(arguments[3], str(durability.SFTP_EXECUTABLE))
+        self.assertEqual(arguments[4], str(durability.SFTP_EXECUTABLE))
         self.assertEqual(run.call_args.kwargs["input"].count(b"get "), 1)
         self.assertFalse(run.call_args.kwargs["shell"])
         self.assertEqual(
