@@ -107,6 +107,8 @@ A later reviewed activation must establish and independently verify the exact AC
 - `E:\yolpol-backups\durability-receipts`: protected explicit SYSTEM/Administrators inheritable Full Control plus `yolpol-backup` inheritable ReadAndExecute.
 - `C:\ProgramData\YOLPOL\offserver-durability`: protected explicit inheritable Full Control for SYSTEM/Administrators only; the installed helper file has protected explicit non-inheriting Full Control for only those two trustees.
 
+These names describe the logical permission contract. For exact runtime mask comparison, the helper canonicalizes every expected Allow ACE to Windows/.NET's representation by including `Synchronize`; it still requires exact numeric equality and rejects missing or additional rights.
+
 The helper is expected to run as LocalSystem because volume flushing requires administrative privilege. Activation must separately verify the exact runtime checks, the SFTP account's effective inability to create/modify/rename/delete beneath the durable and receipt roots, its intended ingress access, successful native volume flush, and the schedule-latency/maximum-size deadline above. This repository task applies none of those ACLs and installs no Scheduled Task. These checks are defense in depth on Windows; they do not solve remote receipt authentication, so positive adapter confirmation remains disabled.
 
 ## Ordering and fail-closed behavior

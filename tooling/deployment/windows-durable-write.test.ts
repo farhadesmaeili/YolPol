@@ -14,6 +14,13 @@ const adapter = readFileSync(
 );
 const windowsIt = process.platform === "win32" ? it : it.skip;
 
+function getPowerShellFunction(name: string): string {
+  const match = helper.match(new RegExp(`^function ${name} \\{[\\s\\S]*?^\\}`, "mu"));
+
+  expect(match, `${name} function not found`).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 describe("Windows durable-write helper repository contract", () => {
   it("uses only fixed roots, fixed identities, and a validated Production backup identity", () => {
     expect(helper).toContain("$ChrootRoot = 'E:\\yolpol-backups'");
@@ -107,6 +114,133 @@ describe("Windows durable-write helper repository contract", () => {
     expect(trustCheck).toBeGreaterThanOrEqual(0);
     expect(productionScan).toBeGreaterThan(trustCheck);
     expect(existingReceipt).toBeGreaterThan(productionScan);
+  });
+
+  it("normalizes expected Allow rights once and retains exact ACL matching", () => {
+    const expectedRuleFactory = getPowerShellFunction("New-ExpectedAccessRule");
+    const aclAssertion = getPowerShellFunction("Assert-CanonicalAcl");
+
+    expect(expectedRuleFactory).toContain(
+      "$normalizedRights = $Rights -bor\n        [System.Security.AccessControl.FileSystemRights]::Synchronize",
+    );
+    expect(expectedRuleFactory).toContain("Rights = [Int64]$normalizedRights");
+    expect(expectedRuleFactory).not.toMatch(/-band|AccessControlType/iu);
+    expect(aclAssertion).toContain("$actualRules.Count -ne $ExpectedRules.Count");
+    expect(aclAssertion).toContain(
+      "$rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow",
+    );
+    expect(aclAssertion).toContain(
+      "[Int64]$rule.FileSystemRights -eq $expectedRule.Rights",
+    );
+    expect(aclAssertion).toContain("$rule.IdentityReference.Value -ceq $expectedRule.Sid");
+    expect(aclAssertion).toContain(
+      "[int]$rule.InheritanceFlags -eq $expectedRule.InheritanceFlags",
+    );
+    expect(aclAssertion).toContain(
+      "[int]$rule.PropagationFlags -eq $expectedRule.PropagationFlags",
+    );
+    expect(aclAssertion).toContain("$rule.IsInherited -eq $expectedRule.IsInherited");
+    expect(aclAssertion).not.toMatch(/FileSystemRights\s+-band|expectedRule\.Rights\s+-band/iu);
+  });
+
+  windowsIt("matches canonical Windows Allow ACE masks without filesystem mutation", () => {
+    const command = String.raw`
+$content = Get-Content -LiteralPath $env:YOLPOL_TEST_HELPER_PATH -Raw
+$functionMatch = [regex]::Match(
+  $content,
+  '(?ms)^function New-ExpectedAccessRule \{.*?^\}')
+if (-not $functionMatch.Success) { throw 'New-ExpectedAccessRule function not found' }
+. ([scriptblock]::Create($functionMatch.Value))
+function Assert-Equal($Actual, $Expected, [string] $Label) {
+  if ($Actual -ne $Expected) {
+    throw "$Label expected '$Expected' but received '$Actual'"
+  }
+}
+function Assert-NotEqual($Actual, $Expected, [string] $Label) {
+  if ($Actual -eq $Expected) {
+    throw "$Label unexpectedly matched '$Expected'"
+  }
+}
+$sid = [System.Security.Principal.SecurityIdentifier]::new(
+  [System.Security.Principal.WellKnownSidType]::LocalSystemSid,
+  $null)
+$none = [System.Security.AccessControl.InheritanceFlags]::None
+$inheritChildren = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+  [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+$propagationNone = [System.Security.AccessControl.PropagationFlags]::None
+$allow = [System.Security.AccessControl.AccessControlType]::Allow
+$deny = [System.Security.AccessControl.AccessControlType]::Deny
+$synchronize = [System.Security.AccessControl.FileSystemRights]::Synchronize
+$readAndExecute = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+$modify = [System.Security.AccessControl.FileSystemRights]::Modify
+$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl
+$canonicalRead = [Int64]($readAndExecute -bor $synchronize)
+$canonicalModify = [Int64]($modify -bor $synchronize)
+
+$rootRead = New-ExpectedAccessRule $sid $readAndExecute $none
+$treeModify = New-ExpectedAccessRule $sid $modify $inheritChildren
+$treeRead = New-ExpectedAccessRule $sid $readAndExecute $inheritChildren
+$inheritedDirectoryRead = New-ExpectedAccessRule $sid $readAndExecute $inheritChildren $true
+$inheritedFileRead = New-ExpectedAccessRule $sid $readAndExecute $none $true
+$full = New-ExpectedAccessRule $sid $fullControl $inheritChildren
+
+Assert-Equal $rootRead.Rights 1179817 'ReadAndExecute canonical mask'
+Assert-Equal $rootRead.Rights $canonicalRead 'ReadAndExecute Synchronize normalization'
+Assert-Equal $treeModify.Rights 1245631 'Modify canonical mask'
+Assert-Equal $treeModify.Rights $canonicalModify 'Modify Synchronize normalization'
+Assert-Equal $full.Rights ([Int64]$fullControl) 'FullControl idempotence'
+Assert-Equal $rootRead.InheritanceFlags ([int]$none) 'Root ReadAndExecute inheritance'
+Assert-Equal $rootRead.IsInherited $false 'Root ReadAndExecute inherited state'
+Assert-Equal $treeModify.InheritanceFlags ([int]$inheritChildren) 'Tree Modify inheritance'
+Assert-Equal $treeModify.IsInherited $false 'Tree Modify inherited state'
+Assert-Equal $treeRead.InheritanceFlags ([int]$inheritChildren) 'Tree ReadAndExecute inheritance'
+Assert-Equal $treeRead.Rights $canonicalRead 'Tree ReadAndExecute mask'
+Assert-Equal $inheritedDirectoryRead.InheritanceFlags ([int]$inheritChildren) 'Inherited directory inheritance'
+Assert-Equal $inheritedDirectoryRead.IsInherited $true 'Inherited directory state'
+Assert-Equal $inheritedFileRead.InheritanceFlags ([int]$none) 'Inherited file inheritance'
+Assert-Equal $inheritedFileRead.IsInherited $true 'Inherited file state'
+
+$rootAllowAce = [System.Security.AccessControl.FileSystemAccessRule]::new(
+  $sid, $readAndExecute, $none, $propagationNone, $allow)
+$modifyAllowAce = [System.Security.AccessControl.FileSystemAccessRule]::new(
+  $sid, $modify, $inheritChildren, $propagationNone, $allow)
+$readTreeAllowAce = [System.Security.AccessControl.FileSystemAccessRule]::new(
+  $sid, $readAndExecute, $inheritChildren, $propagationNone, $allow)
+Assert-Equal ([Int64]$rootAllowAce.FileSystemRights) $rootRead.Rights 'Root Allow ACE exact mask'
+Assert-Equal ([Int64]$modifyAllowAce.FileSystemRights) $treeModify.Rights 'Modify Allow ACE exact mask'
+Assert-Equal ([Int64]$readTreeAllowAce.FileSystemRights) $treeRead.Rights 'Read tree Allow ACE exact mask'
+
+$extraRightAce = [System.Security.AccessControl.FileSystemAccessRule]::new(
+  $sid,
+  ($readAndExecute -bor [System.Security.AccessControl.FileSystemRights]::Write),
+  $none,
+  $propagationNone,
+  $allow)
+Assert-NotEqual ([Int64]$extraRightAce.FileSystemRights) $rootRead.Rights 'Additional right rejection'
+Assert-NotEqual ([Int64]$readAndExecute) $rootRead.Rights 'Missing Synchronize rejection'
+$denyAce = [System.Security.AccessControl.FileSystemAccessRule]::new(
+  $sid, $readAndExecute, $none, $propagationNone, $deny)
+Assert-NotEqual $denyAce.AccessControlType $allow 'Deny rejection'
+Assert-Equal $rootAllowAce.AccessControlType $allow 'Allow contract'
+Assert-Equal $rootRead.PropagationFlags ([int]$propagationNone) 'Propagation flags'
+`;
+    const result = spawnSync(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          YOLPOL_TEST_HELPER_PATH: resolve(
+            repositoryRoot,
+            "deploy/windows/offserver-durability/yolpol-durable-write.ps1",
+          ),
+        },
+        timeout: 20_000,
+      },
+    );
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it("rejects unsafe surviving leaf ACLs on existing and newly published durable state", () => {
