@@ -578,9 +578,11 @@ function New-ExpectedAccessRule {
         [bool]$IsInherited = $false
     )
 
+    $normalizedRights = $Rights -bor
+        [System.Security.AccessControl.FileSystemRights]::Synchronize
     return [pscustomobject]@{
         Sid = $Sid.Value
-        Rights = [Int64]$Rights
+        Rights = [Int64]$normalizedRights
         InheritanceFlags = [int]$InheritanceFlags
         PropagationFlags = [int][System.Security.AccessControl.PropagationFlags]::None
         IsInherited = $IsInherited
