@@ -84,3 +84,7 @@ All containment and capacity failures occur before `RemoteDurabilityConfirmation
 Repository tests cover command construction, the unchanged strict SFTP options, fixed executable selection, invalid limits, nonzero/signal/timeout normalization, all four object bounds, exact-bound success, smaller-object rejection, polling cleanup, upload non-regression, the no-unbounded-`get` structural contract, capacity formula and threshold, capacity-query failure, pre-staging rejection, bootstrap package/executable requirements, and the real Linux `RLIMIT_FSIZE` behavior.
 
 Live Phase C2 work remains separate: provision and accept the Windows roots/ACLs/LocalSystem task and non-exportable CNG key; provision SFTP client/host trust and the pinned VPS public key; validate Tailscale/firewall and native Windows durable-flush behavior; install reviewed repository contracts on the VPS; activate configured JSON; run controlled real backup, receipt, containment, failure, readback, restore, and Production-gate acceptance; and establish operating schedule, monitoring, retention, and recovery procedures. None of that activation occurred in Task 0074.
+
+## Subsequent repository status
+
+Task 0075 adds fixed `--core=0:0` containment to every bounded readback child, producing the command prefix `/usr/bin/prlimit --core=0:0 --fsize=N:N -- /usr/bin/sftp ...`. Upload behavior and all Task 0074 file-size, capacity, validation, and evidence contracts remain unchanged.
