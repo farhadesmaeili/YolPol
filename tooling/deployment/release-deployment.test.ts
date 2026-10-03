@@ -183,6 +183,7 @@ describe("Phase C1 and repository-side Phase C2 workflow contract", () => {
     expect(controller).toContain('run(f"migrate-{environment}"');
     expect(durability).toContain('raise DurabilityUnavailable("remote durability adapter is unavailable")');
     expect(durability).toContain('SFTP_EXECUTABLE = Path("/usr/bin/sftp")');
+    expect(durability).toContain('PRLIMIT_EXECUTABLE = Path("/usr/bin/prlimit")');
     expect(durability).toContain("subprocess.run(");
     expect(durability).toContain("shell=False");
     expect(durability).toContain('"-oBatchMode=yes"');

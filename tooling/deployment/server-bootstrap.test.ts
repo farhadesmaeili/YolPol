@@ -88,7 +88,9 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).toContain('DirectoryContract("/etc/yolpol/offserver-durability", 0, 0, 0o700)');
     expect(bootstrap).toContain('(\"/etc/yolpol/offserver-durability.json\", 0o600, b\'{"schemaVersion":1,"state":"unconfigured"}\\n\')');
     expect(bootstrap).toContain('"/usr/bin/sftp"');
+    expect(bootstrap).toContain('"/usr/bin/prlimit"');
     expect(bootstrap).toContain('"openssh-client"');
+    expect(bootstrap).toContain('"util-linux"');
   });
 
   it("keeps Windows SFTP activation material root-owned, fixed, and absent from examples", () => {
@@ -98,6 +100,7 @@ describe("server bootstrap automation", () => {
       'WINDOWS_RECEIPT_PUBLIC_KEY_PATH = SFTP_SECRET_DIRECTORY / "windows-receipt-rsa-v1.pem"',
     );
     expect(durability).toContain('SFTP_EXECUTABLE = Path("/usr/bin/sftp")');
+    expect(durability).toContain('PRLIMIT_EXECUTABLE = Path("/usr/bin/prlimit")');
     expect(durability).toContain('OPENSSL_EXECUTABLE = Path("/usr/bin/openssl")');
     expect(durability).toContain('_validate_fixed_executable(OPENSSL_EXECUTABLE, "OpenSSL executable")');
     expect(durability).toContain('"rsa_padding_mode:pss"');

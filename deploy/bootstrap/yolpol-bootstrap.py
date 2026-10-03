@@ -277,13 +277,14 @@ def command_exists(path: str | Path) -> bool:
 def install_prerequisites(host: SupportedHost) -> None:
     base = [
         "/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/bin/jq", "/usr/bin/openssl",
-        "/usr/bin/sftp", "/usr/sbin/visudo",
+        "/usr/bin/prlimit", "/usr/bin/sftp", "/usr/sbin/visudo",
     ]
     if not all(command_exists(path) for path in base):
         run(["/usr/bin/apt-get", "update"])
         run([
             "/usr/bin/apt-get", "install", "--yes", "--no-install-recommends",
             "python3", "acl", "curl", "ca-certificates", "gnupg", "jq", "openssl", "openssh-client", "sudo",
+            "util-linux",
         ])
     if not command_exists("/usr/bin/docker") or not command_exists(COMPOSE_PATH):
         install_docker_packages(host)
@@ -345,7 +346,7 @@ def install_docker_packages(host: SupportedHost) -> None:
 def validate_prerequisites() -> None:
     for path in (
         "/usr/bin/python3", "/usr/bin/getfacl", "/usr/bin/curl", "/usr/bin/jq", "/usr/bin/openssl",
-        "/usr/bin/sftp", "/usr/sbin/visudo",
+        "/usr/bin/prlimit", "/usr/bin/sftp", "/usr/sbin/visudo",
         "/usr/bin/docker", COMPOSE_PATH,
     ):
         if not command_exists(path):

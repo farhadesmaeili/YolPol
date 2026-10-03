@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import ast
 import hashlib
 import importlib.util
 import json
@@ -14,6 +15,7 @@ import tempfile
 import time
 import types
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import NoReturn
 from unittest.mock import MagicMock, Mock, call, patch
@@ -521,6 +523,26 @@ class OffserverDurabilityTests(unittest.TestCase):
         missing = Mock(side_effect=FileNotFoundError())
         with patch.object(Path, "lstat", missing), self.assertRaises(durability.DurabilityUnavailable):
             durability._validate_sftp_executable()
+
+    def test_prlimit_executable_and_ancestors_are_fixed_and_trusted(self) -> None:
+        executable = Mock(st_mode=stat.S_IFREG | 0o755, st_uid=0, st_gid=0)
+        directory = Mock(st_mode=stat.S_IFDIR | 0o755, st_uid=0, st_gid=0)
+        unsafe_directory = Mock(st_mode=stat.S_IFDIR | 0o777, st_uid=0, st_gid=0)
+        with (
+            patch.object(Path, "lstat", side_effect=[executable, directory, directory, directory]),
+            patch.object(durability.os, "access", return_value=True),
+        ):
+            durability._validate_prlimit_executable()
+        with (
+            patch.object(Path, "lstat", side_effect=[executable, unsafe_directory]),
+            patch.object(durability.os, "access", return_value=True),
+            self.assertRaises(durability.DurabilityUnavailable),
+        ):
+            durability._validate_prlimit_executable()
+        with patch.object(Path, "lstat", side_effect=FileNotFoundError()), self.assertRaises(
+            durability.DurabilityUnavailable,
+        ):
+            durability._validate_prlimit_executable()
         insecure = Mock(
             st_mode=stat.S_IFREG | 0o775,
             st_uid=0,
@@ -687,12 +709,19 @@ class OffserverDurabilityTests(unittest.TestCase):
         ):
             durability._run_openssl_public_key_preflight()
 
-    def test_sftp_process_uses_only_fixed_strict_noninteractive_options(self) -> None:
+    def test_sftp_upload_process_uses_only_fixed_strict_noninteractive_options(self) -> None:
         configuration = durability.WindowsSftpConfiguration(
             host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
         )
         with patch.object(durability.subprocess, "run", return_value=Mock(returncode=0)) as run:
-            durability._run_sftp(configuration, b"pwd\n")
+            durability._run_sftp_upload(
+                configuration,
+                f"/production/{self.BACKUP_ID}",
+                Path("artifact"),
+                f"/production/{self.BACKUP_ID}/{self.BACKUP_ID}.dump.age",
+                Path("manifest"),
+                f"/production/{self.BACKUP_ID}/{self.BACKUP_ID}.manifest.json",
+            )
         arguments = run.call_args.args[0]
         options = set(arguments)
         self.assertEqual(arguments[0], str(durability.SFTP_EXECUTABLE))
@@ -711,17 +740,100 @@ class OffserverDurabilityTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["timeout"], durability.SFTP_TIMEOUT_SECONDS)
         self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
         self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        batch = run.call_args.kwargs["input"]
+        self.assertNotIn(b"get ", batch)
+        self.assertIn(b"put ", batch)
 
-    def test_sftp_timeout_fails_closed(self) -> None:
+    def test_bounded_sftp_get_uses_fixed_prlimit_and_one_get(self) -> None:
         configuration = durability.WindowsSftpConfiguration(
             host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
         )
-        with patch.object(
-            durability.subprocess,
-            "run",
-            side_effect=subprocess.TimeoutExpired(["/usr/bin/sftp"], durability.SFTP_TIMEOUT_SECONDS),
-        ), self.assertRaises(durability.DurabilityError):
-            durability._run_sftp(configuration, b"pwd\n")
+        with tempfile.TemporaryDirectory() as directory:
+            verification = Path(directory) / "verification"
+            attempt = verification / "attempt"
+            attempt.mkdir(parents=True)
+            local_path = attempt / "receipt.json"
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability.subprocess, "run", return_value=Mock(returncode=0)) as run,
+            ):
+                durability._run_bounded_sftp_get(
+                    configuration,
+                    f"/durability-receipts/{self.BACKUP_ID}.json",
+                    local_path,
+                    durability.MAX_DURABILITY_RECEIPT_BYTES,
+                )
+        arguments = run.call_args.args[0]
+        self.assertEqual(arguments[:3], [
+            str(durability.PRLIMIT_EXECUTABLE),
+            f"--fsize={durability.MAX_DURABILITY_RECEIPT_BYTES}:{durability.MAX_DURABILITY_RECEIPT_BYTES}",
+            "--",
+        ])
+        self.assertEqual(arguments[3], str(durability.SFTP_EXECUTABLE))
+        self.assertEqual(run.call_args.kwargs["input"].count(b"get "), 1)
+        self.assertFalse(run.call_args.kwargs["shell"])
+        self.assertEqual(
+            run.call_args.kwargs["env"],
+            {"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+
+    def test_bounded_sftp_get_rejects_invalid_limits_and_process_failures(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+        )
+        for invalid in (0, -1, True, "4096", None):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                verification = Path(directory) / "verification"
+                attempt = verification / "attempt"
+                attempt.mkdir(parents=True)
+                with (
+                    patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                    self.assertRaises(durability.DurabilityError),
+                ):
+                    durability._run_bounded_sftp_get(
+                        configuration,
+                        f"/durability-receipts/{self.BACKUP_ID}.json",
+                        attempt / "receipt.json",
+                        invalid,
+                    )
+
+        failures = (
+            Mock(returncode=1),
+            Mock(returncode=-25),
+            subprocess.TimeoutExpired(["/usr/bin/prlimit"], durability.SFTP_TIMEOUT_SECONDS),
+        )
+        for failure in failures:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                verification = Path(directory) / "verification"
+                attempt = verification / "attempt"
+                attempt.mkdir(parents=True)
+                effect = {"return_value": failure} if isinstance(failure, Mock) else {"side_effect": failure}
+                with (
+                    patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                    patch.object(durability.subprocess, "run", **effect),
+                    self.assertRaisesRegex(durability.DurabilityError, "SFTP download failed"),
+                ):
+                    durability._run_bounded_sftp_get(
+                        configuration,
+                        f"/durability-receipts/{self.BACKUP_ID}.json",
+                        attempt / "receipt.json",
+                        durability.MAX_DURABILITY_RECEIPT_BYTES,
+                    )
+
+    def test_only_bounded_primitive_constructs_production_sftp_get(self) -> None:
+        source = (ROOT / "deploy/operations/yolpol-offserver-durability.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        functions_with_get = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if any(
+                    isinstance(descendant, ast.Constant)
+                    and isinstance(descendant.value, str)
+                    and descendant.value.startswith("get ")
+                    for descendant in ast.walk(node)
+                ):
+                    functions_with_get.add(node.name)
+        self.assertEqual(functions_with_get, {"_run_bounded_sftp_get"})
 
     def test_openssl_verification_uses_only_fixed_pinned_policy(self) -> None:
         signature = Path("fixed-signature.sig")
@@ -760,15 +872,6 @@ class OffserverDurabilityTests(unittest.TestCase):
         ):
             durability._run_openssl_receipt_verification(signature, message)
 
-    @staticmethod
-    def _readback_local_paths(batch: bytes) -> list[Path]:
-        result = []
-        for line in batch.decode("utf-8").splitlines():
-            quoted = line.split(" ", 2)[2]
-            value = quoted[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-            result.append(Path(value))
-        return result
-
     def receipt_value(self, pair: object, **overrides: object) -> dict[str, object]:
         return {
             "artifactSha256": pair.artifact_sha256,
@@ -782,22 +885,25 @@ class OffserverDurabilityTests(unittest.TestCase):
             **overrides,
         }
 
-    def _publish_receipt_readback(
+    def _publish_bounded_download(
         self,
-        batch: bytes,
+        remote_path: str,
+        local_path: Path,
         pair: object,
         signature: bytes | None = None,
     ) -> None:
-        receipt, signature_path = self._readback_local_paths(batch)
-        receipt.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
-        signature_path.write_bytes(
-            signature if signature is not None else b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES,
-        )
-
-    def _publish_durable_readback(self, batch: bytes, pair: object) -> None:
-        artifact, manifest = self._readback_local_paths(batch)
-        artifact.write_bytes(pair.artifact_path.read_bytes())
-        manifest.write_bytes(pair.manifest_path.read_bytes())
+        if remote_path.endswith(".sig"):
+            local_path.write_bytes(
+                signature if signature is not None else b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES,
+            )
+        elif remote_path.startswith("/durability-receipts/"):
+            local_path.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
+        elif remote_path.endswith(".dump.age"):
+            local_path.write_bytes(pair.artifact_path.read_bytes())
+        elif remote_path.endswith(".manifest.json"):
+            local_path.write_bytes(pair.manifest_path.read_bytes())
+        else:
+            self.fail(f"unexpected bounded download path: {remote_path}")
 
     def test_windows_receipt_requires_exact_canonical_schema_and_pair_binding(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -847,19 +953,20 @@ class OffserverDurabilityTests(unittest.TestCase):
                 with self.subTest(label=label), self.assertRaises(durability.DurabilityError):
                     durability._validate_windows_receipt(content, pair)
 
-                calls = 0
+                calls: list[tuple[str, int]] = []
 
-                def invalid_receipt_sftp(
+                def invalid_receipt_download(
                     _configuration: object,
-                    batch: bytes,
+                    remote_path: str,
+                    local_path: Path,
+                    maximum_size: int,
                     **_kwargs: object,
                 ) -> None:
-                    nonlocal calls
-                    calls += 1
-                    if calls == 2:
-                        receipt, signature = self._readback_local_paths(batch)
-                        receipt.write_bytes(content)
-                        signature.write_bytes(b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+                    calls.append((remote_path, maximum_size))
+                    if remote_path.endswith(".sig"):
+                        local_path.write_bytes(b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+                    else:
+                        local_path.write_bytes(content)
 
                 configuration = durability.WindowsSftpConfiguration(
                     host="100.100.100.100",
@@ -869,7 +976,12 @@ class OffserverDurabilityTests(unittest.TestCase):
                 )
                 with (
                     patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                    patch.object(durability, "_run_sftp", side_effect=invalid_receipt_sftp),
+                    patch.object(durability, "_run_sftp_upload"),
+                    patch.object(
+                        durability,
+                        "_run_bounded_sftp_get",
+                        side_effect=invalid_receipt_download,
+                    ),
                     self.assertRaises(durability.DurabilityError),
                 ):
                     durability.perform_durability(
@@ -879,7 +991,7 @@ class OffserverDurabilityTests(unittest.TestCase):
                         evidence_directory=evidence,
                         now_unix=self.NOW,
                     )
-                self.assertEqual(calls, 2)
+                self.assertEqual(len(calls), 2)
                 self.assertEqual(list(evidence.iterdir()), [])
 
     def test_windows_receipt_polling_is_fixed_and_bounded(self) -> None:
@@ -905,7 +1017,7 @@ class OffserverDurabilityTests(unittest.TestCase):
                 patch.object(durability.time, "sleep", side_effect=sleep),
                 patch.object(
                     durability,
-                    "_run_sftp",
+                    "_run_bounded_sftp_get",
                     side_effect=durability.DurabilityError("synthetic missing receipt"),
                 ) as run,
                 self.assertRaisesRegex(durability.DurabilityUnavailable, "receipt is unavailable"),
@@ -913,13 +1025,58 @@ class OffserverDurabilityTests(unittest.TestCase):
                 durability._poll_windows_receipt(configuration, pair, temporary)
             self.assertEqual(run.call_count, 2)
             for invocation in run.call_args_list:
-                batch = invocation.args[1]
-                self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.json ".encode(), batch)
-                self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.sig ".encode(), batch)
+                self.assertEqual(
+                    invocation.args[1],
+                    f"/durability-receipts/{self.BACKUP_ID}.json",
+                )
+                self.assertEqual(invocation.args[3], durability.MAX_DURABILITY_RECEIPT_BYTES)
                 self.assertLessEqual(
                     invocation.kwargs["timeout_seconds"],
                     durability.SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS,
                 )
+
+    def test_failed_receipt_attempt_files_are_removed_before_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            verification = Path(directory) / "verification"
+            temporary = verification / "attempt"
+            source = Path(directory) / "source"
+            verification.mkdir()
+            temporary.mkdir()
+            source.mkdir()
+            self.pair(source)
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+            receipt_attempts = 0
+
+            def download(
+                _configuration: object,
+                remote_path: str,
+                local_path: Path,
+                _maximum_size: int,
+                **_kwargs: object,
+            ) -> None:
+                nonlocal receipt_attempts
+                if remote_path.endswith(".sig"):
+                    local_path.write_bytes(b"s" * durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+                    return
+                receipt_attempts += 1
+                if receipt_attempts == 1:
+                    local_path.write_bytes(b"partial")
+                    raise durability.DurabilityError("synthetic interrupted receipt")
+                self.assertFalse((temporary / "receipt-1.json").exists())
+                self.assertFalse((temporary / "receipt-1.sig").exists())
+                local_path.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
+
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "SFTP_RECEIPT_POLL_INTERVAL_SECONDS", 0),
+                patch.object(durability, "_run_bounded_sftp_get", side_effect=download),
+            ):
+                receipt, signature = durability._poll_windows_receipt(configuration, pair, temporary)
+            self.assertEqual(receipt, durability.canonical_bytes(self.receipt_value(pair)))
+            self.assertEqual(signature, temporary / "receipt-2.sig")
 
     def test_windows_remote_paths_derive_only_from_validated_backup_identity(self) -> None:
         self.assertEqual(
@@ -958,14 +1115,21 @@ class OffserverDurabilityTests(unittest.TestCase):
                     remote_directory="/production",
                 )
 
-                def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                    receipt, signature_path = self._readback_local_paths(batch)
-                    receipt.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
-                    if signature is not None:
-                        signature_path.write_bytes(signature)
+                def fake_download(
+                    _configuration: object,
+                    remote_path: str,
+                    local_path: Path,
+                    _maximum_size: int,
+                    **_kwargs: object,
+                ) -> None:
+                    if remote_path.endswith(".sig"):
+                        if signature is not None:
+                            local_path.write_bytes(signature)
+                    else:
+                        local_path.write_bytes(durability.canonical_bytes(self.receipt_value(pair)))
 
                 with (
-                    patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                    patch.object(durability, "_run_bounded_sftp_get", side_effect=fake_download),
                     self.assertRaises(durability.DurabilityError),
                 ):
                     durability._poll_windows_receipt(configuration, pair, temporary)
@@ -1084,19 +1248,24 @@ class OffserverDurabilityTests(unittest.TestCase):
             verification = Path(directory) / "verification"
             verification.mkdir()
             pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
-            calls: list[bytes] = []
+            upload_calls: list[tuple[object, ...]] = []
+            download_calls: list[tuple[str, int]] = []
             events: list[str] = []
 
-            def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                calls.append(batch)
-                if len(calls) == 1:
-                    events.append("upload")
-                elif len(calls) == 2:
-                    events.append("receipt-and-signature")
-                    self._publish_receipt_readback(batch, pair)
-                elif len(calls) == 3:
-                    events.append("durable-readback")
-                    self._publish_durable_readback(batch, pair)
+            def fake_upload(*arguments: object) -> None:
+                upload_calls.append(arguments)
+                events.append("upload")
+
+            def fake_download(
+                _configuration: object,
+                remote_path: str,
+                local_path: Path,
+                maximum_size: int,
+                **_kwargs: object,
+            ) -> None:
+                download_calls.append((remote_path, maximum_size))
+                events.append(Path(remote_path).suffix)
+                self._publish_bounded_download(remote_path, local_path, pair)
 
             def verify_signature(receipt_data: bytes, signature_path: Path, temporary: Path) -> None:
                 self.assertEqual(receipt_data, durability.canonical_bytes(self.receipt_value(pair)))
@@ -1109,7 +1278,8 @@ class OffserverDurabilityTests(unittest.TestCase):
             )
             with (
                 patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(durability, "_run_sftp_upload", side_effect=fake_upload),
+                patch.object(durability, "_run_bounded_sftp_get", side_effect=fake_download),
                 patch.object(
                     durability,
                     "_verify_windows_receipt_signature",
@@ -1124,20 +1294,17 @@ class OffserverDurabilityTests(unittest.TestCase):
                     now_unix=self.NOW,
                 )
             verify.assert_called_once()
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(upload_calls), 1)
             self.assertEqual(
                 events,
-                ["upload", "receipt-and-signature", "signature-verified", "durable-readback"],
+                ["upload", ".json", ".sig", "signature-verified", ".age", ".json"],
             )
-            self.assertIn(f"mkdir /production/{self.BACKUP_ID}\n".encode(), calls[0])
-            self.assertIn(b".partial", calls[0])
-            self.assertNotIn(b"/durable", calls[0])
-            self.assertNotIn(b"/durability-receipts", calls[0])
-            self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.json ".encode(), calls[1])
-            self.assertIn(f"get /durability-receipts/{self.BACKUP_ID}.sig ".encode(), calls[1])
-            self.assertIn(f"get /durable/{self.BACKUP_ID}/{pair.artifact_filename} ".encode(), calls[2])
-            for read_batch in calls[1:]:
-                self.assertTrue(all(line.startswith(b"get ") for line in read_batch.splitlines()))
+            self.assertEqual(download_calls, [
+                (f"/durability-receipts/{self.BACKUP_ID}.json", durability.MAX_DURABILITY_RECEIPT_BYTES),
+                (f"/durability-receipts/{self.BACKUP_ID}.sig", durability.WINDOWS_RECEIPT_SIGNATURE_BYTES),
+                (f"/durable/{self.BACKUP_ID}/{pair.artifact_filename}", pair.artifact_size),
+                (f"/durable/{self.BACKUP_ID}/{pair.manifest_filename}", pair.manifest_size),
+            ])
             self.assertEqual(result["durabilityConfirmation"], durability.WINDOWS_DURABILITY_CONFIRMATION)
             self.assertEqual(result["remoteObjectSetId"], durability._windows_remote_object_set_id(pair.backup_id))
             self.assertTrue(result["destinationVerified"])
@@ -1151,12 +1318,17 @@ class OffserverDurabilityTests(unittest.TestCase):
             verification = Path(directory) / "verification"
             verification.mkdir()
             pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
-            calls: list[bytes] = []
+            downloads: list[str] = []
 
-            def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                calls.append(batch)
-                if len(calls) == 2:
-                    self._publish_receipt_readback(batch, pair, b"w" * 384)
+            def fake_download(
+                _configuration: object,
+                remote_path: str,
+                local_path: Path,
+                _maximum_size: int,
+                **_kwargs: object,
+            ) -> None:
+                downloads.append(remote_path)
+                self._publish_bounded_download(remote_path, local_path, pair, b"w" * 384)
 
             configuration = durability.WindowsSftpConfiguration(
                 host="100.100.100.100",
@@ -1166,7 +1338,8 @@ class OffserverDurabilityTests(unittest.TestCase):
             )
             with (
                 patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(durability, "_run_sftp_upload"),
+                patch.object(durability, "_run_bounded_sftp_get", side_effect=fake_download),
                 patch.object(
                     durability,
                     "_verify_windows_receipt_signature",
@@ -1181,7 +1354,8 @@ class OffserverDurabilityTests(unittest.TestCase):
                     evidence_directory=evidence,
                     now_unix=self.NOW,
                 )
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(downloads), 2)
+            self.assertTrue(all(path.startswith("/durability-receipts/") for path in downloads))
             self.assertEqual(list(evidence.iterdir()), [])
 
     def test_configured_production_entrypoint_accepts_authenticated_authority(self) -> None:
@@ -1190,15 +1364,18 @@ class OffserverDurabilityTests(unittest.TestCase):
             verification = Path(directory) / "verification"
             verification.mkdir()
             pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
-            calls = 0
+            downloads = 0
 
-            def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                nonlocal calls
-                calls += 1
-                if calls == 2:
-                    self._publish_receipt_readback(batch, pair)
-                elif calls == 3:
-                    self._publish_durable_readback(batch, pair)
+            def fake_download(
+                _configuration: object,
+                remote_path: str,
+                local_path: Path,
+                _maximum_size: int,
+                **_kwargs: object,
+            ) -> None:
+                nonlocal downloads
+                downloads += 1
+                self._publish_bounded_download(remote_path, local_path, pair)
 
             perform_durability = durability.perform_durability
 
@@ -1218,18 +1395,19 @@ class OffserverDurabilityTests(unittest.TestCase):
                 patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
                 patch.object(durability, "_load_configuration", return_value=self.configured_value()),
                 patch.object(durability, "_validate_activation_files") as activation,
-                patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                patch.object(durability, "_run_sftp_upload"),
+                patch.object(durability, "_run_bounded_sftp_get", side_effect=fake_download),
                 patch.object(durability, "_verify_windows_receipt_signature"),
                 patch.object(durability, "perform_durability", side_effect=perform_with_test_paths),
             ):
                 result = durability.execute_production_durability(self.context())
             activation.assert_called_once_with()
-            self.assertEqual(calls, 3)
+            self.assertEqual(downloads, 4)
             self.assertEqual(result["durabilityConfirmation"], durability.WINDOWS_DURABILITY_CONFIRMATION)
             self.assertEqual(len(list(evidence.iterdir())), 1)
 
     def test_windows_sftp_upload_receipt_and_readback_failures_publish_no_evidence(self) -> None:
-        failures = ("upload-batch", "receipt", "readback-batch")
+        failures = ("upload", "receipt", "artifact", "manifest")
         for failure in failures:
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 source, _, evidence = self.directories(Path(directory))
@@ -1239,18 +1417,31 @@ class OffserverDurabilityTests(unittest.TestCase):
                     host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
                 )
                 pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
-                calls: list[bytes] = []
+                downloads: list[str] = []
 
-                def fail_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                    calls.append(batch)
-                    if failure == "upload-batch" or (failure == "readback-batch" and len(calls) == 3):
+                def fail_upload(*_arguments: object) -> None:
+                    if failure == "upload":
                         raise durability.DurabilityError("synthetic SFTP failure")
-                    if len(calls) == 2:
-                        self._publish_receipt_readback(batch, pair)
+
+                def fail_download(
+                    _configuration: object,
+                    remote_path: str,
+                    local_path: Path,
+                    _maximum_size: int,
+                    **_kwargs: object,
+                ) -> None:
+                    downloads.append(remote_path)
+                    if (
+                        (failure == "artifact" and remote_path.endswith(".dump.age"))
+                        or (failure == "manifest" and remote_path.startswith("/durable/") and remote_path.endswith(".manifest.json"))
+                    ):
+                        raise durability.DurabilityError("synthetic SFTP failure")
+                    self._publish_bounded_download(remote_path, local_path, pair)
 
                 with (
                     patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                    patch.object(durability, "_run_sftp", side_effect=fail_sftp),
+                    patch.object(durability, "_run_sftp_upload", side_effect=fail_upload),
+                    patch.object(durability, "_run_bounded_sftp_get", side_effect=fail_download),
                     patch.object(durability, "_verify_windows_receipt_signature"),
                     patch.object(
                         durability,
@@ -1270,10 +1461,10 @@ class OffserverDurabilityTests(unittest.TestCase):
                         evidence_directory=evidence,
                         now_unix=self.NOW,
                     )
-                self.assertEqual(
-                    len(calls),
-                    3 if failure == "readback-batch" else 1,
-                )
+                if failure in {"upload", "receipt"}:
+                    self.assertEqual(downloads, [])
+                else:
+                    self.assertGreaterEqual(len(downloads), 3)
                 self.assertEqual(list(evidence.iterdir()), [])
 
     def test_windows_sftp_existing_object_directory_collision_fails_closed(self) -> None:
@@ -1285,13 +1476,17 @@ class OffserverDurabilityTests(unittest.TestCase):
                 host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
             )
 
-            def reject_existing_directory(_configuration: object, batch: bytes) -> None:
-                self.assertTrue(batch.startswith(f"mkdir /production/{self.BACKUP_ID}\n".encode()))
+            def reject_existing_directory(
+                _configuration: object,
+                object_directory: str,
+                *_arguments: object,
+            ) -> None:
+                self.assertEqual(object_directory, f"/production/{self.BACKUP_ID}")
                 raise durability.DurabilityError("synthetic existing object directory")
 
             with (
                 patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                patch.object(durability, "_run_sftp", side_effect=reject_existing_directory),
+                patch.object(durability, "_run_sftp_upload", side_effect=reject_existing_directory),
                 self.assertRaises(durability.DurabilityError),
             ):
                 durability.perform_durability(
@@ -1310,32 +1505,31 @@ class OffserverDurabilityTests(unittest.TestCase):
                 verification = Path(directory) / "verification"
                 verification.mkdir()
                 pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
-                calls = 0
-
-                def fake_sftp(_configuration: object, batch: bytes, **_kwargs: object) -> None:
-                    nonlocal calls
-                    calls += 1
-                    if calls == 2:
-                        self._publish_receipt_readback(batch, pair)
-                    elif calls == 3:
-                        artifact, manifest = self._readback_local_paths(batch)
-                        artifact_bytes = pair.artifact_path.read_bytes()
-                        manifest_bytes = pair.manifest_path.read_bytes()
-                        artifact.write_bytes(
-                            bytes([artifact_bytes[0] ^ 1]) + artifact_bytes[1:]
-                            if mismatch == "artifact" else artifact_bytes,
+                def fake_download(
+                    _configuration: object,
+                    remote_path: str,
+                    local_path: Path,
+                    _maximum_size: int,
+                    **_kwargs: object,
+                ) -> None:
+                    self._publish_bounded_download(remote_path, local_path, pair)
+                    if (
+                        remote_path.startswith("/durable/")
+                        and (
+                            (mismatch == "artifact" and remote_path.endswith(".dump.age"))
+                            or (mismatch == "manifest" and remote_path.endswith(".manifest.json"))
                         )
-                        manifest.write_bytes(
-                            bytes([manifest_bytes[0] ^ 1]) + manifest_bytes[1:]
-                            if mismatch == "manifest" else manifest_bytes,
-                        )
+                    ):
+                        content = local_path.read_bytes()
+                        local_path.write_bytes(bytes([content[0] ^ 1]) + content[1:])
 
                 configuration = durability.WindowsSftpConfiguration(
                     host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
                 )
                 with (
                     patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
-                    patch.object(durability, "_run_sftp", side_effect=fake_sftp),
+                    patch.object(durability, "_run_sftp_upload"),
+                    patch.object(durability, "_run_bounded_sftp_get", side_effect=fake_download),
                     patch.object(durability, "_verify_windows_receipt_signature"),
                     self.assertRaises(durability.DurabilityError),
                 ):
@@ -1347,6 +1541,156 @@ class OffserverDurabilityTests(unittest.TestCase):
                         now_unix=self.NOW,
                     )
                 self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_temporary_capacity_formula_threshold_and_fail_closed_query(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, _ = self.directories(Path(directory))
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            expected = (
+                2 * pair.artifact_size
+                + 2 * pair.manifest_size
+                + durability.TEMPORARY_PROTOCOL_OVERHEAD_BYTES
+                + durability.TEMPORARY_FILESYSTEM_SAFETY_RESERVE_BYTES
+            )
+            self.assertEqual(durability._required_temporary_free_bytes(pair), expected)
+            with patch.object(durability.shutil, "disk_usage", return_value=Mock(free=expected)):
+                durability._admit_temporary_capacity(pair)
+            with (
+                patch.object(durability.shutil, "disk_usage", return_value=Mock(free=expected - 1)),
+                self.assertRaises(durability.DurabilityError),
+            ):
+                durability._admit_temporary_capacity(pair)
+            with (
+                patch.object(durability.shutil, "disk_usage", side_effect=OSError("synthetic stat failure")),
+                self.assertRaises(durability.DurabilityError),
+            ):
+                durability._admit_temporary_capacity(pair)
+
+            for invalid_pair in (
+                replace(pair, artifact_size=0),
+                replace(pair, artifact_size=True),
+                replace(pair, manifest_size=0),
+                replace(pair, manifest_size=durability.MAX_MANIFEST_BYTES + 1),
+            ):
+                with self.subTest(pair=invalid_pair), self.assertRaises(durability.DurabilityError):
+                    durability._required_temporary_free_bytes(invalid_pair)
+
+    def test_insufficient_temporary_capacity_fails_before_staging_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            required = durability._required_temporary_free_bytes(pair)
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability.shutil, "disk_usage", return_value=Mock(free=required - 1)),
+                patch.object(durability, "_stage_validated_file") as stage,
+                self.assertRaises(durability.DurabilityError),
+            ):
+                durability.perform_durability(
+                    self.context(),
+                    durability.WindowsSftpDurabilityAdapter(configuration),
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+            stage.assert_not_called()
+            self.assertEqual(list(evidence.iterdir()), [])
+            self.assertEqual(list(verification.iterdir()), [])
+
+    def test_each_bounded_object_failure_leaves_no_evidence_or_temporary_files(self) -> None:
+        targets = ("receipt", "signature", "artifact", "manifest")
+        for target in targets:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as directory:
+                source, _, evidence = self.directories(Path(directory))
+                verification = Path(directory) / "verification"
+                verification.mkdir()
+                pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+                configuration = durability.WindowsSftpConfiguration(
+                    host="100.100.100.100",
+                    port=22,
+                    username="yolpol-backup",
+                    remote_directory="/production",
+                )
+
+                def bounded_failure(
+                    _configuration: object,
+                    remote_path: str,
+                    local_path: Path,
+                    maximum_size: int,
+                    **_kwargs: object,
+                ) -> None:
+                    matches = (
+                        (target == "receipt" and remote_path.endswith(".json") and remote_path.startswith("/durability-receipts/"))
+                        or (target == "signature" and remote_path.endswith(".sig"))
+                        or (target == "artifact" and remote_path.endswith(".dump.age"))
+                        or (target == "manifest" and remote_path.startswith("/durable/") and remote_path.endswith(".manifest.json"))
+                    )
+                    if matches:
+                        local_path.write_bytes(b"x" * maximum_size)
+                        raise durability.DurabilityError("synthetic bounded transfer failure")
+                    self._publish_bounded_download(remote_path, local_path, pair)
+
+                with (
+                    patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                    patch.object(durability, "SFTP_RECEIPT_MAX_ATTEMPTS", 1),
+                    patch.object(durability, "_run_sftp_upload"),
+                    patch.object(durability, "_run_bounded_sftp_get", side_effect=bounded_failure),
+                    patch.object(durability, "_verify_windows_receipt_signature"),
+                    self.assertRaises(durability.DurabilityError),
+                ):
+                    durability.perform_durability(
+                        self.context(),
+                        durability.WindowsSftpDurabilityAdapter(configuration),
+                        source_directory=source,
+                        evidence_directory=evidence,
+                        now_unix=self.NOW,
+                    )
+                self.assertEqual(list(evidence.iterdir()), [])
+                self.assertEqual(list(verification.iterdir()), [])
+
+    def test_smaller_bounded_artifact_is_rejected_by_exact_size_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, evidence = self.directories(Path(directory))
+            verification = Path(directory) / "verification"
+            verification.mkdir()
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            configuration = durability.WindowsSftpConfiguration(
+                host="100.100.100.100", port=22, username="yolpol-backup", remote_directory="/production",
+            )
+
+            def smaller_artifact(
+                _configuration: object,
+                remote_path: str,
+                local_path: Path,
+                _maximum_size: int,
+                **_kwargs: object,
+            ) -> None:
+                if remote_path.endswith(".dump.age"):
+                    local_path.write_bytes(pair.artifact_path.read_bytes()[:-1])
+                else:
+                    self._publish_bounded_download(remote_path, local_path, pair)
+
+            with (
+                patch.object(durability, "VERIFICATION_TEMP_DIRECTORY", verification),
+                patch.object(durability, "_run_sftp_upload"),
+                patch.object(durability, "_run_bounded_sftp_get", side_effect=smaller_artifact),
+                patch.object(durability, "_verify_windows_receipt_signature"),
+                self.assertRaisesRegex(durability.DurabilityError, "artifact readback rejected"),
+            ):
+                durability.perform_durability(
+                    self.context(),
+                    durability.WindowsSftpDurabilityAdapter(configuration),
+                    source_directory=source,
+                    evidence_directory=evidence,
+                    now_unix=self.NOW,
+                )
+            self.assertEqual(list(evidence.iterdir()), [])
+            self.assertEqual(list(verification.iterdir()), [])
 
     def test_remote_backup_identity_and_path_traversal_are_impossible(self) -> None:
         configuration = durability.WindowsSftpConfiguration(

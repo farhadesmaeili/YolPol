@@ -209,6 +209,42 @@ class BootstrapTests(unittest.TestCase):
         )
         self.assertTrue(bootstrap.command_exists("/usr/bin/sftp"))
         self.assertTrue(bootstrap.command_exists("/usr/bin/openssl"))
+        self.assertTrue(bootstrap.command_exists("/usr/bin/prlimit"))
+        durability._validate_sftp_executable()
+        durability._validate_openssl_executable()
+        durability._validate_prlimit_executable()
+
+    def test_prlimit_is_required_and_util_linux_is_installed_when_missing(self) -> None:
+        installed = False
+        commands: list[list[str]] = []
+
+        def command_exists(path: str | Path) -> bool:
+            return installed if str(path) == "/usr/bin/prlimit" else True
+
+        def run(arguments: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+            nonlocal installed
+            commands.append(arguments)
+            if arguments[:3] == ["/usr/bin/apt-get", "install", "--yes"]:
+                self.assertIn("util-linux", arguments)
+                installed = True
+            return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+        with mock.patch.object(bootstrap, "command_exists", side_effect=command_exists), mock.patch.object(
+            bootstrap,
+            "run",
+            side_effect=run,
+        ):
+            bootstrap.install_prerequisites(bootstrap.SUPPORTED_HOSTS[0])
+        self.assertTrue(any(command[:2] == ["/usr/bin/apt-get", "update"] for command in commands))
+        self.assertTrue(any("util-linux" in command for command in commands))
+
+        with mock.patch.object(
+            bootstrap,
+            "command_exists",
+            side_effect=lambda path: str(path) != "/usr/bin/prlimit",
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "/usr/bin/prlimit"):
+                bootstrap.validate_prerequisites()
 
     def test_system_openssh_accepts_every_fixed_sftp_option(self) -> None:
         configuration = durability.WindowsSftpConfiguration(
@@ -233,6 +269,47 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn("bad configuration option", diagnostics)
         self.assertNotIn("unsupported option", diagnostics)
         self.assertNotIn("unknown option", diagnostics)
+
+    def test_real_prlimit_contains_exact_and_oversize_local_sftp_downloads(self) -> None:
+        server = Path("/usr/lib/openssh/sftp-server")
+        self.assertTrue(server.is_file(), "test-only openssh-sftp-server package is required")
+        source = self.temporary / "bounded-source.bin"
+        exact = self.temporary / "bounded-exact.bin"
+        limited = self.temporary / "bounded-limited.bin"
+        content = bytes(range(256)) * 16
+        source.write_bytes(content)
+
+        def transfer(limit: int, destination: Path) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [
+                    "/usr/bin/prlimit",
+                    f"--fsize={limit}:{limit}",
+                    "--",
+                    "/usr/bin/sftp",
+                    "-F",
+                    "none",
+                    "-b",
+                    "-",
+                    "-D",
+                    str(server),
+                ],
+                input=f'get "{source}" "{destination}"\n'.encode("utf-8"),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+                timeout=15,
+                env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+            )
+
+        exact_result = transfer(len(content), exact)
+        self.assertEqual(exact_result.returncode, 0)
+        self.assertEqual(exact.stat().st_size, len(content))
+        self.assertEqual(hashlib.sha256(exact.read_bytes()).digest(), hashlib.sha256(content).digest())
+
+        limited_result = transfer(1_024, limited)
+        self.assertNotEqual(limited_result.returncode, 0)
+        self.assertLessEqual(limited.stat().st_size, 1_024)
 
     def test_system_openssl_accepts_fixed_receipt_rsa_pss_policy(self) -> None:
         private_key = self.temporary / "ephemeral-private.pem"
