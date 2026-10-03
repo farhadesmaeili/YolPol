@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends acl openssh-client openssl python3 sudo util-linux \
+  && apt-get install --yes --no-install-recommends acl openssh-client openssh-sftp-server openssl python3 sudo util-linux \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1001 yolpol-operator \
   && useradd --uid 1001 --gid 1001 --no-create-home --shell /bin/sh yolpol-operator \

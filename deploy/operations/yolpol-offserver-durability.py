@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -32,6 +33,7 @@ SFTP_KEY_PATH = SFTP_SECRET_DIRECTORY / "id_ed25519"
 SFTP_KNOWN_HOSTS_PATH = SFTP_SECRET_DIRECTORY / "known_hosts"
 WINDOWS_RECEIPT_PUBLIC_KEY_PATH = SFTP_SECRET_DIRECTORY / "windows-receipt-rsa-v1.pem"
 SFTP_EXECUTABLE = Path("/usr/bin/sftp")
+PRLIMIT_EXECUTABLE = Path("/usr/bin/prlimit")
 OPENSSL_EXECUTABLE = Path("/usr/bin/openssl")
 VERIFICATION_TEMP_DIRECTORY = Path("/opt/yolpol/runtime/tmp")
 PRODUCTION_BACKUP_DIRECTORY = Path("/opt/yolpol/production/backups")
@@ -45,6 +47,8 @@ MAX_MANIFEST_BYTES = 65_536
 MAX_DURABILITY_RECEIPT_BYTES = 4_096
 WINDOWS_RECEIPT_SIGNATURE_BYTES = 384
 WINDOWS_RECEIPT_PUBLIC_KEY_BITS = 3_072
+TEMPORARY_PROTOCOL_OVERHEAD_BYTES = 1 * 1024 * 1024
+TEMPORARY_FILESYSTEM_SAFETY_RESERVE_BYTES = 5 * 1024 * 1024 * 1024
 MAX_EVIDENCE_BYTES = 8_192
 MAX_EVIDENCE_AGE_SECONDS = 900
 MAX_CLOCK_SKEW_SECONDS = 30
@@ -68,6 +72,7 @@ MIGRATION_FINGERPRINT = re.compile(r"^[A-Za-z0-9_.-]{1,128}:[0-9a-f]{64}$")
 REMOTE_IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
 CONFIRMATION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 TAILSCALE_IPV4_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+SFTP_REMOTE_PATH = re.compile(r"^/[A-Za-z0-9._/-]+$")
 
 WINDOWS_RECEIPT_KEYS = frozenset({
     "artifactSha256",
@@ -653,10 +658,26 @@ def _validate_fixed_executable(path: Path, label: str) -> None:
         or not os.access(path, os.X_OK)
     ):
         _configuration_unavailable(f"{label} rejected")
+    for ancestor in path.parents:
+        try:
+            ancestor_metadata = ancestor.lstat()
+        except OSError as error:
+            _configuration_unavailable(f"{label} ancestor rejected", error)
+        if (
+            not stat.S_ISDIR(ancestor_metadata.st_mode)
+            or ancestor_metadata.st_uid != 0
+            or ancestor_metadata.st_gid != 0
+            or stat.S_IMODE(ancestor_metadata.st_mode) & 0o022
+        ):
+            _configuration_unavailable(f"{label} ancestor rejected")
 
 
 def _validate_sftp_executable() -> None:
     _validate_fixed_executable(SFTP_EXECUTABLE, "SFTP executable")
+
+
+def _validate_prlimit_executable() -> None:
+    _validate_fixed_executable(PRLIMIT_EXECUTABLE, "prlimit executable")
 
 
 def _validate_openssl_executable() -> None:
@@ -767,6 +788,7 @@ def _validate_activation_files() -> None:
     _validate_windows_receipt_public_key_content()
     _secure_root_directory(VERIFICATION_TEMP_DIRECTORY, 0o700, "verification temporary directory")
     _validate_sftp_executable()
+    _validate_prlimit_executable()
     _validate_openssl_executable()
     _run_openssl_public_key_preflight()
 
@@ -807,19 +829,95 @@ def _sftp_arguments(configuration: WindowsSftpConfiguration) -> list[str]:
     ]
 
 
-def _run_sftp(
+def _run_sftp_upload(
     configuration: WindowsSftpConfiguration,
-    batch: bytes,
-    *,
-    timeout_seconds: int = SFTP_TIMEOUT_SECONDS,
+    object_directory: str,
+    artifact_staged: Path,
+    artifact_remote: str,
+    manifest_staged: Path,
+    manifest_remote: str,
 ) -> None:
-    if not batch or len(batch) > 4_096 or not batch.endswith(b"\n"):
-        fail("SFTP operation rejected")
-    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or timeout_seconds < 1:
-        fail("SFTP timeout rejected")
+    for remote_path in (object_directory, artifact_remote, manifest_remote):
+        _validate_remote_sftp_path(remote_path)
+    batch = (
+        f"mkdir {object_directory}\n"
+        f"put {_quoted_local_sftp_path(artifact_staged)} {artifact_remote}.partial\n"
+        f"put {_quoted_local_sftp_path(manifest_staged)} {manifest_remote}.partial\n"
+        f"rename {artifact_remote}.partial {artifact_remote}\n"
+        f"rename {manifest_remote}.partial {manifest_remote}\n"
+    ).encode("utf-8")
     try:
         result = subprocess.run(
             _sftp_arguments(configuration),
+            input=batch,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=SFTP_TIMEOUT_SECONDS,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise DurabilityError("SFTP operation failed") from error
+    if result.returncode != 0:
+        fail("SFTP operation failed")
+
+
+def _validate_remote_sftp_path(path: str) -> None:
+    if (
+        not isinstance(path, str)
+        or SFTP_REMOTE_PATH.fullmatch(path) is None
+        or "//" in path
+        or any(part in {"", ".", ".."} for part in path.split("/")[1:])
+    ):
+        fail("SFTP remote path rejected")
+
+
+def _validate_sftp_download_local_path(path: Path) -> None:
+    if not isinstance(path, Path):
+        fail("SFTP local path rejected")
+    try:
+        temporary_root = VERIFICATION_TEMP_DIRECTORY.resolve(strict=True)
+        parent_metadata = path.parent.lstat()
+        parent = path.parent.resolve(strict=True)
+    except OSError as error:
+        raise DurabilityError("SFTP local path rejected") from error
+    if (
+        not stat.S_ISDIR(parent_metadata.st_mode)
+        or parent != path.parent
+        or parent.parent != temporary_root
+    ):
+        fail("SFTP local path rejected")
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise DurabilityError("SFTP local path rejected") from error
+    fail("SFTP local path rejected")
+
+
+def _run_bounded_sftp_get(
+    configuration: WindowsSftpConfiguration,
+    remote_path: str,
+    local_path: Path,
+    maximum_size: int,
+    *,
+    timeout_seconds: int = SFTP_TIMEOUT_SECONDS,
+) -> None:
+    _validate_remote_sftp_path(remote_path)
+    _validate_sftp_download_local_path(local_path)
+    maximum_size = _require_integer(maximum_size, "SFTP download size limit", minimum=1)
+    timeout_seconds = _require_integer(timeout_seconds, "SFTP timeout", minimum=1)
+    batch = f"get {remote_path} {_quoted_local_sftp_path(local_path)}\n".encode("utf-8")
+    try:
+        result = subprocess.run(
+            [
+                str(PRLIMIT_EXECUTABLE),
+                f"--fsize={maximum_size}:{maximum_size}",
+                "--",
+                *_sftp_arguments(configuration),
+            ],
             input=batch,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -829,9 +927,9 @@ def _run_sftp(
             env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise DurabilityError("SFTP operation failed") from error
+        raise DurabilityError("SFTP download failed") from error
     if result.returncode != 0:
-        fail("SFTP operation failed")
+        fail("SFTP download failed")
 
 
 def _quoted_local_sftp_path(path: Path) -> str:
@@ -839,6 +937,36 @@ def _quoted_local_sftp_path(path: Path) -> str:
     if "\x00" in text or "\r" in text or "\n" in text:
         fail("SFTP local path rejected")
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _remove_temporary_file(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        raise DurabilityError("SFTP temporary cleanup failed") from error
+
+
+def _required_temporary_free_bytes(pair: BackupPair) -> int:
+    artifact_size = _require_integer(pair.artifact_size, "backup artifact size", minimum=1)
+    manifest_size = _require_integer(pair.manifest_size, "backup manifest size", minimum=1)
+    if manifest_size > MAX_MANIFEST_BYTES:
+        fail("backup manifest size rejected")
+    return (
+        2 * artifact_size
+        + 2 * manifest_size
+        + TEMPORARY_PROTOCOL_OVERHEAD_BYTES
+        + TEMPORARY_FILESYSTEM_SAFETY_RESERVE_BYTES
+    )
+
+
+def _admit_temporary_capacity(pair: BackupPair) -> None:
+    required = _required_temporary_free_bytes(pair)
+    try:
+        free = shutil.disk_usage(VERIFICATION_TEMP_DIRECTORY).free
+    except (AttributeError, OSError, TypeError, ValueError) as error:
+        raise DurabilityError("verification temporary capacity unavailable") from error
+    if isinstance(free, bool) or not isinstance(free, int) or free < required:
+        fail("verification temporary capacity rejected")
 
 
 def _remote_object_directory(configuration: WindowsSftpConfiguration, backup_id: str) -> str:
@@ -915,20 +1043,35 @@ def _poll_windows_receipt(
             break
         receipt_local = temporary / f"receipt-{attempt}.json"
         signature_local = temporary / f"receipt-{attempt}.sig"
-        batch = (
-            f"get {receipt_remote} {_quoted_local_sftp_path(receipt_local)}\n"
-            f"get {signature_remote} {_quoted_local_sftp_path(signature_local)}\n"
-        ).encode("utf-8")
+        _remove_temporary_file(receipt_local)
+        _remove_temporary_file(signature_local)
         try:
-            _run_sftp(
+            _run_bounded_sftp_get(
                 configuration,
-                batch,
+                receipt_remote,
+                receipt_local,
+                MAX_DURABILITY_RECEIPT_BYTES,
+                timeout_seconds=max(
+                    1,
+                    min(SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS, math.ceil(remaining)),
+                ),
+            )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise DurabilityError("Windows durability receipt is unavailable")
+            _run_bounded_sftp_get(
+                configuration,
+                signature_remote,
+                signature_local,
+                WINDOWS_RECEIPT_SIGNATURE_BYTES,
                 timeout_seconds=max(
                     1,
                     min(SFTP_RECEIPT_ATTEMPT_TIMEOUT_SECONDS, math.ceil(remaining)),
                 ),
             )
         except DurabilityError:
+            _remove_temporary_file(receipt_local)
+            _remove_temporary_file(signature_local)
             remaining = deadline - time.monotonic()
             if remaining <= 0 or attempt == SFTP_RECEIPT_MAX_ATTEMPTS:
                 break
@@ -1091,6 +1234,7 @@ class WindowsSftpDurabilityAdapter:
         durable_artifact_remote = f"{durable_directory}/{pair.artifact_filename}"
         durable_manifest_remote = f"{durable_directory}/{pair.manifest_filename}"
         try:
+            _admit_temporary_capacity(pair)
             with tempfile.TemporaryDirectory(
                 prefix=f"verify-{pair.backup_id}-",
                 dir=VERIFICATION_TEMP_DIRECTORY,
@@ -1114,14 +1258,14 @@ class WindowsSftpDurabilityAdapter:
                     expected_size=pair.manifest_size,
                     maximum_size=MAX_MANIFEST_BYTES,
                 )
-                upload = (
-                    f"mkdir {object_directory}\n"
-                    f"put {_quoted_local_sftp_path(artifact_staged)} {artifact_remote}.partial\n"
-                    f"put {_quoted_local_sftp_path(manifest_staged)} {manifest_remote}.partial\n"
-                    f"rename {artifact_remote}.partial {artifact_remote}\n"
-                    f"rename {manifest_remote}.partial {manifest_remote}\n"
-                ).encode("utf-8")
-                _run_sftp(self.configuration, upload)
+                _run_sftp_upload(
+                    self.configuration,
+                    object_directory,
+                    artifact_staged,
+                    artifact_remote,
+                    manifest_staged,
+                    manifest_remote,
+                )
                 receipt_data, signature_path = _poll_windows_receipt(
                     self.configuration,
                     pair,
@@ -1132,11 +1276,18 @@ class WindowsSftpDurabilityAdapter:
                     signature_path,
                     temporary,
                 )
-                readback = (
-                    f"get {durable_artifact_remote} {_quoted_local_sftp_path(artifact_readback)}\n"
-                    f"get {durable_manifest_remote} {_quoted_local_sftp_path(manifest_readback)}\n"
-                ).encode("utf-8")
-                _run_sftp(self.configuration, readback)
+                _run_bounded_sftp_get(
+                    self.configuration,
+                    durable_artifact_remote,
+                    artifact_readback,
+                    pair.artifact_size,
+                )
+                _run_bounded_sftp_get(
+                    self.configuration,
+                    durable_manifest_remote,
+                    manifest_readback,
+                    pair.manifest_size,
+                )
                 artifact_metadata = _regular_file(artifact_readback, temporary, "SFTP artifact readback")
                 manifest_metadata = _regular_file(manifest_readback, temporary, "SFTP manifest readback")
                 if artifact_metadata.st_size != pair.artifact_size:

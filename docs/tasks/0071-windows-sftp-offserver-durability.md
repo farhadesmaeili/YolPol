@@ -1,6 +1,6 @@
 # Task 0071: Windows SFTP Off-server Durability Adapter
 
-> Subsequent repository status: Task 0073 implements fixed authenticated Windows receipt provenance with a detached RSA-PSS signature and pinned VPS verification key. The unsigned/future-authentication statements below record the Task 0071 boundary at completion; live activation still has not occurred.
+> Subsequent repository status: Task 0073 implements fixed authenticated Windows receipt provenance with a detached RSA-PSS signature and pinned VPS verification key. Task 0074 closes the local SFTP download-size residual with fixed `/usr/bin/prlimit` `RLIMIT_FSIZE` containment, one download per subprocess, and temporary-filesystem admission control. The unsigned/future-authentication statements below record the Task 0071 boundary at completion; live activation still has not occurred.
 
 ## Status and activation boundary
 
@@ -66,6 +66,7 @@ The adapter uses only:
 
 ```text
 /usr/bin/sftp                                           fixed executable
+/usr/bin/prlimit                                        fixed resource-limit executable (Task 0074)
 /etc/yolpol/offserver-durability.json                   root:root 0600
 /etc/yolpol/offserver-durability/                       root:root 0700
 /etc/yolpol/offserver-durability/id_ed25519             root:root 0600
@@ -121,7 +122,7 @@ Readback alone does **not** establish `durable_write_confirmed = True`. The adap
 
 OpenSSH SFTP's `fsync@openssh.com` extension and client `-f` behavior are not used as a shortcut. The OpenSSH upload path can discard the direct `sftp_fsync()` result, so the outer process exit status is insufficient proof that remote fsync succeeded. A future implementation requires either a positively verified per-upload fsync-class result or a separately reviewed Windows-side durable-flush receipt/helper exposed through the SFTP-only boundary. It must not add a remote shell, caller-supplied receipt, assertion boolean, or generic command execution.
 
-System `sftp` also offers no trustworthy pre-transfer maximum for `get`. The adapter checks exact expected sizes immediately after each completed download, but a malicious or corrupted destination could send an oversized object first and consume unexpected space under `/opt/yolpol/runtime/tmp`. Parsing remote listings would be race-prone and does not bound transfer bytes. Activation review must treat temporary-filesystem capacity/containment as a residual risk unless a reliable transfer bound is added.
+Task 0074 closes the repository-side local download-size residual without trusting remote listings. Every receipt, signature, artifact, and manifest `get` now runs alone as `/usr/bin/prlimit --fsize=N:N -- /usr/bin/sftp ...`; `N` is respectively 4096 bytes, 384 bytes, the validated local artifact size, or the validated local manifest size. The kernel bound is containment only: exact post-download size, canonical receipt, signature, and SHA-256 validation remain mandatory. Before staging, the adapter also requires free space on the filesystem containing `/opt/yolpol/runtime/tmp` for two artifact copies, two manifest copies, 1 MiB of bounded protocol overhead, and a fixed 5 GiB safety reserve. Capacity-query failure or insufficient space fails before large temporary copies or evidence.
 
 ## Failure, rollback, and deactivation
 
@@ -131,7 +132,7 @@ Deactivation is a separately approved root-controlled replacement of the active 
 
 ## Bootstrap behavior
 
-Bootstrap now installs/checks `openssh-client`, creates `/etc/yolpol/offserver-durability` as `root:root 0700`, and creates a missing active configuration as canonical unconfigured `root:root 0600`. It continues to install the unconfigured example. It does not create the private key or `known_hosts`, and ordinary bootstrap/check succeeds while the adapter is unconfigured. Activation material is validated only when the configured adapter is selected.
+Bootstrap installs/checks `openssh-client` and, as of Task 0074, `util-linux` plus fixed `/usr/bin/prlimit`; it creates `/etc/yolpol/offserver-durability` as `root:root 0700` and creates a missing active configuration as canonical unconfigured `root:root 0600`. It continues to install the unconfigured example. It does not create the private key or `known_hosts`, and ordinary bootstrap/check succeeds while the adapter is unconfigured. Activation material is validated only when the configured adapter is selected.
 
 No sudo command or operator permission is added. `yolpol-operator` and the deployment agent receive no direct SFTP, key, trust-file, or arbitrary SSH access; the existing root controller remains the only execution path.
 
@@ -149,6 +150,6 @@ Still deferred:
 - a controlled encrypted Production backup upload/readback exercise;
 - Production activation of changed-fingerprint migrations;
 - remote partial-object incident cleanup, retention, monitoring, restore automation, and full disposable disaster-recovery proof.
-- a reliable pre-transfer readback size bound or separately reviewed containment for `/opt/yolpol/runtime/tmp`.
+- live-host acceptance of the Task 0074 repository containment and capacity policy during the separately reviewed Phase C2 activation.
 
-Repository implementation is not live activation. Configuration and successful destination readback alone still cannot create Task 0069 durability evidence. Until a real durable-write primitive and the remaining prerequisites are separately approved, completed, and verified, Production remains fail-closed.
+Repository implementation is not live activation. Tasks 0072 and 0073 provide the repository-side Windows durable-write helper/receipt and authenticated receipt-verification contracts, but Production remains fail-closed until live Windows helper/task installation, CNG signing-authority provisioning, SFTP key and host-trust provisioning, VPS verification-public-key installation, configured-adapter activation, controlled end-to-end acceptance, and the remaining operational prerequisites are separately approved, completed, and verified.
