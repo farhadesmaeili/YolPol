@@ -993,6 +993,103 @@ function Assert-EqualBytes {
     }
 }
 
+function Read-CanonicalReceipt {
+    param(
+        [byte[]]$ReceiptBytes,
+        [string]$BackupId
+    )
+
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    try {
+        $receiptText = $utf8.GetString($ReceiptBytes)
+    }
+    catch {
+        throw 'An existing durability receipt is not valid UTF-8'
+    }
+
+    $remoteObjectSetId = "windows-sftp-v1:/durable/$BackupId"
+    $receiptPattern = '\A\{"artifactSha256":"(?<artifactSha256>[0-9a-f]{64})",' +
+        '"artifactSize":(?<artifactSize>[1-9][0-9]*),' +
+        '"backupId":"' + [System.Text.RegularExpressions.Regex]::Escape($BackupId) + '",' +
+        '"durabilityConfirmation":"' +
+        [System.Text.RegularExpressions.Regex]::Escape($DurabilityConfirmation) + '",' +
+        '"manifestSha256":"(?<manifestSha256>[0-9a-f]{64})",' +
+        '"manifestSize":(?<manifestSize>[1-9][0-9]*),' +
+        '"remoteObjectSetId":"' +
+        [System.Text.RegularExpressions.Regex]::Escape($remoteObjectSetId) + '",' +
+        '"schemaVersion":1\}\n\z'
+    $match = [System.Text.RegularExpressions.Regex]::Match(
+        $receiptText,
+        $receiptPattern,
+        [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+    if (-not $match.Success) {
+        throw 'An existing durability receipt is not canonical'
+    }
+
+    [Int64]$artifactSize = 0
+    [Int64]$manifestSize = 0
+    $numberStyle = [System.Globalization.NumberStyles]::None
+    $culture = [System.Globalization.CultureInfo]::InvariantCulture
+    if (
+        -not [Int64]::TryParse(
+            $match.Groups['artifactSize'].Value,
+            $numberStyle,
+            $culture,
+            [ref]$artifactSize
+        ) -or
+        -not [Int64]::TryParse(
+            $match.Groups['manifestSize'].Value,
+            $numberStyle,
+            $culture,
+            [ref]$manifestSize
+        ) -or
+        $artifactSize -le 0 -or
+        $manifestSize -le 0 -or
+        $manifestSize -gt 65536
+    ) {
+        throw 'An existing durability receipt contains invalid object sizes'
+    }
+
+    $receipt = [pscustomobject]@{
+        Artifact = [pscustomobject]@{
+            Sha256 = $match.Groups['artifactSha256'].Value
+            Size = $artifactSize
+        }
+        Manifest = [pscustomobject]@{
+            Sha256 = $match.Groups['manifestSha256'].Value
+            Size = $manifestSize
+        }
+    }
+    $expectedReceipt = Get-CanonicalReceiptBytes $BackupId $receipt.Artifact $receipt.Manifest
+    Assert-EqualBytes $expectedReceipt $ReceiptBytes
+    return $receipt
+}
+
+function Get-PlainFileLength {
+    param([string]$Path)
+
+    $stream = [YolpolWindowsDurabilityNative]::OpenPlainRead($Path, $BufferSize)
+    try {
+        return [Int64]$stream.Length
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Select-SinglePendingBackup {
+    param([System.Collections.IList]$PendingBackups)
+
+    if ($PendingBackups.Count -gt 1) {
+        throw 'Multiple complete unreceipted Production backup pairs require manual review'
+    }
+    if ($PendingBackups.Count -eq 0) {
+        return $null
+    }
+    return $PendingBackups[0]
+}
+
 $drive = [System.IO.DriveInfo]::new('E')
 if (-not $drive.IsReady -or $drive.DriveType -ne [System.IO.DriveType]::Fixed -or $drive.DriveFormat -cne 'NTFS') {
     throw 'The fixed E: NTFS volume contract is not satisfied'
@@ -1003,6 +1100,7 @@ $trust = Assert-WindowsTrustBoundary
 $production = $trust.Production
 
 $productionEntries = Get-BoundedEntries $production $MaximumProductionDirectories 'Production ingress root'
+$pendingBackups = [System.Collections.Generic.List[object]]::new()
 foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
     if ($entry -isnot [System.IO.DirectoryInfo] -or (Test-ReparsePoint $entry)) {
         throw 'Production ingress contains a non-directory or reparse-point entry'
@@ -1087,17 +1185,26 @@ foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
                 -AdministratorsSid $trust.AdministratorsSid -Label 'Existing durable backup file' `
                 -RequireProtected $false
         }
-        $existingArtifact = Get-PlainFileDigest ([System.IO.Path]::Combine($durableDirectory, $artifactName))
-        $existingManifest = Get-PlainFileDigest ([System.IO.Path]::Combine($durableDirectory, $manifestName))
-        $expectedReceipt = Get-CanonicalReceiptBytes $backupId $existingArtifact $existingManifest
         $actualReceipt = Read-PlainBoundedBytes $receiptFinal $MaximumReceiptBytes
-        Assert-EqualBytes $expectedReceipt $actualReceipt
         $actualSignature = Read-PlainBoundedBytes $signatureFinal $ReceiptSignatureBytes
         if ($actualSignature.Length -ne $ReceiptSignatureBytes) {
             throw 'An existing durability receipt signature has the wrong length'
         }
         $existingSigningMessage = Get-ReceiptSigningMessage $actualReceipt
         [YolpolWindowsDurabilityNative]::VerifyReceipt($existingSigningMessage, $actualSignature)
+        $parsedReceipt = Read-CanonicalReceipt $actualReceipt $backupId
+        $existingArtifactLength = Get-PlainFileLength (
+            [System.IO.Path]::Combine($durableDirectory, $artifactName)
+        )
+        $existingManifestLength = Get-PlainFileLength (
+            [System.IO.Path]::Combine($durableDirectory, $manifestName)
+        )
+        if ($existingArtifactLength -ne $parsedReceipt.Artifact.Size) {
+            throw 'Existing durable artifact length does not match its authenticated receipt'
+        }
+        if ($existingManifestLength -ne $parsedReceipt.Manifest.Size) {
+            throw 'Existing durable manifest length does not match its authenticated receipt'
+        }
         continue
     }
     if ([System.IO.Directory]::Exists($durableDirectory) -or [System.IO.File]::Exists($durableDirectory)) {
@@ -1113,58 +1220,87 @@ foreach ($entry in ($productionEntries | Sort-Object -Property Name)) {
         throw 'A complete Production backup pair has conflicting entries'
     }
 
-    [YolpolWindowsDurabilityNative]::CreateDirectoryExclusive($durableDirectory)
-    $null = Assert-PlainDirectory $durableDirectory 'New durable backup directory'
-    Assert-CanonicalAcl -Path $durableDirectory -Directory $true `
-        -ExpectedRules $trust.DurableDirectoryRules -SystemSid $trust.SystemSid `
-        -AdministratorsSid $trust.AdministratorsSid -Label 'New durable backup directory' `
-        -RequireProtected $false
-    $artifactFinal = [System.IO.Path]::Combine($durableDirectory, $artifactName)
-    $manifestFinal = [System.IO.Path]::Combine($durableDirectory, $manifestName)
-    $artifactPartial = "$artifactFinal.partial"
-    $manifestPartial = "$manifestFinal.partial"
-
-    $artifactWritten = Copy-DurableFile $artifactSource $artifactPartial
-    $manifestWritten = Copy-DurableFile $manifestSource $manifestPartial
-    if ($artifactWritten.Size -le 0 -or $manifestWritten.Size -le 0 -or $manifestWritten.Size -gt 65536) {
-        throw 'Durable backup pair size is invalid'
-    }
-    Assert-CanonicalAcl -Path $artifactPartial -Directory $false `
-        -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
-        -AdministratorsSid $trust.AdministratorsSid -Label 'Durable artifact partial' `
-        -RequireProtected $false
-    Assert-CanonicalAcl -Path $manifestPartial -Directory $false `
-        -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
-        -AdministratorsSid $trust.AdministratorsSid -Label 'Durable manifest partial' `
-        -RequireProtected $false
-
-    [YolpolWindowsDurabilityNative]::MoveNewNoReplace($artifactPartial, $artifactFinal)
-    [YolpolWindowsDurabilityNative]::MoveNewNoReplace($manifestPartial, $manifestFinal)
-
-    $artifactVerified = Get-PlainFileDigest $artifactFinal
-    $manifestVerified = Get-PlainFileDigest $manifestFinal
-    if ($artifactVerified.Size -ne $artifactWritten.Size -or $artifactVerified.Sha256 -cne $artifactWritten.Sha256) {
-        throw 'Final durable artifact verification failed'
-    }
-    if ($manifestVerified.Size -ne $manifestWritten.Size -or $manifestVerified.Sha256 -cne $manifestWritten.Sha256) {
-        throw 'Final durable manifest verification failed'
-    }
-
-    [YolpolWindowsDurabilityNative]::FlushFixedVolume()
-
-    $receiptBytes = Get-CanonicalReceiptBytes $backupId $artifactVerified $manifestVerified
-    $signingMessage = Get-ReceiptSigningMessage $receiptBytes
-    $signatureBytes = [YolpolWindowsDurabilityNative]::SignReceipt($signingMessage)
-    Write-SignaturePartial $signaturePartial $signatureBytes
-    Assert-CanonicalAcl -Path $signaturePartial -Directory $false `
-        -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
-        -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt signature partial' `
-        -RequireProtected $false
-    Write-ReceiptPartial $receiptPartial $receiptBytes
-    Assert-CanonicalAcl -Path $receiptPartial -Directory $false `
-        -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
-        -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt partial' `
-        -RequireProtected $false
-    [YolpolWindowsDurabilityNative]::MoveNewNoReplace($signaturePartial, $signatureFinal)
-    [YolpolWindowsDurabilityNative]::MoveNewNoReplace($receiptPartial, $receiptFinal)
+    $pendingBackups.Add([pscustomobject]@{
+        BackupId = $backupId
+        ArtifactSource = $artifactSource
+        ManifestSource = $manifestSource
+        ArtifactName = $artifactName
+        ManifestName = $manifestName
+        DurableDirectory = $durableDirectory
+        ReceiptFinal = $receiptFinal
+        ReceiptPartial = $receiptPartial
+        SignatureFinal = $signatureFinal
+        SignaturePartial = $signaturePartial
+    })
 }
+
+$pendingBackup = Select-SinglePendingBackup $pendingBackups
+if ($null -eq $pendingBackup) {
+    exit 0
+}
+
+$backupId = $pendingBackup.BackupId
+$artifactSource = $pendingBackup.ArtifactSource
+$manifestSource = $pendingBackup.ManifestSource
+$artifactName = $pendingBackup.ArtifactName
+$manifestName = $pendingBackup.ManifestName
+$durableDirectory = $pendingBackup.DurableDirectory
+$receiptFinal = $pendingBackup.ReceiptFinal
+$receiptPartial = $pendingBackup.ReceiptPartial
+$signatureFinal = $pendingBackup.SignatureFinal
+$signaturePartial = $pendingBackup.SignaturePartial
+
+[YolpolWindowsDurabilityNative]::CreateDirectoryExclusive($durableDirectory)
+$null = Assert-PlainDirectory $durableDirectory 'New durable backup directory'
+Assert-CanonicalAcl -Path $durableDirectory -Directory $true `
+    -ExpectedRules $trust.DurableDirectoryRules -SystemSid $trust.SystemSid `
+    -AdministratorsSid $trust.AdministratorsSid -Label 'New durable backup directory' `
+    -RequireProtected $false
+$artifactFinal = [System.IO.Path]::Combine($durableDirectory, $artifactName)
+$manifestFinal = [System.IO.Path]::Combine($durableDirectory, $manifestName)
+$artifactPartial = "$artifactFinal.partial"
+$manifestPartial = "$manifestFinal.partial"
+
+$artifactWritten = Copy-DurableFile $artifactSource $artifactPartial
+$manifestWritten = Copy-DurableFile $manifestSource $manifestPartial
+if ($artifactWritten.Size -le 0 -or $manifestWritten.Size -le 0 -or $manifestWritten.Size -gt 65536) {
+    throw 'Durable backup pair size is invalid'
+}
+Assert-CanonicalAcl -Path $artifactPartial -Directory $false `
+    -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+    -AdministratorsSid $trust.AdministratorsSid -Label 'Durable artifact partial' `
+    -RequireProtected $false
+Assert-CanonicalAcl -Path $manifestPartial -Directory $false `
+    -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+    -AdministratorsSid $trust.AdministratorsSid -Label 'Durable manifest partial' `
+    -RequireProtected $false
+
+[YolpolWindowsDurabilityNative]::MoveNewNoReplace($artifactPartial, $artifactFinal)
+[YolpolWindowsDurabilityNative]::MoveNewNoReplace($manifestPartial, $manifestFinal)
+
+$artifactVerified = Get-PlainFileDigest $artifactFinal
+$manifestVerified = Get-PlainFileDigest $manifestFinal
+if ($artifactVerified.Size -ne $artifactWritten.Size -or $artifactVerified.Sha256 -cne $artifactWritten.Sha256) {
+    throw 'Final durable artifact verification failed'
+}
+if ($manifestVerified.Size -ne $manifestWritten.Size -or $manifestVerified.Sha256 -cne $manifestWritten.Sha256) {
+    throw 'Final durable manifest verification failed'
+}
+
+[YolpolWindowsDurabilityNative]::FlushFixedVolume()
+
+$receiptBytes = Get-CanonicalReceiptBytes $backupId $artifactVerified $manifestVerified
+$signingMessage = Get-ReceiptSigningMessage $receiptBytes
+$signatureBytes = [YolpolWindowsDurabilityNative]::SignReceipt($signingMessage)
+Write-SignaturePartial $signaturePartial $signatureBytes
+Assert-CanonicalAcl -Path $signaturePartial -Directory $false `
+    -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+    -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt signature partial' `
+    -RequireProtected $false
+Write-ReceiptPartial $receiptPartial $receiptBytes
+Assert-CanonicalAcl -Path $receiptPartial -Directory $false `
+    -ExpectedRules $trust.DurableFileRules -SystemSid $trust.SystemSid `
+    -AdministratorsSid $trust.AdministratorsSid -Label 'Durability receipt partial' `
+    -RequireProtected $false
+[YolpolWindowsDurabilityNative]::MoveNewNoReplace($signaturePartial, $signatureFinal)
+[YolpolWindowsDurabilityNative]::MoveNewNoReplace($receiptPartial, $receiptFinal)
