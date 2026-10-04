@@ -1,6 +1,6 @@
 # Task 0072: Windows Durable-write Receipt
 
-> Subsequent repository status: Task 0073 implements fixed authenticated provenance for this unchanged canonical receipt by publishing a detached RSA-PSS signature and verifying it with a pinned VPS public key. The unsigned/future-authentication statements below record the Task 0072 boundary at completion; live activation still has not occurred.
+> Subsequent repository status: Task 0073 implements fixed authenticated provenance for this unchanged canonical receipt by publishing a detached RSA-PSS signature and verifying it with a pinned VPS public key. Later host acceptance successfully exercised native durable copy, final re-hash, fixed-volume `FlushFileBuffers`, canonical receipt generation, RSA-PSS signing, and LocalSystem execution on the actual fixed NTFS `E:` volume; the permanent Scheduled Task remains disabled with no automatic trigger. Task 0077 then fixes the maximum eligible Phase C2 encrypted artifact at 1 GiB so that a concrete maximum can be benchmarked against the unchanged 180-second deadline. The unsigned/future-authentication statements below record the Task 0072 boundary at completion; Phase C2 activation still has not occurred.
 
 ## Status and activation boundary
 
@@ -96,6 +96,8 @@ After a valid receipt, the adapter independently downloads only:
 It requires both readback files to be regular local temporary files with exact expected sizes and SHA-256 values from the already validated local `BackupPair`. The adapter then raises `DurabilityUnavailable` because the receipt has no authenticated authority that the VPS can verify. It never constructs a `RemoteDurabilityConfirmation` and never reaches Task 0069 canonical evidence publication. The helper cannot write Phase C2 evidence. An ingress readback, SFTP process exit status, `sftp -f`, caller boolean, unsigned or manually supplied receipt bytes, receipt without final durable readback, or canonical matching receipt and durable pair cannot publish evidence.
 
 The 180-second polling deadline is a deployment contract, not an arbitrary object-size guarantee. Any future activation must measure and verify that the Scheduled Task start latency plus copy, per-file flush, final readback/hash, fixed-volume flush, and receipt publication for the permitted maximum backup size reliably complete inside that bound. Otherwise activation remains prohibited; the timeout must not be bypassed dynamically.
+
+Task 0077 subsequently defines that permitted maximum as exactly 1 GiB without changing this deadline. The required LocalSystem 1 GiB runtime benchmark remains a separate, incomplete host-acceptance step.
 
 ## Windows ACL and execution contract
 
