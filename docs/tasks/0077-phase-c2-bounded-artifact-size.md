@@ -4,6 +4,8 @@
 
 This is a repository-only Phase C2 hardening task. It changes no Windows host, VPS, Production or Staging runtime, database, Docker volume, secret, key, Scheduled Task, firewall, SSH configuration, deployed file, or active configuration. Phase C2 remains canonical `{"schemaVersion":1,"state":"unconfigured"}` and changed-fingerprint Production promotion remains fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`.
 
+> Subsequent acceptance status: the separately approved maximum-size LocalSystem benchmark passed on 2026-10-04 against the installed pre-Task-0078 helper. Receipt/signature publication for the exact 1 GiB artifact completed at 101.929 seconds inside the unchanged 180-second deadline. Task 0078 records that historical design evidence and implements a repository-only bounded cadence definition plus completed-history fast path. The result is not final-helper activation proof: activation requires zero pending pairs and a fresh benchmark against the final installed Task 0078 helper bytes. The permanent task remains disabled with no automatic trigger and zero real trigger count; Phase C2 is still unconfigured.
+
 Prior host acceptance successfully exercised native durable copy, final re-hash, fixed-volume `FlushFileBuffers`, canonical receipt generation, RSA-PSS signing, and LocalSystem execution on the actual fixed NTFS `E:` volume. The permanent Windows Scheduled Task exists but is disabled and has no automatic trigger. Those results do not activate Phase C2 and do not include the 1 GiB maximum-size benchmark introduced here.
 
 The fixed encrypted Production backup artifact maximum is:
@@ -61,10 +63,10 @@ No receipt field, encoding, size maximum, detached-signature size, RSA-PSS/SHA-2
 
 Repository tests cover the exact constant, one-byte and exact-limit acceptance, zero-byte and one-byte-over rejection, unchanged manifest maximum, pre-adapter rejection with no evidence, non-configurability, the actual-size temporary-capacity formula, and exact-pair readback limits.
 
-These items remain not done:
+The separately approved one-shot/demand-run benchmark against the pre-Task-0078 helper is accepted as historical design evidence and recorded in `docs/deployments/windows-offserver-durability-1gib-benchmark-2026-10-04.md`. These items remain not done:
 
-- run and accept the separately approved one-shot/demand-run 1 GiB LocalSystem maximum-size benchmark within the fixed 180-second deadline;
-- only after that benchmark passes, activate the recurring Windows Scheduled Task trigger and operating cadence;
+- independently prove zero complete unreceipted pending Production pairs and accept a fresh exact 1 GiB benchmark against the final installed Task 0078 helper bytes;
+- activate and accept the recurring Windows Scheduled Task trigger and operating cadence through a separately approved live-host mutation;
 - activate the Phase C2 configured state and its reviewed host trust material;
 - transfer a real Production encrypted backup through the configured adapter;
 - publish and validate end-to-end signed durability evidence on the VPS;

@@ -34,6 +34,8 @@ describe("Windows durable-write helper repository contract", () => {
     expect(helper).toContain(
       "$BackupIdPattern = '^yolpol-production-[0-9]{8}T[0-9]{6}Z(?:-[0-9a-f]{7,64})?$'",
     );
+    expect(helper).toContain("$MaximumProductionDirectories = 128");
+    expect(helper).toContain("$MaximumEntriesPerBackupDirectory = 4");
     expect(helper.slice(0, helper.indexOf("Add-Type"))).not.toMatch(/^\s*param\s*\(/mu);
     expect(helper).toContain("Get-BoundedEntries $production $MaximumProductionDirectories");
     expect(helper).toContain(
@@ -76,7 +78,159 @@ describe("Windows durable-write helper repository contract", () => {
     expect(helper).toContain("if ($receiptExists -ne $signatureExists)");
     expect(helper).toContain("durable backup directory collision requires manual review");
     expect(helper).toContain("$existingEntries = Get-BoundedEntries $existingDurable 2");
-    expect(helper).toContain("Assert-EqualBytes $expectedReceipt $actualReceipt");
+    expect(helper).toContain("$parsedReceipt = Read-CanonicalReceipt $actualReceipt $backupId");
+  });
+
+  it("keeps completed history metadata-bounded while authenticating its exact receipt bindings", () => {
+    const receiptBranchStart = helper.indexOf("if ($receiptExists)");
+    const receiptBranchEnd = helper.indexOf(
+      "if ([System.IO.Directory]::Exists($durableDirectory)",
+      receiptBranchStart,
+    );
+    const receiptBranch = helper.slice(receiptBranchStart, receiptBranchEnd);
+    const receiptParser = getPowerShellFunction("Read-CanonicalReceipt");
+    const lengthReader = getPowerShellFunction("Get-PlainFileLength");
+    const signatureVerification = receiptBranch.indexOf(
+      "VerifyReceipt($existingSigningMessage, $actualSignature)",
+    );
+    const strictParsing = receiptBranch.indexOf("Read-CanonicalReceipt $actualReceipt $backupId");
+    const artifactLength = receiptBranch.indexOf("$existingArtifactLength = Get-PlainFileLength");
+
+    expect(receiptBranchStart).toBeGreaterThanOrEqual(0);
+    expect(receiptBranchEnd).toBeGreaterThan(receiptBranchStart);
+    expect(receiptBranch).not.toMatch(/Get-PlainFileDigest|Get-StreamDigest/u);
+    expect(signatureVerification).toBeGreaterThanOrEqual(0);
+    expect(strictParsing).toBeGreaterThan(signatureVerification);
+    expect(artifactLength).toBeGreaterThan(strictParsing);
+    expect(receiptBranch).toContain("$existingManifestLength = Get-PlainFileLength");
+    expect(receiptBranch).toContain("$parsedReceipt.Artifact.Size");
+    expect(receiptBranch).toContain("$parsedReceipt.Manifest.Size");
+    expect(receiptBranch).toContain("Assert-CanonicalAcl -Path $existingEntry.FullName");
+    expect(lengthReader).toContain("OpenPlainRead($Path, $BufferSize)");
+    expect(lengthReader).toContain("return [Int64]$stream.Length");
+    expect(lengthReader).not.toMatch(/\$stream\.Read\(|Get-StreamDigest|SHA256|TransformBlock/u);
+
+    expect(receiptParser).toContain("[System.Text.UTF8Encoding]::new($false, $true)");
+    expect(receiptParser).toContain("[0-9a-f]{64}");
+    expect(receiptParser).toContain('"schemaVersion":1\\}\\n\\z');
+    expect(receiptParser).toContain("[System.Globalization.NumberStyles]::None");
+    expect(receiptParser).toContain("$manifestSize -gt 65536");
+    expect(receiptParser).toContain("windows-sftp-v1:/durable/$BackupId");
+    expect(receiptParser).toContain("Assert-EqualBytes $expectedReceipt $ReceiptBytes");
+    expect(receiptParser).not.toContain("ConvertFrom-Json");
+  });
+
+  it("classifies the full bounded scan before selecting at most one pending pair", () => {
+    const trustCheck = helper.indexOf("$trust = Assert-WindowsTrustBoundary");
+    const productionScan = helper.indexOf("$productionEntries = Get-BoundedEntries");
+    const pendingCollection = helper.indexOf("$pendingBackups.Add(");
+    const pendingSelection = helper.indexOf("$pendingBackup = Select-SinglePendingBackup");
+    const durableCreation = helper.indexOf("CreateDirectoryExclusive($durableDirectory)");
+    const selector = getPowerShellFunction("Select-SinglePendingBackup");
+
+    expect(productionScan).toBeGreaterThan(trustCheck);
+    expect(pendingCollection).toBeGreaterThan(productionScan);
+    expect(pendingSelection).toBeGreaterThan(pendingCollection);
+    expect(durableCreation).toBeGreaterThan(pendingSelection);
+    expect(selector).toContain("$PendingBackups.Count -gt 1");
+    expect(selector).toContain(
+      "Multiple complete unreceipted Production backup pairs require manual review",
+    );
+    expect(selector).toContain("return $PendingBackups[0]");
+  });
+
+  windowsIt("selects zero or one pending pair and rejects a multiple-pair backlog", () => {
+    const command = String.raw`
+$content = Get-Content -LiteralPath $env:YOLPOL_TEST_HELPER_PATH -Raw
+$functionMatch = [regex]::Match(
+  $content,
+  '(?ms)^function Select-SinglePendingBackup \{.*?^\}')
+if (-not $functionMatch.Success) { throw 'Select-SinglePendingBackup function not found' }
+. ([scriptblock]::Create($functionMatch.Value))
+$empty = [System.Collections.ArrayList]::new()
+if ($null -ne (Select-SinglePendingBackup $empty)) { throw 'Empty selection was not null' }
+$one = [System.Collections.ArrayList]::new()
+$expected = [pscustomobject]@{ BackupId = 'one' }
+$null = $one.Add($expected)
+if ((Select-SinglePendingBackup $one).BackupId -cne 'one') { throw 'Single selection changed' }
+$multiple = [System.Collections.ArrayList]::new()
+$null = $multiple.Add($expected)
+$null = $multiple.Add([pscustomobject]@{ BackupId = 'two' })
+$rejected = $false
+try { $null = Select-SinglePendingBackup $multiple } catch { $rejected = $true }
+if (-not $rejected) { throw 'Multiple pending pairs were accepted' }
+`;
+    const result = spawnSync(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          YOLPOL_TEST_HELPER_PATH: resolve(
+            repositoryRoot,
+            "deploy/windows/offserver-durability/yolpol-durable-write.ps1",
+          ),
+        },
+        timeout: 20_000,
+      },
+    );
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  windowsIt("strictly parses only the exact bounded canonical receipt schema", () => {
+    const command = String.raw`
+$content = Get-Content -LiteralPath $env:YOLPOL_TEST_HELPER_PATH -Raw
+foreach ($name in @('Assert-EqualBytes', 'Get-CanonicalReceiptBytes', 'Read-CanonicalReceipt')) {
+  $functionMatch = [regex]::Match($content, "(?ms)^function $name \{.*?^\}")
+  if (-not $functionMatch.Success) { throw "$name function not found" }
+  . ([scriptblock]::Create($functionMatch.Value))
+}
+$MaximumReceiptBytes = 4096
+$DurabilityConfirmation = 'windows-flushfilebuffers-volume-v1'
+$backupId = 'yolpol-production-20261004T170000Z-c2a0077b'
+$receiptText = '{"artifactSha256":"' + ('a' * 64) +
+  '","artifactSize":1073741824,"backupId":"' + $backupId +
+  '","durabilityConfirmation":"windows-flushfilebuffers-volume-v1","manifestSha256":"' +
+  ('b' * 64) +
+  '","manifestSize":104,"remoteObjectSetId":"windows-sftp-v1:/durable/' + $backupId +
+  '","schemaVersion":1}' + [char]10
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+$valid = $utf8.GetBytes($receiptText)
+$parsed = Read-CanonicalReceipt $valid $backupId
+if ($parsed.Artifact.Size -ne 1073741824 -or $parsed.Manifest.Size -ne 104) {
+  throw 'Canonical receipt sizes changed'
+}
+function Assert-Rejected([byte[]] $Bytes, [string] $ExpectedBackupId, [string] $Label) {
+  $rejected = $false
+  try { $null = Read-CanonicalReceipt $Bytes $ExpectedBackupId } catch { $rejected = $true }
+  if (-not $rejected) { throw "$Label was accepted" }
+}
+Assert-Rejected ($utf8.GetBytes($receiptText.Replace(',"schemaVersion":1}', ',"extra":1,"schemaVersion":1}'))) $backupId 'Unknown field'
+Assert-Rejected ($utf8.GetBytes($receiptText.Replace(('a' * 64), ('A' * 64)))) $backupId 'Uppercase hash'
+Assert-Rejected ($utf8.GetBytes($receiptText.Replace('"artifactSize":1073741824', '"artifactSize":0'))) $backupId 'Zero artifact'
+Assert-Rejected ($utf8.GetBytes($receiptText.Replace('"manifestSize":104', '"manifestSize":65537'))) $backupId 'Oversized manifest'
+Assert-Rejected $valid 'yolpol-production-20261004T170000Z-deadbee' 'Wrong backup identity'
+Assert-Rejected ([byte[]](0xC3, 0x28)) $backupId 'Invalid UTF-8'
+`;
+    const result = spawnSync(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          YOLPOL_TEST_HELPER_PATH: resolve(
+            repositoryRoot,
+            "deploy/windows/offserver-durability/yolpol-durable-write.ps1",
+          ),
+        },
+        timeout: 20_000,
+      },
+    );
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it("requires protected canonical ACLs before scanning or accepting an existing receipt", () => {
