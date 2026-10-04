@@ -88,3 +88,5 @@ Live Phase C2 work remains separate: provision and accept the Windows roots/ACLs
 ## Subsequent repository status
 
 Task 0075 adds fixed `--core=0:0` containment to every bounded readback child, producing the command prefix `/usr/bin/prlimit --core=0:0 --fsize=N:N -- /usr/bin/sftp ...`. Upload behavior and all Task 0074 file-size, capacity, validation, and evidence contracts remain unchanged.
+
+Task 0077 subsequently and intentionally supersedes only Task 0074's historical policy of imposing no arbitrary global artifact-size ceiling. The Phase C2 encrypted artifact is now eligible only through the fixed 1 GiB maximum required for worst-case benchmarking against the unchanged 180-second receipt deadline. Task 0074's independent actual-size temporary-capacity formula and exact `pair.artifact_size` readback bound remain unchanged.

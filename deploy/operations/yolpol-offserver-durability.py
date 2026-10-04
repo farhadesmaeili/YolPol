@@ -43,6 +43,7 @@ MAX_PRIVATE_KEY_BYTES = 16_384
 MAX_KNOWN_HOSTS_BYTES = 65_536
 MAX_WINDOWS_RECEIPT_PUBLIC_KEY_BYTES = 8_192
 MAX_OPENSSL_PUBLIC_KEY_OUTPUT_BYTES = 8_192
+MAX_ARTIFACT_BYTES = 1 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 65_536
 MAX_DURABILITY_RECEIPT_BYTES = 4_096
 WINDOWS_RECEIPT_SIGNATURE_BYTES = 384
@@ -300,8 +301,10 @@ def inspect_backup_pair(source_directory: Path, backup_id: str) -> BackupPair:
     manifest_path = source_directory / manifest_filename
     artifact_metadata = _regular_file(artifact_path, source_directory, "encrypted backup artifact")
     manifest_metadata = _regular_file(manifest_path, source_directory, "backup manifest")
-    if artifact_metadata.st_size <= 0 or manifest_metadata.st_size <= 0 or manifest_metadata.st_size > MAX_MANIFEST_BYTES:
-        fail("backup pair size rejected")
+    if artifact_metadata.st_size <= 0 or artifact_metadata.st_size > MAX_ARTIFACT_BYTES:
+        fail("backup artifact size rejected")
+    if manifest_metadata.st_size <= 0 or manifest_metadata.st_size > MAX_MANIFEST_BYTES:
+        fail("backup manifest size rejected")
     try:
         manifest_bytes = manifest_path.read_bytes()
     except OSError as error:

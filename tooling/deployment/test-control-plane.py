@@ -15,6 +15,7 @@ import tempfile
 import time
 import types
 import unittest
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from typing import NoReturn
@@ -323,6 +324,103 @@ class OffserverDurabilityTests(unittest.TestCase):
         evidence.mkdir()
         self.pair(source)
         return source, destination, evidence
+
+    def set_artifact_content(self, source: Path, content: bytes) -> None:
+        artifact_path = source / f"{self.BACKUP_ID}.dump.age"
+        manifest_path = source / f"{self.BACKUP_ID}.manifest.json"
+        artifact_path.write_bytes(content)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["artifact"]["sizeBytes"] = len(content)
+        manifest["artifact"]["sha256"] = hashlib.sha256(content).hexdigest()
+        manifest_path.write_text(
+            json.dumps(manifest, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def inspect_with_reported_artifact_size(self, source: Path, size: int) -> object:
+        artifact_path = source / f"{self.BACKUP_ID}.dump.age"
+        manifest_path = source / f"{self.BACKUP_ID}.manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["artifact"]["sizeBytes"] = size
+        manifest_path.write_text(
+            json.dumps(manifest, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        regular_file = durability._regular_file
+
+        def reported_size(path: Path, parent: Path, label: str) -> object:
+            metadata = regular_file(path, parent, label)
+            return Mock(st_size=size) if path == artifact_path else metadata
+
+        with patch.object(durability, "_regular_file", side_effect=reported_size):
+            return durability.inspect_backup_pair(source, self.BACKUP_ID)
+
+    def test_artifact_size_policy_accepts_one_byte_and_exact_maximum(self) -> None:
+        self.assertEqual(durability.MAX_ARTIFACT_BYTES, 1 * 1024 * 1024 * 1024)
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, _ = self.directories(Path(directory))
+            self.set_artifact_content(source, b"x")
+            one_byte = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            self.assertEqual(one_byte.artifact_size, 1)
+
+            maximum = self.inspect_with_reported_artifact_size(
+                source,
+                durability.MAX_ARTIFACT_BYTES,
+            )
+            self.assertEqual(maximum.artifact_size, durability.MAX_ARTIFACT_BYTES)
+
+    def test_zero_and_oversized_artifacts_fail_before_remote_work_or_evidence(self) -> None:
+        for size in (0, durability.MAX_ARTIFACT_BYTES + 1):
+            with self.subTest(size=size), tempfile.TemporaryDirectory() as directory:
+                source, _, evidence = self.directories(Path(directory))
+                adapter = Mock()
+                artifact_path = source / f"{self.BACKUP_ID}.dump.age"
+                if size == 0:
+                    artifact_path.write_bytes(b"")
+                    context = nullcontext()
+                else:
+                    regular_file = durability._regular_file
+
+                    def reported_size(path: Path, parent: Path, label: str) -> object:
+                        metadata = regular_file(path, parent, label)
+                        return Mock(st_size=size) if path == artifact_path else metadata
+
+                    context = patch.object(durability, "_regular_file", side_effect=reported_size)
+
+                with (
+                    patch.dict(durability.os.environ, {"MAX_ARTIFACT_BYTES": str(size + 1)}),
+                    context,
+                    self.assertRaisesRegex(durability.DurabilityError, "backup artifact size rejected"),
+                ):
+                    durability.perform_durability(
+                        self.context(),
+                        adapter,
+                        source_directory=source,
+                        evidence_directory=evidence,
+                        now_unix=self.NOW,
+                    )
+                adapter.copy_and_verify.assert_not_called()
+                self.assertEqual(list(evidence.iterdir()), [])
+
+    def test_manifest_size_limit_remains_exactly_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _, _ = self.directories(Path(directory))
+            manifest_path = source / f"{self.BACKUP_ID}.manifest.json"
+            manifest_bytes = manifest_path.read_bytes()
+            manifest_path.write_bytes(
+                manifest_bytes + b" " * (durability.MAX_MANIFEST_BYTES - len(manifest_bytes)),
+            )
+            pair = durability.inspect_backup_pair(source, self.BACKUP_ID)
+            self.assertEqual(pair.manifest_size, durability.MAX_MANIFEST_BYTES)
+
+            manifest_path.write_bytes(manifest_path.read_bytes() + b" ")
+            with self.assertRaisesRegex(durability.DurabilityError, "backup manifest size rejected"):
+                durability.inspect_backup_pair(source, self.BACKUP_ID)
+
+    def test_artifact_size_policy_is_not_configuration_supplied(self) -> None:
+        configured = self.configured_value(maxArtifactBytes=durability.MAX_ARTIFACT_BYTES + 1)
+        with self.assertRaises(durability.DurabilityUnavailable):
+            durability._validate_configuration_bytes(durability.canonical_bytes(configured))
 
     def test_synthetic_adapter_copies_verifies_and_persists_canonical_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1309,6 +1407,7 @@ class OffserverDurabilityTests(unittest.TestCase):
                 (f"/durable/{self.BACKUP_ID}/{pair.artifact_filename}", pair.artifact_size),
                 (f"/durable/{self.BACKUP_ID}/{pair.manifest_filename}", pair.manifest_size),
             ])
+            self.assertNotEqual(pair.artifact_size, durability.MAX_ARTIFACT_BYTES)
             self.assertEqual(result["durabilityConfirmation"], durability.WINDOWS_DURABILITY_CONFIRMATION)
             self.assertEqual(result["remoteObjectSetId"], durability._windows_remote_object_set_id(pair.backup_id))
             self.assertTrue(result["destinationVerified"])
@@ -1557,6 +1656,14 @@ class OffserverDurabilityTests(unittest.TestCase):
                 + durability.TEMPORARY_FILESYSTEM_SAFETY_RESERVE_BYTES
             )
             self.assertEqual(durability._required_temporary_free_bytes(pair), expected)
+            maximum_pair = replace(pair, artifact_size=durability.MAX_ARTIFACT_BYTES)
+            self.assertEqual(
+                durability._required_temporary_free_bytes(maximum_pair),
+                2 * durability.MAX_ARTIFACT_BYTES
+                + 2 * pair.manifest_size
+                + durability.TEMPORARY_PROTOCOL_OVERHEAD_BYTES
+                + durability.TEMPORARY_FILESYSTEM_SAFETY_RESERVE_BYTES,
+            )
             with patch.object(durability.shutil, "disk_usage", return_value=Mock(free=expected)):
                 durability._admit_temporary_capacity(pair)
             with (
