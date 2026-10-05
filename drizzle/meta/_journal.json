@@ -169,6 +169,13 @@
       "when": 1789391490099,
       "tag": "0023_telegram_notification_destinations",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791230751683,
+      "tag": "0024_phase_c2_live_acceptance",
+      "breakpoints": true
     }
   ]
 }
