@@ -9,6 +9,8 @@ const repositoryRoot = resolve(import.meta.dirname, "../..");
 const bootstrapPath = resolve(repositoryRoot, "deploy/bootstrap/yolpol-bootstrap.py");
 const bootstrap = readFileSync(bootstrapPath, "utf8");
 const deploymentPolicy = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-deploy-policy.py"), "utf8");
+const durability = readFileSync(resolve(repositoryRoot, "deploy/operations/yolpol-offserver-durability.py"), "utf8");
+const durabilityExample = readFileSync(resolve(repositoryRoot, "deploy/operations/offserver-durability.json.example"), "utf8");
 const sudoers = readFileSync(resolve(repositoryRoot, "deploy/operations/sudoers.yolpol-deploy"), "utf8");
 const ci = readFileSync(resolve(repositoryRoot, ".github/workflows/ci.yml"), "utf8");
 const dockerComposeAvailable = spawnSync("docker", ["compose", "version"], {encoding: "utf8", timeout: 10_000}).status === 0;
@@ -83,6 +85,39 @@ describe("server bootstrap automation", () => {
     expect(bootstrap).toContain('SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deploy")');
     expect(bootstrap).toContain('AGENT_SUDOERS_DESTINATION = Path("/etc/sudoers.d/yolpol-deployment-agent")');
     expect(bootstrap.match(/"\/usr\/sbin\/visudo", "-cf"/gu)).toHaveLength(6);
+    expect(bootstrap).toContain('DirectoryContract("/etc/yolpol/offserver-durability", 0, 0, 0o700)');
+    expect(bootstrap).toContain('(\"/etc/yolpol/offserver-durability.json\", 0o600, b\'{"schemaVersion":1,"state":"unconfigured"}\\n\')');
+    expect(bootstrap).toContain('"/usr/bin/sftp"');
+    expect(bootstrap).toContain('"/usr/bin/prlimit"');
+    expect(bootstrap).toContain('"openssh-client"');
+    expect(bootstrap).toContain('"util-linux"');
+  });
+
+  it("keeps Windows SFTP activation material root-owned, fixed, and absent from examples", () => {
+    expect(durability).toContain('SFTP_KEY_PATH = SFTP_SECRET_DIRECTORY / "id_ed25519"');
+    expect(durability).toContain('SFTP_KNOWN_HOSTS_PATH = SFTP_SECRET_DIRECTORY / "known_hosts"');
+    expect(durability).toContain(
+      'WINDOWS_RECEIPT_PUBLIC_KEY_PATH = SFTP_SECRET_DIRECTORY / "windows-receipt-rsa-v1.pem"',
+    );
+    expect(durability).toContain('SFTP_EXECUTABLE = Path("/usr/bin/sftp")');
+    expect(durability).toContain('PRLIMIT_EXECUTABLE = Path("/usr/bin/prlimit")');
+    expect(durability).toContain('OPENSSL_EXECUTABLE = Path("/usr/bin/openssl")');
+    expect(durability).toContain('_validate_fixed_executable(OPENSSL_EXECUTABLE, "OpenSSL executable")');
+    expect(durability).toContain('"rsa_padding_mode:pss"');
+    expect(durability).toContain('"rsa_mgf1_md:sha256"');
+    expect(durability).toContain('"rsa_pss_saltlen:digest"');
+    expect(durability).toContain('"-oBatchMode=yes"');
+    expect(durability).toContain('"-oStrictHostKeyChecking=yes"');
+    expect(durability).toContain('"-oUpdateHostKeys=no"');
+    expect(durability).not.toContain("StrictHostKeyChecking=no");
+    expect(durability).not.toContain("UserKnownHostsFile=/dev/null");
+    expect(durability).not.toContain("shell=True");
+    expect(durability.toLowerCase()).not.toContain("sshpass");
+    expect(durabilityExample).toBe('{"schemaVersion":1,"state":"unconfigured"}\n');
+    expect(durabilityExample).not.toMatch(/private|password|token|BEGIN OPENSSH PRIVATE KEY/u);
+    expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/id_ed25519"');
+    expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/known_hosts"');
+    expect(bootstrap).not.toContain('("/etc/yolpol/offserver-durability/windows-receipt-rsa-v1.pem"');
   });
 
   it("keeps runtime, secrets, and release authorities closed and separated", () => {

@@ -182,7 +182,15 @@ describe("Phase C1 and repository-side Phase C2 workflow contract", () => {
     expect(controller).toContain("prove_production_durability(");
     expect(controller).toContain('run(f"migrate-{environment}"');
     expect(durability).toContain('raise DurabilityUnavailable("remote durability adapter is unavailable")');
-    expect(durability).not.toMatch(/subprocess|os\.system|shell=True|https?:\/\//u);
+    expect(durability).toContain('SFTP_EXECUTABLE = Path("/usr/bin/sftp")');
+    expect(durability).toContain('PRLIMIT_EXECUTABLE = Path("/usr/bin/prlimit")');
+    expect(durability).toContain("subprocess.run(");
+    expect(durability).toContain("shell=False");
+    expect(durability).toContain('"-oBatchMode=yes"');
+    expect(durability).toContain('"-oStrictHostKeyChecking=yes"');
+    expect(durability).toContain('"-oUpdateHostKeys=no"');
+    expect(durability).not.toMatch(/os\.system|shell=True|https?:\/\//u);
+    expect(durability).not.toContain("subprocess.Popen");
   });
 
   it("uses fixed Staging public smoke routes and no caller URL", () => {

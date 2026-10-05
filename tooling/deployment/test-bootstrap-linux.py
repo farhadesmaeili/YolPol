@@ -22,6 +22,7 @@ from unittest import mock
 
 BOOTSTRAP_PATH = Path("/opt/yolpol/bin/yolpol-bootstrap")
 POLICY_PATH = Path("/opt/yolpol/bin/yolpol-deploy-policy")
+DURABILITY_PATH = Path("/opt/yolpol/bin/yolpol-offserver-durability")
 
 
 def load_module(name: str, path: Path):
@@ -38,6 +39,7 @@ def load_module(name: str, path: Path):
 
 bootstrap = load_module("yolpol_bootstrap_test", BOOTSTRAP_PATH)
 policy = load_module("yolpol_policy_test", POLICY_PATH)
+durability = load_module("yolpol_offserver_durability_test", DURABILITY_PATH)
 
 
 def release_artifacts(version: str, git_sha: str) -> tuple[bytes, bytes]:
@@ -188,6 +190,208 @@ class BootstrapTests(unittest.TestCase):
         writable.chmod(0o777)
         with self.assertRaisesRegex(bootstrap.BootstrapError, "writable or non-root"):
             bootstrap.ensure_directory(bootstrap.DirectoryContract(str(writable / "child"), 0, 0, 0o700))
+
+    def test_offserver_sftp_bootstrap_contract_is_unconfigured_and_root_only(self) -> None:
+        directories = {contract.path: contract for contract in bootstrap.DIRECTORIES}
+        trust = directories["/etc/yolpol/offserver-durability"]
+        self.assertEqual((trust.uid, trust.gid, trust.mode), (0, 0, 0o700))
+        states = {path: (mode, content) for path, mode, content in bootstrap.STATE_FILES}
+        self.assertEqual(
+            states["/etc/yolpol/offserver-durability.json"],
+            (0o600, b'{"schemaVersion":1,"state":"unconfigured"}\n'),
+        )
+        managed_destinations = {contract.destination for contract in bootstrap.MANAGED_FILES}
+        self.assertNotIn("/etc/yolpol/offserver-durability/id_ed25519", managed_destinations)
+        self.assertNotIn("/etc/yolpol/offserver-durability/known_hosts", managed_destinations)
+        self.assertNotIn(
+            "/etc/yolpol/offserver-durability/windows-receipt-rsa-v1.pem",
+            managed_destinations,
+        )
+        self.assertTrue(bootstrap.command_exists("/usr/bin/sftp"))
+        self.assertTrue(bootstrap.command_exists("/usr/bin/openssl"))
+        self.assertTrue(bootstrap.command_exists("/usr/bin/prlimit"))
+        durability._validate_sftp_executable()
+        durability._validate_openssl_executable()
+        durability._validate_prlimit_executable()
+
+    def test_prlimit_is_required_and_util_linux_is_installed_when_missing(self) -> None:
+        installed = False
+        commands: list[list[str]] = []
+
+        def command_exists(path: str | Path) -> bool:
+            return installed if str(path) == "/usr/bin/prlimit" else True
+
+        def run(arguments: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+            nonlocal installed
+            commands.append(arguments)
+            if arguments[:3] == ["/usr/bin/apt-get", "install", "--yes"]:
+                self.assertIn("util-linux", arguments)
+                installed = True
+            return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+        with mock.patch.object(bootstrap, "command_exists", side_effect=command_exists), mock.patch.object(
+            bootstrap,
+            "run",
+            side_effect=run,
+        ):
+            bootstrap.install_prerequisites(bootstrap.SUPPORTED_HOSTS[0])
+        self.assertTrue(any(command[:2] == ["/usr/bin/apt-get", "update"] for command in commands))
+        self.assertTrue(any("util-linux" in command for command in commands))
+
+        with mock.patch.object(
+            bootstrap,
+            "command_exists",
+            side_effect=lambda path: str(path) != "/usr/bin/prlimit",
+        ):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "/usr/bin/prlimit"):
+                bootstrap.validate_prerequisites()
+
+    def test_system_openssh_accepts_every_fixed_sftp_option(self) -> None:
+        configuration = durability.WindowsSftpConfiguration(
+            host="100.100.100.100",
+            port=22,
+            username="yolpol-backup",
+            remote_directory="/production",
+        )
+        arguments = durability._sftp_arguments(configuration)
+        arguments[arguments.index("-P") + 1] = "1"
+        arguments[-1] = "yolpol-backup@127.0.0.1"
+        result = subprocess.run(
+            arguments,
+            input=b"",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=5,
+        )
+        diagnostics = result.stderr.decode("utf-8", "replace").lower()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("bad configuration option", diagnostics)
+        self.assertNotIn("unsupported option", diagnostics)
+        self.assertNotIn("unknown option", diagnostics)
+
+    def test_real_prlimit_contains_exact_and_oversize_local_sftp_downloads(self) -> None:
+        server = Path("/usr/lib/openssh/sftp-server")
+        self.assertTrue(server.is_file(), "test-only openssh-sftp-server package is required")
+        inherited_core_limit = subprocess.run(
+            [
+                "/usr/bin/prlimit",
+                "--core=0:0",
+                "--",
+                "/usr/bin/python3",
+                "-c",
+                "import resource; print(*resource.getrlimit(resource.RLIMIT_CORE))",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            shell=False,
+            timeout=15,
+            env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        )
+        self.assertEqual(inherited_core_limit.returncode, 0)
+        self.assertEqual(inherited_core_limit.stdout, b"0 0\n")
+        source = self.temporary / "bounded-source.bin"
+        exact = self.temporary / "bounded-exact.bin"
+        limited = self.temporary / "bounded-limited.bin"
+        content = bytes(range(256)) * 16
+        source.write_bytes(content)
+
+        def transfer(limit: int, destination: Path) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [
+                    "/usr/bin/prlimit",
+                    "--core=0:0",
+                    f"--fsize={limit}:{limit}",
+                    "--",
+                    "/usr/bin/sftp",
+                    "-F",
+                    "none",
+                    "-b",
+                    "-",
+                    "-D",
+                    str(server),
+                ],
+                input=f'get "{source}" "{destination}"\n'.encode("utf-8"),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+                timeout=15,
+                env={"HOME": "/root", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+            )
+
+        exact_result = transfer(len(content), exact)
+        self.assertEqual(exact_result.returncode, 0)
+        self.assertEqual(exact.stat().st_size, len(content))
+        self.assertEqual(hashlib.sha256(exact.read_bytes()).digest(), hashlib.sha256(content).digest())
+
+        limited_result = transfer(1_024, limited)
+        self.assertNotEqual(limited_result.returncode, 0)
+        self.assertLessEqual(limited.stat().st_size, 1_024)
+
+    def test_system_openssl_accepts_fixed_receipt_rsa_pss_policy(self) -> None:
+        private_key = self.temporary / "ephemeral-private.pem"
+        public_key = self.temporary / "ephemeral-public.pem"
+        message = self.temporary / "message.bin"
+        signature = self.temporary / "signature.bin"
+        message.write_bytes(
+            durability.WINDOWS_RECEIPT_DOMAIN_SEPARATOR
+            + b'{"backupId":"yolpol-production-20270115T120000Z-abcdef0"}\n'
+        )
+        commands = (
+            [
+                "/usr/bin/openssl",
+                "genpkey",
+                "-algorithm",
+                "RSA",
+                "-pkeyopt",
+                "rsa_keygen_bits:3072",
+                "-out",
+                str(private_key),
+            ],
+            [
+                "/usr/bin/openssl",
+                "pkey",
+                "-in",
+                str(private_key),
+                "-pubout",
+                "-out",
+                str(public_key),
+            ],
+            [
+                "/usr/bin/openssl",
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private_key),
+                "-sigopt",
+                "rsa_padding_mode:pss",
+                "-sigopt",
+                "rsa_mgf1_md:sha256",
+                "-sigopt",
+                "rsa_pss_saltlen:digest",
+                "-out",
+                str(signature),
+                str(message),
+            ],
+        )
+        for arguments in commands:
+            result = subprocess.run(
+                arguments,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0)
+        self.assertEqual(signature.stat().st_size, durability.WINDOWS_RECEIPT_SIGNATURE_BYTES)
+        with mock.patch.object(durability, "WINDOWS_RECEIPT_PUBLIC_KEY_PATH", public_key):
+            durability._run_openssl_public_key_preflight()
+            durability._run_openssl_receipt_verification(signature, message)
 
     def test_atomic_file_install_is_repeatable_and_requires_explicit_replacement(self) -> None:
         target = self.temporary / "contract"

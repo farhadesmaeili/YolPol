@@ -1,6 +1,6 @@
 import type {DatabaseReadinessProbe} from "@/features/health/application/ports/health-readiness-ports";
 
-export const expectedDatabaseMigrationTimestamp = 1789391490099;
+export const expectedDatabaseMigrationTimestamp = 1791230751683;
 export const databaseReadinessQueryTimeoutMilliseconds = 3_000;
 
 type MigrationRow = Readonly<{created_at: string | number | null}>;
