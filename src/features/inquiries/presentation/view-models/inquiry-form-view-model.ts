@@ -7,7 +7,7 @@ export type InquiryDraftErrorCode = "required" | "invalid" | "tooLarge" | "desti
 export type InquiryDraftFailure = Readonly<{field: "fullName" | "company" | "country" | "city" | "email" | "phone" | "whatsappPhone" | "telegramUsername" | "preferredContact" | "destinationCountry" | "destinationCity" | "message" | "privacy" | "products" | "quantity" | "quantityUnit"; code: InquiryDraftErrorCode; itemIndex?: number; productId?: string}>;
 export type InquiryFormLabels = Readonly<{
   customer: string; fullName: string; company: string; country: string; city: string; email: string; phone: string;
-  contactHint: string; destinationHint: string; detailsHint: string; continueHint: string; newInquiry: string;
+  contactHint: string; phoneFormatHint: string; destinationHint: string; detailsHint: string; continueHint: string; newInquiry: string;
   preferredContact: string; whatsappPhone: string; telegramUsername: string; contactMethods: Readonly<Record<PreferredContactMethod, string>>;
   countries: Readonly<Record<TargetCountryCode, string>>; countryPlaceholder: string;
   products: string; product: string; palletCountRequired: string; quantityRequired: string; quantityUnit: string; units: Readonly<Record<SubmitInquiryUnit, string>>; removeProduct: string;

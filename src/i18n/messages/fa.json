@@ -119,7 +119,7 @@
     "addAnotherProduct": "افزودن محصول دیگر",
     "allProductsAdded": "همه محصولات موجود اضافه شده‌اند."
   },
-  "InquiryFormCorrections": {"palletCountRequiredLabel":"تعداد پالت (الزامی)","quantityRequiredLabel":"تعداد (الزامی)","quantityUnitLabel":"واحد","invalidField":"برای این فیلد مقدار معتبری وارد کنید.","phoneInvalid":"شماره تلفن بین‌المللی معتبری همراه با کد کشور وارد کنید.","whatsappPhoneInvalid":"شماره واتس‌اپ بین‌المللی معتبری همراه با کد کشور وارد کنید.","telegramUsernameInvalid":"نام کاربری معتبر تلگرام را با @ وارد کنید.","preferredContactRequired":"حداقل یک روش تماس ترجیحی انتخاب کنید.","quantityRequired":"تعداد را وارد کنید.","quantityInvalid":"تعداد را به‌صورت عدد صحیح مثبت وارد کنید.","quantityTooLarge":"تعداد بیش از حد بزرگ است.","quantityUnitInvalid":"یک واحد معتبر برای تعداد انتخاب کنید.","productsRequired":"حداقل یک محصول موجود انتخاب کنید.","privacyRequired":"برای آماده‌سازی درخواست، رضایت الزامی است.","destinationDependency":"در صورت وارد کردن شهر مقصد، کشور مقصد را انتخاب کنید."},
+  "InquiryFormCorrections": {"palletCountRequiredLabel":"تعداد پالت (الزامی)","quantityRequiredLabel":"تعداد (الزامی)","quantityUnitLabel":"واحد","invalidField":"برای این فیلد مقدار معتبری وارد کنید.","phoneInvalid":"یک شماره تلفن محلی معتبر برای کشور انتخاب‌شده مشتری یا شماره‌ای بین‌المللی با + وارد کنید.","whatsappPhoneInvalid":"یک شماره واتس‌اپ محلی معتبر برای کشور انتخاب‌شده مشتری یا شماره‌ای بین‌المللی با + وارد کنید.","telegramUsernameInvalid":"نام کاربری معتبر تلگرام را با @ وارد کنید.","preferredContactRequired":"حداقل یک روش تماس ترجیحی انتخاب کنید.","quantityRequired":"تعداد را وارد کنید.","quantityInvalid":"تعداد را به‌صورت عدد صحیح مثبت وارد کنید.","quantityTooLarge":"تعداد بیش از حد بزرگ است.","quantityUnitInvalid":"یک واحد معتبر برای تعداد انتخاب کنید.","productsRequired":"حداقل یک محصول موجود انتخاب کنید.","privacyRequired":"برای آماده‌سازی درخواست، رضایت الزامی است.","destinationDependency":"در صورت وارد کردن شهر مقصد، کشور مقصد را انتخاب کنید."},
   "ExportLogistics": {
     "metadata": {
       "title": "سفارش عمده و برنامه‌ریزی مرجع بار | یول‌پل",
@@ -314,6 +314,7 @@
       "destinationCity": "شهر مقصد (اختیاری)",
       "message": "جزئیات بیشتر (اختیاری)",
       "contactHint": "تیم ما از این اطلاعات برای پیگیری درخواست شما استفاده می‌کند.",
+      "phoneFormatHint": "فرمت محلی بر اساس کشور انتخاب‌شده مشتری تفسیر می‌شود. فرمت بین‌المللی را می‌توانید با + و کد کشور وارد کنید.",
       "destinationHint": "این اطلاعات به شناخت بهتر درخواست شما کمک می‌کند. هماهنگی تحویل‌گیری و حمل با خریدار است.",
       "detailsHint": "اندازه، زمان موردنظر یا نیازهای دیگر را بنویسید. پس از ارسال هم می‌توانید گفتگو را ادامه دهید.",
       "continueHint": "با ارسال درخواست، گفتگوی شما با یول‌پل آغاز می‌شود. قیمت و شرایط در گفتگو مشخص می‌شوند.",

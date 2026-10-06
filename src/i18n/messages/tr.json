@@ -120,7 +120,7 @@
     "addAnotherProduct": "Başka bir ürün ekle",
     "allProductsAdded": "Tüm mevcut ürünler eklendi."
   },
-  "InquiryFormCorrections": {"palletCountRequiredLabel":"Palet sayısı (zorunlu)","quantityRequiredLabel":"Miktar (zorunlu)","quantityUnitLabel":"Birim","invalidField":"Bu alan için geçerli bir değer girin.","phoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası telefon numarası girin.","whatsappPhoneInvalid":"Ülke arama kodunu içeren geçerli bir uluslararası WhatsApp numarası girin.","telegramUsernameInvalid":"@ ile başlayan geçerli bir Telegram kullanıcı adı girin.","preferredContactRequired":"En az bir tercih edilen iletişim yöntemi seçin.","quantityRequired":"Miktarı girin.","quantityInvalid":"Pozitif bir tam sayı miktarı girin.","quantityTooLarge":"Miktar çok büyük.","quantityUnitInvalid":"Geçerli bir miktar birimi seçin.","productsRequired":"En az bir kullanılabilir ürün seçin.","privacyRequired":"Talebi hazırlamak için onay gereklidir.","destinationDependency":"Varış şehri girildiğinde varış ülkesini seçin."},
+  "InquiryFormCorrections": {"palletCountRequiredLabel":"Palet sayısı (zorunlu)","quantityRequiredLabel":"Miktar (zorunlu)","quantityUnitLabel":"Birim","invalidField":"Bu alan için geçerli bir değer girin.","phoneInvalid":"Seçilen müşteri ülkesi için geçerli bir yerel telefon numarası veya + ile başlayan uluslararası bir numara girin.","whatsappPhoneInvalid":"Seçilen müşteri ülkesi için geçerli bir yerel WhatsApp numarası veya + ile başlayan uluslararası bir numara girin.","telegramUsernameInvalid":"@ ile başlayan geçerli bir Telegram kullanıcı adı girin.","preferredContactRequired":"En az bir tercih edilen iletişim yöntemi seçin.","quantityRequired":"Miktarı girin.","quantityInvalid":"Pozitif bir tam sayı miktarı girin.","quantityTooLarge":"Miktar çok büyük.","quantityUnitInvalid":"Geçerli bir miktar birimi seçin.","productsRequired":"En az bir kullanılabilir ürün seçin.","privacyRequired":"Talebi hazırlamak için onay gereklidir.","destinationDependency":"Varış şehri girildiğinde varış ülkesini seçin."},
   "ExportLogistics": {
     "metadata": {
       "title": "Toptan Sipariş ve Referans Yük Planlama | YolPol",
@@ -315,6 +315,7 @@
       "destinationCity": "Varış şehri (isteğe bağlı)",
       "message": "Ek bilgiler (isteğe bağlı)",
       "contactHint": "İletişim bilgileriniz, ekibimizin talebinizle ilgili size ulaşmasını sağlar.",
+      "phoneFormatHint": "Yerel biçim, seçilen müşteri ülkesini kullanır. Uluslararası biçim, + ve ülke arama koduyla girilebilir.",
       "destinationHint": "Bu bilgiler talebinizi anlamamıza yardımcı olur. Teslim alma ve nakliye alıcı tarafından düzenlenir.",
       "detailsHint": "Ölçü, zamanlama veya diğer ihtiyaçlarınızı belirtin. Gönderdikten sonra görüşmeye devam edebilirsiniz.",
       "continueHint": "Talebinizle YOLPOL ile görüşmeniz başlar. Fiyatlar ve koşullar doğrudan görüşülür.",
