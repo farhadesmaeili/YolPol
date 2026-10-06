@@ -94,7 +94,7 @@ The managed Windows sandbox returned `uv_os_get_passwd ... ENOMEM` for a child `
 
 ## Activation boundary and deferred work
 
-The precise post-task statement is: **the Production Monitoring repository contract is implemented and validated; live Production collector credentials, database-role provisioning, contract installation, and VPS activation remain operational steps.**
+At Task 0070 completion, the precise post-task statement was: **the Production Monitoring repository contract is implemented and validated; live Production collector credentials, database-role provisioning, contract installation, and VPS activation remain operational steps.**
 
 Also deferred are live Telegram delivery testing, periodic Production backup scheduling, a real Phase C2 off-server provider and durability monitoring, the public `https://yolpol.com` DNS/TLS probe after cutover, and an independent off-host watchdog. Prometheus on the same VPS cannot detect total VPS or Prometheus-host loss. Public Production activation and DNS/Cloudflare changes remain separately approved operations.
 
@@ -115,3 +115,9 @@ The fail-closed deployment policy now validates all eleven services, the proxy's
 The tightened regression passed locally on Docker Desktop Engine 29.2.1 with the exact runtime mapping, host and proxy-upstream readiness responses, exact two-network memberships, failed DNS resolution and connection attempts for Alertmanager, Node Exporter, and the Staging PostgreSQL Exporter from the proxy, 12/12 healthy targets, four successful probes, and a blocked direct external IPv4 request. Docker Engine 29.8.0 remains the required post-release VPS verification environment; the 29.2.1 result is not represented as proof of the live host fix.
 
 After an approved release reaches the VPS, install and validate the new repository contracts through the controlled bootstrap/deployment path, then recreate only `prometheus` and `prometheus-admin-proxy`. Preserve `yolpol-monitoring_prometheus_data`; never use `down -v` or remove any volume. Verify Prometheus is only on `monitoring` and `prometheus_proxy`, the proxy is only on `prometheus_proxy` and `prometheus_admin`, no other service joins `prometheus_proxy`, representative scrape-network names are unavailable from the proxy, `docker port` is exact, `curl -fsS http://127.0.0.1:9090/-/ready` succeeds, 12/12 targets are up, 4/4 Blackbox probes succeed, and deployment-agent health remains good. This task performs none of those live operations.
+
+## Subsequent v0.2.4 live proxy acceptance
+
+After this task and the `v0.2.3` regression, the hardened `prometheus-admin-proxy` fix was released in `v0.2.4`, deployed through the controlled live-host procedure, and accepted on the VPS. Local Prometheus administration through `127.0.0.1:9090` was verified, the intended proxy topology was accepted, all 12 Prometheus targets remained healthy, all four Blackbox probes remained successful, and deployment-agent health remained good.
+
+This later acceptance closes the live proxy-verification item; it does not rewrite the original Task 0070 boundary or the observed `v0.2.3` Docker regression. It also does not provide a public `https://yolpol.com` DNS/TLS probe or an independent off-host watchdog capable of detecting total VPS loss.
