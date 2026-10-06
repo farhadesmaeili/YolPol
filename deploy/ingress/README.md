@@ -51,9 +51,9 @@ There is deliberately no `ingress-deploy`, caller-selected path/project/network/
 
 ## Current live state and retained rollback
 
-Shared ingress is healthy and owns public 80/443. Staging web is reachable as `staging-web` on `yolpol-staging-ingress`; Monitoring Blackbox Exporter uses the same network for its Staging probes. The legacy Staging edge is stopped, while its container, network, Caddy state, and `/opt/yolpol/releases/active` authority are intentionally retained for rollback. The verified Staging authority is also present at `/opt/yolpol/releases/staging/active`. No Production authority or application runtime has been provisioned.
+Shared ingress is healthy and owns public 80/443. Staging web is reachable as `staging-web` on `yolpol-staging-ingress`; Monitoring Blackbox Exporter uses the same network for its Staging probes. The legacy Staging edge is stopped, while its container, network, Caddy state, and `/opt/yolpol/releases/active` authority are intentionally retained for rollback. The verified Staging authority is also present at `/opt/yolpol/releases/staging/active`. Production authority and runtime are provisioned; the authenticated `v0.2.7` deployment completed successfully, and Production web, PostgreSQL, and all three long-running workers were healthy. `ingress-health-production` passed. This runtime state is not proof of public cutover.
 
-Cloudflare still temporarily redirects `yolpol.com` and `www.yolpol.com` to `staging.yolpol.com`. A path-scoped temporary compatibility rule currently permits HTTP-01 handling for `/.well-known/acme-challenge/` on the proxied apex and `www` hostnames. Do not treat that rule as a permanent architecture requirement. The redirect must remain until Production runtime, secrets, database, release and workers are ready, rollback is ready, and a separate Production cutover is explicitly approved.
+The last verified public boundary recorded Cloudflare temporarily redirecting `yolpol.com` and `www.yolpol.com` to `staging.yolpol.com`; no evidence here proves redirect removal. A path-scoped temporary compatibility rule was also recorded for HTTP-01 handling at `/.well-known/acme-challenge/` on the proxied apex and `www` hostnames. Do not treat that rule as a permanent architecture requirement. Public redirect removal and cutover remain separately reviewed and explicitly approved operations even though the Production runtime is healthy.
 
 ## Root-controlled migration and rollback procedure
 
@@ -70,19 +70,19 @@ The current VPS completed this sequence successfully on 2026-09-19. It remains t
 7. Immediately start only the fixed `yolpol-ingress` `ingress` service as root.
 8. Run `ingress-status`, `ingress-health`, and public HTTPS liveness/readiness and application smoke checks for `staging.yolpol.com`. Confirm certificate behavior and logs without exposing content or credentials. Only after this succeeds, activate the revised Monitoring network/alert contract so it does not falsely expect shared ingress during the handoff.
 9. If any check fails, stop shared ingress before restarting the profiled legacy Staging edge. Confirm only the legacy listener owns 80/443, then verify Staging again. Diagnose offline before retrying.
-10. Only later, after the full Production activation gate, deploy Production web on `yolpol-production-ingress`, run `ingress-health-production`, verify the Production hostname path locally, and perform the separately approved DNS/Cloudflare cutover and smoke test.
+10. In the original migration sequence, only later, after the runtime portions of the Production activation gate, deploy Production web on `yolpol-production-ingress`, run `ingress-health-production`, verify the Production hostname path locally, and perform the separately approved DNS/Cloudflare cutover and smoke test. The runtime and ingress-health portions were subsequently accepted through `v0.2.7`; the public cutover portion remains separate.
 
 The old Staging-local `edge` network and `yolpol-staging_caddy_*` volumes are retained only to make rollback possible. The `edge` service is behind `legacy-staging-edge-migration`, is absent from ordinary startup, and has no wrapper command. Root may remove that temporary rollback contract only in a later reviewed cleanup after the shared ingress has a proven operating history.
 
 ## Production activation gate
 
-A Caddy route does not make Production live. Public activation still requires Production runtime and secret provisioning, an isolated database, an authenticated Production release authority, immutable images, backup/recovery readiness, an explicit migration decision, healthy web and workers, successful `ingress-health-production`, public-route verification, rollback readiness, explicit DNS/Cloudflare approval, and a smoke test. The temporary redirect must not be removed earlier.
+A Caddy route does not make Production publicly live. The `v0.2.7` acceptance proves the Production runtime, database migration, healthy web and workers, Phase C2 durability gate, and `ingress-health-production`; it does not prove public-route cutover. Public activation still requires public-route verification, rollback readiness, explicit DNS/Cloudflare approval, redirect removal, and a public smoke test.
 
 ## Automation and monitoring
 
 Future bootstrap automation can install the fixed directory, files, modes, networks, runtime schema, and dedicated volumes deterministically. Future release automation replaces Staging or Production web on its stable external network and leaves `yolpol-ingress` running; application releases neither recreate ingress nor change its Caddy state.
 
-Monitoring now identifies the shared ingress container separately and reaches Staging web through `staging-web` on the Staging ingress network. This does not claim that a public Production probe is active. After Production activation, add explicit shared-ingress availability, Staging public-route, and Production public-route probes with environment labels through a separately reviewed monitoring change and dedicated acceptance test.
+Monitoring now identifies the shared ingress container separately and reaches the environment web services through their isolated ingress networks. This does not claim that a public Production probe is active. After public cutover, add explicit shared-ingress availability, Staging public-route, and Production public-route probes with environment labels through a separately reviewed monitoring change and dedicated acceptance test.
 
 ## Intentionally unsupported here
 

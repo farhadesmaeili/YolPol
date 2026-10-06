@@ -6,7 +6,7 @@ YOLPOL یک پلتفرم چندزبانه و SEO-first برای تأمین و ف
 
 مدل تجاری سایت فقط مبتنی بر استعلام است: قیمت‌های داخلی Product در سایت عمومی منتشر نمی‌شوند و checkout، پرداخت یا خرید مستقیم آنلاین وجود ندارد. معماری برای self-hosting طراحی شده و بر Server Componentهای ایستا، مسیرهای قابل‌خزش با پیشوند زبان و مرزهای عملیاتی صریح تکیه دارد.
 
-نسخه مخزن فعلی `0.2.6` است و شامل قرارداد مستقل Production، مسیر احراز‌شده انتشار از Staging به Production، هسته provider-neutral مربوط به durability/evidence در Phase C2 همراه با transport ثابت Windows SFTP، helper ویندوزی برای durable copy و receipt پس از volume flush، provenance احراز‌شده و detached برای receipt، readback نهایی از durable store، و Monitoring ایزوله Staging/Production است. سوابق تاریخی Taskها فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` را تأیید می‌کنند؛ این branch نسخه‌ای را که اکنون روی host deploy شده است استنتاج نمی‌کند. مسیر کامل Phase C2 همچنان fail-closed است: هیچ نصب زنده Windows، کلید امضای CNG یا کلید عمومی verification پین‌شده روی VPS پیکربندی نشده است. اصلاح proxy لوپ‌بک Prometheus از `v0.2.4` به بعد در تاریخچه release محلی وجود دارد، اما تاریخچه مخزن به‌تنهایی rollout زنده آن را اثبات نمی‌کند. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، فعال‌سازی زنده Phase C2 و اثبات کامل disaster recovery روی سرور disposable همچنان کارهای جداگانه‌اند.
+نسخه فعلی مخزن و release تأییدشده Production، `v0.2.7` است. deployment احراز‌شده Production با نتیجه `deployed-not-publicly-activated` با موفقیت کامل شد و نخستین transaction واقعی Phase C2 با migration fingerprint تغییریافته را نیز دربر داشت: controller یک backup تازه ساخت، evidence احراز‌شده durable-write ویندوز و readback دقیق مقصد را پذیرفت و سپس migration با نام `0024_phase_c2_live_acceptance` را کامل کرد. Production Monitoring نیز پذیرفته شده است: پس از milestone فعال‌سازی `v0.2.3`، rollout زنده proxy مدیریتی Prometheus در `v0.2.4` پذیرفته شد. cutover نهایی عمومی DNS/Cloudflare، monitoring مستقل بیرونی، acceptance مربوط به restore و disaster recovery روی سرور disposable، و automatic restore/PITR همچنان کارهای جداگانه‌اند.
 
 ## قابلیت‌های اصلی
 
@@ -311,15 +311,15 @@ GitHub Release
 → deployment دقیق و immutable در Production بدون rebuild
 ```
 
-release `v0.2.2` در commit `48a566142bd0259c596314f6a01a92cc66d868ce` یک milestone تاریخی است که مسیر احراز‌شده runtime از Staging به Production و provision و سلامت runtime مربوط به Production را تأیید کرد. deployment runtime از فعال‌سازی عمومی DNS/Cloudflare جداست و مخزن نه cutover نهایی عمومی را تکمیل‌شده ثبت می‌کند و نه release فعلی deployشده را استنتاج می‌کند.
+release `v0.2.2` در commit `48a566142bd0259c596314f6a01a92cc66d868ce` همچنان milestone تاریخی نخستین اجرای موفق مسیر احراز‌شده runtime از Staging به Production و provision یک runtime سالم Production است. release فعلی و تأییدشده Production، `v0.2.7` در Git SHA برابر با `ebf1988e1b7e6fbc4615fd946652f8147e34af6f` است؛ deployment احراز‌شده آن بدون فعال‌سازی عمومی با موفقیت کامل شد. deployment runtime از فعال‌سازی عمومی DNS/Cloudflare جدا باقی می‌ماند و cutover نهایی عمومی تکمیل‌شده ثبت نشده است.
 
 Staging و Production دارای database، volume، credential، runtime file، release authority، تنظیمات Telegram/provider و deployment state مستقل هستند. root مالک release authority، secretها، policy، lock، journal و wrapper محدود است. اپراتور عادی نه دسترسی نامحدود Docker دارد و نه shell عمومی root.
 
 gateهای عملیاتی زیر همچنان fail-closed باقی می‌مانند:
 
-- قرارداد repository-side مربوط به Phase C2، helper ویندوزی durable copy/volume-flush receipt، احراز detached receipt با RSA-PSS، اعتبارسنجی سخت‌گیرانه receipt و readback نهایی durable store پیاده‌سازی و با تست‌های synthetic/static پوشش داده شده‌اند؛ اما هیچ helper زنده، کلید امضای CNG، کلید عمومی پین‌شده روی VPS یا adapter فعال نصب و پیکربندی نشده است.
-- در نتیجه migration fingerprint تغییریافته برای Production همچنان پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
-- فعال‌سازی Production Monitoring در milestone نسخه `v0.2.3` تأیید شده است، اما این branch نسخه live فعلی یا rollout اصلاح منتشرشده proxy مربوط به Prometheus را اثبات نمی‌کند؛ monitoring عمومی و off-host نیز جدا باقی می‌ماند.
+- helper نصب‌شده Phase C2 در Windows، schedule مربوط به LocalSystem، مسیر receipt احراز‌شده RSA-PSS، adapter پیکربندی‌شده VPS، readback دقیق durable store و evidence وابسته به deployment، transaction واقعی `v0.2.7` با fingerprint تغییریافته را کامل کردند. مقدار پیش‌فرض ثبت‌شده در مخزن همچنان unconfigured و fail-closed است.
+- هر fingerprint تغییریافته آینده در Production همچنان به backup تازه ساخته‌شده توسط controller و evidence دقیق وابسته به همان deployment نیاز دارد؛ evidence ناموجود یا نامعتبر پیش از تغییر authority با `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` رد می‌شود.
+- Production Monitoring و proxy مدیریتی سخت‌سازی‌شده Prometheus به‌صورت زنده پذیرفته شده‌اند. monitoring عمومی DNS/TLS و watchdog مستقل off-host همچنان جدا هستند.
 - automatic restore وجود ندارد.
 - disposable rebuild و اثبات کامل disaster recovery کامل نشده‌اند.
 - cutover نهایی عمومی DNS/Cloudflare نیازمند بازبینی و کنترل جداگانه است.
@@ -402,8 +402,7 @@ develop
 
 کارهای باقی‌مانده‌ای که در وضعیت فعلی تأیید شده‌اند عبارت‌اند از:
 
-- provision و acceptance زنده مرجع receipt احراز‌شده‌ای که قرارداد آن در مخزن پیاده‌سازی شده است، سپس نصب directory/ACL و helper با LocalSystem روی Windows، provision کردن credential/trust، اعتبارسنجی native flush و مرزهای SFTP، پیکربندی و فعال‌سازی مسیر Windows SFTP در Phase C2؛
-- اعتبارسنجی زنده قرارداد منتشرشده proxy مربوط به Prometheus و تشخیص مستقل خرابی بیرونی؛
+- تشخیص مستقل خرابی بیرونی، از جمله monitoring عمومی DNS/TLS پس از cutover؛
 - cutover نهایی و بازبینی‌شده عمومی DNS/Cloudflare؛
 - disposable rebuild و اثبات کامل disaster recovery؛
 - بازبینی محتوای همه زبان‌ها؛
