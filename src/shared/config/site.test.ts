@@ -38,8 +38,8 @@ describe("site configuration", () => {
         officeAddress: {
           en: "No. 5, West 1st Street, Daryano, Tarasht, Tehran, Iran",
           tr: "No: 5, Batı 1. Sokak, Daryano, Tarasht, Tahran, İran",
-          fa: "ایران، تهران، ترشت، دریانو، خیابان یکم غربی، پلاک ۵",
-          ar: "إيران، طهران، ترشت، دريانو، الشارع الأول الغربي، رقم ٥",
+          fa: "ایران، تهران، طرشت، دریانو، خیابان یکم غربی، پلاک ۵",
+          ar: "إيران، طهران، طرشت، دريانو، الشارع الأول الغربي، رقم ٥",
         },
       },
     });

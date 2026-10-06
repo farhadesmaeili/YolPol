@@ -6,7 +6,7 @@ YOLPOL is a multilingual, SEO-first B2B wholesale sourcing platform. Its current
 
 Commercial activity is inquiry-only: the public site does not publish internal Product prices or provide checkout, payment, or direct online purchasing. The application is designed for self-hosting and favors static Server Components, crawlable locale-prefixed routes, and explicit operational boundaries.
 
-The current repository is version `0.2.6` and includes a separately isolated Production contract, an authenticated Staging-to-Production release path, the provider-neutral Phase C2 durability/evidence core with fixed Windows SFTP transport, a Windows durable-copy/volume-flush receipt helper, detached authenticated receipt provenance, and final durable-store readback, plus isolated Staging/Production Monitoring. Historical task records verify Production Monitoring activation at `v0.2.3`; this branch does not infer the currently deployed host version. The complete Phase C2 path remains fail-closed: no live Windows installation, signing key, or pinned VPS verification key is configured. The Prometheus loopback proxy fix is present in local release history from `v0.2.4` onward, but repository history alone does not prove its live rollout. Final public DNS/Cloudflare cutover, independent external monitoring, live Phase C2 activation, and full disposable disaster-recovery proof remain separate work.
+The current repository and verified Production release are `v0.2.7`. The authenticated Production deployment completed successfully as `deployed-not-publicly-activated`, including the first real changed-migration-fingerprint Phase C2 transaction: the controller created a fresh backup, accepted authenticated Windows durable-write evidence and exact destination readback, then completed migration `0024_phase_c2_live_acceptance`. Production Monitoring is also accepted: the `v0.2.3` activation milestone was followed by the live `v0.2.4` Prometheus administration-proxy rollout. Final public DNS/Cloudflare cutover, independent external monitoring, restore/disposable disaster-recovery acceptance, and automatic restore/PITR remain separate work.
 
 ## Key features
 
@@ -311,15 +311,15 @@ GitHub Release
 → exact immutable Production deployment without rebuilding
 ```
 
-Release `v0.2.2` at commit `48a566142bd0259c596314f6a01a92cc66d868ce` is the historical milestone that successfully exercised the authenticated Staging-to-Production runtime path and established a provisioned, healthy Production runtime. Runtime deployment is separate from public DNS/Cloudflare activation; the repository does not record the final public cutover as complete or infer the currently deployed release.
+Release `v0.2.2` at commit `48a566142bd0259c596314f6a01a92cc66d868ce` remains the historical milestone that first exercised the authenticated Staging-to-Production runtime path and established a provisioned, healthy Production runtime. The current verified Production release is `v0.2.7` at Git SHA `ebf1988e1b7e6fbc4615fd946652f8147e34af6f`; its authenticated deployment completed successfully without public activation. Runtime deployment remains separate from public DNS/Cloudflare activation, and the final public cutover is not recorded as complete.
 
 The environments have independent databases, volumes, credentials, runtime files, release authorities, Telegram/provider configuration, and deployment state. Root owns release authority, secrets, policy, locks, journals, and the restricted wrapper. The normal operator receives neither unrestricted Docker access nor a general root shell.
 
 Known operational gates remain fail closed:
 
-- The Phase C2 repository contract, Windows durable-copy/volume-flush receipt helper, detached RSA-PSS receipt authentication, strict receipt validation, and final durable-store readback are implemented and synthetically/static tested, but no live Windows helper, CNG signing key, pinned VPS public key, or adapter is installed, configured, or activated.
-- Production-changing migration fingerprints therefore remain rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` before authority mutation.
-- Production Monitoring activation was verified at the `v0.2.3` milestone, but this branch does not prove the current live release or the released Prometheus proxy fix's host rollout; public/off-host monitoring remains separate.
+- The installed Phase C2 Windows helper, LocalSystem schedule, authenticated RSA-PSS receipt path, configured VPS adapter, exact durable-store readback, and deployment-bound controller evidence completed the real `v0.2.7` changed-fingerprint transaction. The committed repository default remains unconfigured and fail-closed.
+- Every future changed Production fingerprint still requires a fresh controller-created backup and exact deployment-bound durability evidence; missing or invalid evidence remains rejected with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` before authority mutation.
+- Production Monitoring and the hardened Prometheus administration proxy are live-accepted. Public DNS/TLS monitoring and an independent off-host watchdog remain separate.
 - No automatic restore exists.
 - Disposable rebuild and full disaster-recovery proof remain incomplete.
 - Final public DNS/Cloudflare cutover remains separately reviewed and controlled.
@@ -402,8 +402,7 @@ Use Node.js 22 and pnpm `11.14.0`, run `pnpm install` with the committed lockfil
 
 The current verified remaining work includes:
 
-- live provisioning and acceptance of the repository-defined authenticated receipt authority, followed by Windows directory/ACL and LocalSystem helper installation, credential/trust provisioning, native flush and SFTP-boundary validation, configuration, and activation of the Windows SFTP Phase C2 path;
-- live verification of the released Prometheus proxy contract and independent external failure detection;
+- independent external failure detection, including public DNS/TLS monitoring after cutover;
 - final reviewed public DNS/Cloudflare cutover;
 - disposable rebuild and full disaster-recovery proof;
 - multilingual content review;

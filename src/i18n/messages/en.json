@@ -137,7 +137,7 @@
     "addAnotherProduct": "Add another product",
     "allProductsAdded": "All available products have been added."
   },
-  "InquiryFormCorrections": {"palletCountRequiredLabel":"Pallet count (required)","quantityRequiredLabel":"Quantity (required)","quantityUnitLabel":"Unit","invalidField":"Enter a valid value for this field.","phoneInvalid":"Enter a valid international phone number with its country calling code.","whatsappPhoneInvalid":"Enter a valid international WhatsApp number with its country calling code.","telegramUsernameInvalid":"Enter a valid Telegram username beginning with @.","preferredContactRequired":"Select at least one preferred contact method.","quantityRequired":"Enter a quantity.","quantityInvalid":"Enter a positive whole quantity.","quantityTooLarge":"The quantity is too large.","quantityUnitInvalid":"Select a valid quantity unit.","productsRequired":"Select at least one available product.","privacyRequired":"Consent is required to prepare the inquiry.","destinationDependency":"Select the destination country when a destination city is provided."},
+  "InquiryFormCorrections": {"palletCountRequiredLabel":"Pallet count (required)","quantityRequiredLabel":"Quantity (required)","quantityUnitLabel":"Unit","invalidField":"Enter a valid value for this field.","phoneInvalid":"Enter a valid local number for the selected customer country, or an international number beginning with +.","whatsappPhoneInvalid":"Enter a valid local WhatsApp number for the selected customer country, or an international number beginning with +.","telegramUsernameInvalid":"Enter a valid Telegram username beginning with @.","preferredContactRequired":"Select at least one preferred contact method.","quantityRequired":"Enter a quantity.","quantityInvalid":"Enter a positive whole quantity.","quantityTooLarge":"The quantity is too large.","quantityUnitInvalid":"Select a valid quantity unit.","productsRequired":"Select at least one available product.","privacyRequired":"Consent is required to prepare the inquiry.","destinationDependency":"Select the destination country when a destination city is provided."},
   "ExportLogistics": {
     "metadata": {
       "title": "Wholesale Ordering and Reference Load Planning | YolPol",
@@ -332,6 +332,7 @@
       "destinationCity": "Destination city (optional)",
       "message": "Additional details (optional)",
       "contactHint": "Your business contact details help our team follow up on your request.",
+      "phoneFormatHint": "Local format uses the selected customer country. International format may be entered with + and the country calling code.",
       "destinationHint": "This helps us understand your request. Collection and transport are arranged by you.",
       "detailsHint": "Sizes, timing or other requirements. You can continue the discussion after sending.",
       "continueHint": "Your request opens a conversation with YOLPOL. Prices and terms are agreed directly.",

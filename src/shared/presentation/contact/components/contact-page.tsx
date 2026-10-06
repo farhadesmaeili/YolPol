@@ -16,7 +16,7 @@ export function ContactPagePresentation({model}: {model: ContactModel}) {
         <ContactRow index="01" label={model.email}><a className="break-all font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={siteConfig.contact.emailHref}><LtrIsolate>{siteConfig.contact.email}</LtrIsolate></a></ContactRow>
         <ContactRow index="02" label={model.phone}><ul className="space-y-2">{siteConfig.contact.phones.map((phone) => <li key={phone.id}><a className="font-semibold text-emerald-900 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-700" href={phone.href}><LtrIsolate>{phone.display}</LtrIsolate></a></li>)}</ul></ContactRow>
         <ContactRow index="03" label={model.location}><address className="break-words not-italic leading-7 text-stone-700">{model.contactLocation}</address></ContactRow>
-        <ContactRow index="04" label={model.social}><div className="flex flex-wrap gap-x-6 gap-y-3">{publicSocialLinks.map((social) => <SocialLink key={social.id} href={social.href} label={model[`${social.id}Label`]}><LtrIsolate>{social.display}</LtrIsolate></SocialLink>)}</div></ContactRow>
+        <ContactRow index="04" label={model.social}><div className="flex flex-wrap gap-x-6 gap-y-3">{publicSocialLinks.map((social) => <SocialLink key={social.id} href={social.href} label={model[`${social.id}Label`]}><span className="grid gap-0.5"><LtrIsolate>{social.label}</LtrIsolate><LtrIsolate className="text-sm font-medium text-stone-600">{social.display}</LtrIsolate></span></SocialLink>)}</div></ContactRow>
       </div>
     </div>
   </div></PremiumPageShell>;

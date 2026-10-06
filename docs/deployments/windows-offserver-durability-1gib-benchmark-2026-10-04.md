@@ -56,3 +56,9 @@ Final real trigger count: 0
 ```
 
 No benchmark, durability, backup, receipt, or audit artifact was deleted or cleaned. No secret or private-key material is recorded here. Live recurring activation remains a separate explicitly approved host mutation. Phase C2 remains canonical `{"schemaVersion":1,"state":"unconfigured"}`, and changed-fingerprint Production promotion remains fail-closed with `PHASE_C2_OFFSERVER_BACKUP_REQUIRED`.
+
+## Subsequent acceptance
+
+The final host state above is the state at the end of this 2026-10-04 benchmark and remains historically accurate. In later separately approved work, the final Task 0078 helper and recurring LocalSystem schedule were installed and accepted with no abnormal pending backlog, the VPS adapter was configured and accepted, and the real `v0.2.7` Production controller transaction published deployment-bound Phase C2 evidence before its changed migration completed.
+
+That later acceptance does not turn this pre-Task-0078 benchmark into proof of the final helper bytes. It also does not prove restore, disposable rebuild, PITR, or end-to-end disaster recovery. The committed repository default remains unconfigured and fail-closed for future environments and transactions.

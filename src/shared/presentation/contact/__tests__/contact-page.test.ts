@@ -41,4 +41,15 @@ describe("localized public Contact presentation", () => {
     expect(publicSocialLinks.map(({id}) => id)).toEqual(["instagram", "telegram"]);
     expect(componentSource).not.toContain("siteConfig.social.linkedin");
   });
+
+  it("visibly pairs each public platform label with its centralized handle", () => {
+    expect(publicSocialLinks.map(({label, display}) => ({label, display}))).toEqual([
+      {label: "Instagram", display: "@yolpol.hq"},
+      {label: "Telegram", display: "@yolpol_hq"},
+    ]);
+    expect(componentSource).toContain("social.label");
+    expect(componentSource).toContain("social.display");
+    expect(componentSource).toContain("model[`${social.id}Label`]");
+    expect(siteConfig.social.linkedin.isPublic).toBe(false);
+  });
 });

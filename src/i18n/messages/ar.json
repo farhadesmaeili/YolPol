@@ -119,7 +119,7 @@
     "addAnotherProduct": "إضافة منتج آخر",
     "allProductsAdded": "تمت إضافة جميع المنتجات المتاحة."
   },
-  "InquiryFormCorrections": {"palletCountRequiredLabel":"عدد المنصات (مطلوب)","quantityRequiredLabel":"الكمية (مطلوبة)","quantityUnitLabel":"الوحدة","invalidField":"أدخل قيمة صالحة لهذا الحقل.","phoneInvalid":"أدخل رقم هاتف دولياً صالحاً يتضمن رمز اتصال الدولة.","whatsappPhoneInvalid":"أدخل رقم واتساب دولياً صالحاً يتضمن رمز اتصال الدولة.","telegramUsernameInvalid":"أدخل اسم مستخدم تلغرام صالحاً يبدأ بعلامة @.","preferredContactRequired":"اختر طريقة اتصال مفضلة واحدة على الأقل.","quantityRequired":"أدخل الكمية.","quantityInvalid":"أدخل كمية صحيحة موجبة.","quantityTooLarge":"الكمية كبيرة جداً.","quantityUnitInvalid":"اختر وحدة كمية صالحة.","productsRequired":"اختر منتجاً متاحاً واحداً على الأقل.","privacyRequired":"الموافقة مطلوبة لإعداد الاستفسار.","destinationDependency":"اختر دولة الوجهة عند تحديد مدينة الوجهة."},
+  "InquiryFormCorrections": {"palletCountRequiredLabel":"عدد المنصات (مطلوب)","quantityRequiredLabel":"الكمية (مطلوبة)","quantityUnitLabel":"الوحدة","invalidField":"أدخل قيمة صالحة لهذا الحقل.","phoneInvalid":"أدخل رقم هاتف محلياً صالحاً لدولة العميل المحددة، أو رقماً دولياً يبدأ بعلامة +.","whatsappPhoneInvalid":"أدخل رقم واتساب محلياً صالحاً لدولة العميل المحددة، أو رقماً دولياً يبدأ بعلامة +.","telegramUsernameInvalid":"أدخل اسم مستخدم تلغرام صالحاً يبدأ بعلامة @.","preferredContactRequired":"اختر طريقة اتصال مفضلة واحدة على الأقل.","quantityRequired":"أدخل الكمية.","quantityInvalid":"أدخل كمية صحيحة موجبة.","quantityTooLarge":"الكمية كبيرة جداً.","quantityUnitInvalid":"اختر وحدة كمية صالحة.","productsRequired":"اختر منتجاً متاحاً واحداً على الأقل.","privacyRequired":"الموافقة مطلوبة لإعداد الاستفسار.","destinationDependency":"اختر دولة الوجهة عند تحديد مدينة الوجهة."},
   "ExportLogistics": {
     "metadata": {
       "title": "طلبات الجملة وتخطيط الحمولة المرجعية | YolPol",
@@ -314,6 +314,7 @@
       "destinationCity": "مدينة الوجهة (اختياري)",
       "message": "أضف تفاصيل طلبك (اختياري)",
       "contactHint": "تساعد هذه المعلومات فريقنا على التواصل معك لمتابعة طلبك.",
+      "phoneFormatHint": "يُفسَّر التنسيق المحلي وفق دولة العميل المحددة. ويمكن إدخال التنسيق الدولي باستخدام + ورمز اتصال الدولة.",
       "destinationHint": "تساعدنا هذه المعلومات على فهم طلبك. يتولى المشتري ترتيبات الاستلام والنقل.",
       "detailsHint": "اذكر المقاسات أو الموعد المطلوب أو أي متطلبات أخرى. يمكنك متابعة النقاش بعد الإرسال.",
       "continueHint": "بإرسال طلبك تبدأ محادثتك مع يول بول. تُناقش الأسعار والشروط مباشرةً.",

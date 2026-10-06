@@ -1,6 +1,6 @@
 import {submitInquiryUnits, type SubmitInquiryInput} from "@/features/inquiries/application/dto/inquiry-dto";
 import {InquiryValidationError} from "@/features/inquiries/domain/errors/inquiry-errors";
-import {normalizeInquiryCustomerDetails, normalizeInquiryQuantity, normalizeInternationalPhone} from "@/features/inquiries/domain/validation/inquiry-input-validation";
+import {normalizeInquiryCustomerDetails, normalizeInquiryQuantity, normalizeInternationalPhone, normalizeTargetCountry} from "@/features/inquiries/domain/validation/inquiry-input-validation";
 import {normalizeInquiryProductId} from "@/features/inquiries/domain/value-objects/inquiry-product-snapshot";
 import type {InquiryDraftFailure, InquiryDraftLine, InquiryProductOption} from "@/features/inquiries/presentation/view-models/inquiry-form-view-model";
 import type {Locale} from "@/shared/types/locale";
@@ -21,9 +21,12 @@ export function parseInquiryQuantity(rawValue: string): number | null {
 
 export const parseInquiryPalletCount = parseInquiryQuantity;
 
-export function normalizeInquiryPhoneDraft(value: string, field: "contact.phone" | "contact.whatsappPhone"): string {
+export function normalizeInquiryPhoneDraft(value: string, field: "contact.phone" | "contact.whatsappPhone", customerCountry?: string): string {
   if (value.trim() === "") return value;
-  try { return normalizeInternationalPhone(value, field); } catch { return value; }
+  try {
+    const country = value.trim().startsWith("+") ? undefined : normalizeTargetCountry(customerCountry, "location.country");
+    return normalizeInternationalPhone(value, field, country);
+  } catch { return value; }
 }
 
 export function preselectInquiryProducts(products: readonly InquiryProductOption[], requestedIds: readonly string[]): InquiryDraftLine[] {

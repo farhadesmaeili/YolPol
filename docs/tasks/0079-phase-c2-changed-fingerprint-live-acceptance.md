@@ -60,13 +60,23 @@ The release fingerprint algorithm remains unchanged. It hashes normalized `drizz
 
 The fingerprint transition comes only from the legitimate new journal entry and SQL migration. It does not modify historical migration bytes or weaken the fingerprint algorithm.
 
-## Deployment-bound acceptance still pending
+## Deployment-bound acceptance pending at Task 0079 completion
 
 Adapter acceptance did not publish canonical deployment-bound Phase C2 evidence and did not advance a real deployment ledger to `offserver-durability-confirmed`.
 
 The eventual Production acceptance must start from a real GitHub Production Deployment and authenticated target release. The controller must create a fresh Production backup with a new unique backup ID, verify it locally, transfer that new pair, validate the LocalSystem durable copy and signed receipt, independently read back the exact `/durable` pair, publish evidence bound to the real Deployment ID and current/target fingerprints, and only then advance the ledger and continue the migration/deployment.
 
 There is no standalone evidence fabrication, adoption, rebinding, caller-selected deployment identity, existing-backup reuse, collision recovery, remote cleanup, or ledger-edit path. Until that complete changed-fingerprint transaction succeeds, `PHASE_C2_OFFSERVER_BACKUP_REQUIRED` remains the correct fail-closed outcome for an unsuccessful or incomplete attempt.
+
+## Subsequent v0.2.7 live acceptance
+
+After Task 0079 was merged and released, `v0.2.7` was published and Staging accepted the exact release. Production promotion was then explicitly approved through the authenticated controller path.
+
+The controller created fresh backup `yolpol-production-20261006T001534Z-589aa940c3e34985d5603b72b9844d2072fde1ef`. Canonical evidence was published and validated against Production Deployment `6872397689`, release manifest SHA-256 `1877cebad8109255005edd46b0adb348d7b5458eb22b864cb8aee690313b2d87`, and the exact fingerprint transition from `48bfbae76d5421516cfca1406c47e509e0e9c89edac3cda048c08aa15e190f24` to `606a82f9999d2cc7efbd572dbaac1fdd35e417c6ae5ac61ae8dd876bb62540d4`.
+
+The evidence confirmed local integrity, deep archive verification, authenticated Windows durable write, exact destination readback, and binding to the fresh object set. Only after that acceptance did migration `0024_phase_c2_live_acceptance` complete. The Production deployment then completed with synchronized status and final result `deployed-not-publicly-activated`.
+
+This later acceptance closes the deployment gate that was still pending when Task 0079 itself completed. It does not permit reuse or rebinding of the earlier adapter-only backup, weaken the repository's unconfigured fail-closed default, or change the requirement that every future changed fingerprint provide its own fresh valid evidence.
 
 ## Disaster recovery remains separate
 

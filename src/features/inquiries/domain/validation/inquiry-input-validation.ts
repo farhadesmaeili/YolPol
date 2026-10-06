@@ -4,6 +4,26 @@ import {contactMethods, inquiryUnits, storedContactMethods, targetCountries, typ
 const unsafeSingleLine = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 const unsafeMultiline = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
 const cityPattern = /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u;
+const internationalPhonePattern = /^\+[1-9][0-9]*(?:[ -]?(?:[0-9]+|\([0-9]+\)))*$/u;
+const localPhonePattern = /^[0-9]+(?:[ -]?(?:[0-9]+|\([0-9]+\)))*$/u;
+const canonicalInternationalPhonePattern = /^\+[1-9][0-9]{6,14}$/u;
+
+export const targetCountryCallingCodes: Readonly<Record<TargetCountryCode, string>> = Object.freeze({
+  IR: "98",
+  TR: "90",
+  IQ: "964",
+  AM: "374",
+  AZ: "994",
+  TM: "993",
+  AF: "93",
+  PK: "92",
+  AE: "971",
+  SA: "966",
+  QA: "974",
+  KW: "965",
+  BH: "973",
+  OM: "968",
+});
 
 export function normalizeInquiryText(value: unknown, field: string, min: number, max: number, optional = false): string | undefined {
   if (optional && (value === undefined || value === null || value === "")) return undefined;
@@ -23,13 +43,30 @@ export function normalizeInquiryMessage(value: unknown): string | undefined {
   return normalized;
 }
 
-export function normalizeInternationalPhone(value: unknown, field: string): string {
+function canonicalizeInternationalPhone(input: string, field: string): string {
+  const normalized = `+${input.replace(/^\+/u, "").replace(/[ ()-]/gu, "")}`;
+  if (!canonicalInternationalPhonePattern.test(normalized)) throw new InquiryValidationError(field, "Invalid international phone.");
+  return normalized;
+}
+
+function normalizeLegacyInternationalPhone(value: unknown, field: string): string {
   const input = normalizeInquiryText(value, field, 7, 40)!;
   if (!/^\+?[1-9][0-9]*(?:[ -]?(?:[0-9]+|\([0-9]+\)))*$/u.test(input)) throw new InquiryValidationError(field, "Invalid international phone.");
-  const internationalDigits = input.startsWith("+") ? input.slice(1) : input;
-  const normalized = `+${internationalDigits.replace(/[ ()-]/gu, "")}`;
-  if (!/^\+[1-9][0-9]{6,14}$/u.test(normalized)) throw new InquiryValidationError(field, "Invalid international phone.");
-  return normalized;
+  return canonicalizeInternationalPhone(input, field);
+}
+
+export function normalizeInternationalPhone(value: unknown, field: string, customerCountry?: TargetCountryCode): string {
+  const input = normalizeInquiryText(value, field, 7, 40)!;
+  if (input.startsWith("+")) {
+    if (!internationalPhonePattern.test(input)) throw new InquiryValidationError(field, "Invalid international phone.");
+    return canonicalizeInternationalPhone(input, field);
+  }
+  if (!customerCountry || !localPhonePattern.test(input)) throw new InquiryValidationError(field, "Invalid international phone.");
+  const callingCode = targetCountryCallingCodes[customerCountry];
+  const localDigits = input.replace(/[ ()-]/gu, "").replace(/^0/u, "");
+  if (!/^[1-9][0-9]*$/u.test(localDigits)) throw new InquiryValidationError(field, "Invalid international phone.");
+  const internationalDigits = localDigits.startsWith(callingCode) ? localDigits : `${callingCode}${localDigits}`;
+  return canonicalizeInternationalPhone(internationalDigits, field);
 }
 
 export function normalizeInquiryEmail(value: unknown): string {
@@ -79,8 +116,18 @@ export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput): Ne
 export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput, options: Readonly<{allowLegacy: true}>): NormalizedCustomerDetails;
 export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput, options: Readonly<{allowLegacy?: boolean}> = {}): NormalizedCustomerDetails {
   const preferredMethods = normalizePreferredContactMethods(input.contact.preferredMethods, options.allowLegacy);
+  let country: string;
+  let targetCountry: TargetCountryCode | undefined;
+  try {
+    targetCountry = normalizeTargetCountry(input.location.country, "location.country")!;
+    country = targetCountry;
+  }
+  catch (error) {
+    if (!options.allowLegacy) throw error;
+    country = normalizeInquiryText(input.location.country, "location.country", 2, 100)!;
+  }
   let phone: string;
-  try { phone = normalizeInternationalPhone(input.contact.phone, "contact.phone"); }
+  try { phone = options.allowLegacy ? normalizeLegacyInternationalPhone(input.contact.phone, "contact.phone") : normalizeInternationalPhone(input.contact.phone, "contact.phone", targetCountry); }
   catch (error) { if (!options.allowLegacy) throw error; phone = normalizeInquiryText(input.contact.phone, "contact.phone", 7, 40)!; }
   const whatsappSelected = preferredMethods.includes("whatsapp");
   const telegramSelected = preferredMethods.includes("telegram");
@@ -88,7 +135,7 @@ export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput, opt
   if (!options.allowLegacy && !telegramSelected && input.contact.telegramUsername !== undefined) throw new InquiryValidationError("contact.telegramUsername", "Telegram username requires the Telegram method.");
   let whatsappPhone: string | undefined;
   if (whatsappSelected && input.contact.whatsappPhone !== undefined) {
-    try { whatsappPhone = normalizeInternationalPhone(input.contact.whatsappPhone, "contact.whatsappPhone"); }
+    try { whatsappPhone = options.allowLegacy ? normalizeLegacyInternationalPhone(input.contact.whatsappPhone, "contact.whatsappPhone") : normalizeInternationalPhone(input.contact.whatsappPhone, "contact.whatsappPhone", targetCountry); }
     catch (error) { if (!options.allowLegacy) throw error; whatsappPhone = normalizeInquiryText(input.contact.whatsappPhone, "contact.whatsappPhone", 7, 40); }
   } else if (whatsappSelected && !options.allowLegacy) throw new InquiryValidationError("contact.whatsappPhone", "WhatsApp phone is required.");
   let telegramUsername: string | undefined;
@@ -96,10 +143,7 @@ export function normalizeInquiryCustomerDetails(input: CustomerDetailsInput, opt
     try { telegramUsername = normalizeTelegramUsername(input.contact.telegramUsername); }
     catch (error) { if (!options.allowLegacy) throw error; telegramUsername = normalizeInquiryText(input.contact.telegramUsername, "contact.telegramUsername", 1, 33); }
   } else if (telegramSelected && !options.allowLegacy) throw new InquiryValidationError("contact.telegramUsername", "Telegram username is required.");
-  let country: string;
   let destinationCountry: string | undefined;
-  try { country = normalizeTargetCountry(input.location.country, "location.country")!; }
-  catch (error) { if (!options.allowLegacy) throw error; country = normalizeInquiryText(input.location.country, "location.country", 2, 100)!; }
   try { destinationCountry = normalizeTargetCountry(input.destination?.country, "destination.country", true); }
   catch (error) { if (!options.allowLegacy) throw error; destinationCountry = normalizeInquiryText(input.destination?.country, "destination.country", 2, 100, true); }
   const city = normalizeCity(input.location.city, "location.city");
