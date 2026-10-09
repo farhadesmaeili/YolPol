@@ -41,6 +41,12 @@ Repository-pinned or directly verified versions include:
 
 ## Architecture
 
+Task 0082 adds an optional, isolated [Customer Acquisition local foundation](deploy/customer-acquisition/README.md).
+It uses synthetic data only, separate n8n/acquisition databases and an authenticated
+private API. Start with `pnpm test:acquisition`; disposable PostgreSQL verification is
+`pnpm test:acquisition:disposable`. Normal Development and application deployment do
+not activate this stack. Real discovery and outreach remain deferred.
+
 YOLPOL uses the Next.js App Router, Clean Architecture, and Feature-Based Architecture. Framework entry points remain thin; composition roots wire application ports to infrastructure without making App Router files depend directly on feature infrastructure.
 
 ```text

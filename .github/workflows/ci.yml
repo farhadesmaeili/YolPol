@@ -61,6 +61,9 @@ jobs:
           NODE_ENV: production
           DATABASE_URL: postgresql://yolpol_ci:ci-only@127.0.0.1:1/yolpol_ci
 
+      - name: Validate isolated acquisition migrations
+        run: pnpm db:acquisition:check
+
   integration:
     name: Disposable PostgreSQL integration tests
     runs-on: ubuntu-latest
@@ -92,6 +95,9 @@ jobs:
           POSTGRES_TEST_DB: yolpol_integration
           POSTGRES_TEST_USER: yolpol_test
           POSTGRES_TEST_PASSWORD: local-integration-only
+
+      - name: Run disposable acquisition integration tests
+        run: pnpm test:acquisition:disposable
 
   build:
     name: Production build

@@ -1,0 +1,36 @@
+# Only combined with compose.yaml by the guarded disposable runner.
+services:
+  acquisition-postgres:
+    volumes: !override
+      - ./postgres/acquisition-init.sql:/docker-entrypoint-initdb.d/01-acquisition.sql:ro
+      - ./postgres/disposable-marker.txt:/disposable-task0082:ro
+    tmpfs: [/var/lib/postgresql/data:size=256m]
+  n8n-postgres:
+    volumes: !override
+      - ./postgres/n8n-init.sql:/docker-entrypoint-initdb.d/01-n8n.sql:ro
+    tmpfs: [/var/lib/postgresql/data:size=256m]
+  n8n:
+    ports: !reset []
+    environment:
+      ACQUISITION_DISPOSABLE_TEST: "true"
+    volumes: !override
+      - ./workflows:/opt/acquisition-workflows:ro
+      - ../../tooling/customer-acquisition/n8n-runtime-smoke.mjs:/opt/acquisition-validation/n8n-runtime-smoke.mjs:ro
+      - ./postgres/disposable-marker.txt:/disposable-task0082:ro
+    tmpfs: ["/tmp:size=64m,mode=1777", "/home/node/.cache:size=64m,uid=1000,gid=1000,mode=0700", "/home/node/.n8n:size=64m,uid=1000,gid=1000,mode=0700"]
+  tests:
+    profiles: [validation]
+    build: {context: ../.., dockerfile: deploy/customer-acquisition/Dockerfile, target: integration}
+    environment:
+      ACQUISITION_MODE: synthetic-local
+      ACQUISITION_DISPOSABLE_TEST: "true"
+      ACQUISITION_ADMIN_PASSWORD_FILE: /run/secrets/acquisition_admin_password
+      ACQUISITION_MIGRATOR_PASSWORD_FILE: /run/secrets/acquisition_migrator_password
+      ACQUISITION_RUNTIME_PASSWORD_FILE: /run/secrets/acquisition_runtime_password
+    secrets: [acquisition_admin_password, acquisition_migrator_password, acquisition_runtime_password]
+    networks: [acquisition_database]
+    depends_on:
+      acquisition-postgres: {condition: service_healthy}
+    mem_limit: 768m
+    cpus: "1.00"
+volumes: !reset {}
