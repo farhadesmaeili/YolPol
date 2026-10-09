@@ -1,0 +1,25 @@
+{
+  "id": "AcquisitionFoundation0082",
+  "name": "Task 0082 - Synthetic Company Intake",
+  "active": false,
+  "nodes": [
+    {"id": "manual", "name": "Manual Trigger", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {}},
+    {"id": "synthetic", "name": "Synthetic Observation", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [240, 0], "parameters": {
+      "mode": "raw", "jsonOutput": "{\"synthetic\":true,\"idempotencyKey\":\"task0082-synthetic-company-1\",\"company\":{\"name\":\"Synthetic Olive Bottler\",\"country\":\"TR\",\"domain\":\"bottler.example\"},\"segment\":\"tr-olive-oil-v1\",\"source\":{\"system\":\"synthetic-manual\",\"recordId\":\"company-1\",\"url\":\"https://bottler.example/about\",\"observedAt\":\"2026-10-08T00:00:00.000Z\",\"runReference\":\"task0082-manual\"}}", "options": {}}},
+    {"id": "ingest", "name": "Acquisition API", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [480, 0], "parameters": {
+      "method": "POST", "url": "http://customer-acquisition-api:8080/v1/observations", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+      "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json) }}",
+      "options": {"timeout": 8000, "redirect": {"redirect": {"followRedirects": false}}, "response": {"response": {"responseFormat": "json"}}}},
+      "credentials": {"httpHeaderAuth": {"id": "AcquisitionInternal0082", "name": "Acquisition Internal (file override)"}}, "retryOnFail": false},
+    {"id": "result", "name": "Bounded Result", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [720, 0], "parameters": {
+      "assignments": {"assignments": [{"id": "status", "name": "status", "type": "string", "value": "={{ $json.status }}"}, {"id": "request", "name": "requestId", "type": "string", "value": "={{ $json.requestId }}"}]}, "options": {}}}
+  ],
+  "connections": {
+    "Manual Trigger": {"main": [[{"node": "Synthetic Observation", "type": "main", "index": 0}]]},
+    "Synthetic Observation": {"main": [[{"node": "Acquisition API", "type": "main", "index": 0}]]},
+    "Acquisition API": {"main": [[{"node": "Bounded Result", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "executionTimeout": 30, "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "saveManualExecutions": false},
+  "pinData": {},
+  "tags": []
+}

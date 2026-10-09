@@ -1,5 +1,28 @@
 # YolPol Roadmap
 
+## Customer Acquisition — Task 0082
+
+NOW: implemented and disposable-runtime-validated local, synthetic-only foundation: isolated
+n8n, independent acquisition persistence/migrations, authenticated internal API,
+company/contact deduplication, immutable provenance, deterministic qualification and
+suppression. Status and executed verification are recorded in
+[Task 0082](../tasks/0082-customer-acquisition-automation-foundation.md).
+
+The 2026-10-09 focused audit corrections are verified: post-normalization/derived-key
+Unicode bounds and terse PostgreSQL error-detail logging. Task 0082 records 56 focused
+tests, 14 PostgreSQL tests, both database log-privacy probes and the 2,581-test full
+suite. Neither correction activates persistent or Production resources.
+
+NEXT: approve one Company Discovery source with terms/rate limits/privacy/retention,
+then design Contact Discovery, Email Verification, provider-neutral AI qualification
+and Telegram human approval through existing application boundaries.
+
+LATER: sending, SMTP/IMAP, follow-ups, replies, campaigns, CRM and VPS/Production
+activation. Broad scraping, LinkedIn scraping and shared Production database access
+are not authorized by this foundation. Release-state documentation reconciliation
+for the separately reported v0.2.9 deployment remains a separate item; historical
+operational evidence below is unchanged.
+
 ## Privacy and measurement
 
 The localized Privacy Policy, footer legal link, Inquiry-consent link, metadata, sitemap integration, and explicit optional-analytics preferences are implemented. GA4 is a Production-only runtime feature isolated to a public root document that is separate from Staff: analytics storage defaults to denied, the external Google script is not loaded before consent, Staging remains disabled, explicit App Router page views omit query strings, and successful new Inquiries emit only a minimal `generate_lead` event without Inquiry PII. Before Production activation, an operator must verify that the Google Web Stream's Enhanced Measurement option **Page changes based on browser history events** is disabled; the repository does not configure that external setting. Google Search Console remains a separate search-performance concern.
@@ -139,4 +162,4 @@ The final target operating model treats servers as disposable and rebuildable. S
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 
-Public Product persistence, authentication, payments, a CMS, an admin dashboard, and customer acquisition automation remain outside the current phase. The active Inquiry PostgreSQL flow and deployed Production runtime do not by themselves establish that public Production cutover is complete.
+Public Product persistence, public authentication, payments, a CMS and a catalog admin dashboard remain outside the current phase. Customer acquisition is limited to the Task 0082 local synthetic foundation above; real outreach and deployment remain deferred. The active Inquiry PostgreSQL flow and deployed Production runtime do not by themselves establish that public Production cutover is complete.

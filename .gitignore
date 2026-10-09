@@ -37,6 +37,8 @@ yarn-error.log*
 /deploy/staging/secrets/
 /deploy/monitoring/runtime.env
 /deploy/monitoring/secrets/
+/deploy/customer-acquisition/runtime.env
+/deploy/customer-acquisition/secrets/
 /backups/
 **/yolpol-*.dump.age
 **/yolpol-*.manifest.json

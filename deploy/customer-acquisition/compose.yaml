@@ -1,0 +1,161 @@
+name: yolpol-acquisition-local
+
+x-process: &process
+  restart: "no"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+  pids_limit: 128
+  logging:
+    driver: json-file
+    options: {max-size: 5m, max-file: "2"}
+
+services:
+  acquisition-postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_DB: yolpol_acquisition
+      POSTGRES_USER: acquisition_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/acquisition_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    command: [postgres, -c, log_statement=none, -c, log_min_error_statement=panic, -c, log_parameter_max_length_on_error=0, -c, log_error_verbosity=terse]
+    secrets: [acquisition_admin_password, acquisition_migrator_password, acquisition_runtime_password]
+    volumes:
+      - acquisition_data:/var/lib/postgresql/data
+      - ./postgres/acquisition-init.sql:/docker-entrypoint-initdb.d/01-acquisition.sql:ro
+    networks: [acquisition_database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U acquisition_admin -d yolpol_acquisition"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+    cpus: "0.50"
+    pids_limit: 128
+
+  n8n-postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_DB: yolpol_n8n
+      POSTGRES_USER: n8n_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/n8n_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    command: [postgres, -c, log_statement=none, -c, log_min_error_statement=panic, -c, log_parameter_max_length_on_error=0, -c, log_error_verbosity=terse]
+    secrets: [n8n_admin_password, n8n_database_password]
+    volumes:
+      - n8n_database_data:/var/lib/postgresql/data
+      - ./postgres/n8n-init.sql:/docker-entrypoint-initdb.d/01-n8n.sql:ro
+    networks: [n8n_database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U n8n_admin -d yolpol_n8n"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+    cpus: "0.50"
+    pids_limit: 128
+
+  customer-acquisition-api:
+    <<: *process
+    build: {context: ../.., dockerfile: deploy/customer-acquisition/Dockerfile, target: runtime}
+    environment:
+      ACQUISITION_MODE: synthetic-local
+      ACQUISITION_RUNTIME_PASSWORD_FILE: /run/secrets/acquisition_runtime_password
+      ACQUISITION_API_TOKEN_FILE: /run/secrets/acquisition_api_token
+    secrets: [acquisition_runtime_password, acquisition_api_token]
+    networks: [orchestration, acquisition_database]
+    depends_on:
+      acquisition-postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    mem_limit: 256m
+    cpus: "0.50"
+
+  migrate:
+    <<: *process
+    profiles: [migration]
+    build: {context: ../.., dockerfile: deploy/customer-acquisition/Dockerfile, target: migration}
+    environment:
+      ACQUISITION_MODE: synthetic-local
+      ACQUISITION_MIGRATOR_PASSWORD_FILE: /run/secrets/acquisition_migrator_password
+    secrets: [acquisition_migrator_password]
+    networks: [acquisition_database]
+    depends_on:
+      acquisition-postgres: {condition: service_healthy}
+    mem_limit: 256m
+    cpus: "0.50"
+
+  n8n:
+    <<: *process
+    tmpfs: ["/tmp:size=64m,mode=1777", "/home/node/.cache:size=64m,uid=1000,gid=1000,mode=0700"]
+    image: docker.n8n.io/n8nio/n8n:2.42.4@sha256:9c0862a08090c79122069e23131d27529c250b92e90c9d51a6ec406fe1527c4e
+    user: "1000:1000"
+    ports: ["127.0.0.1:5678:5678"]
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-postgres
+      DB_POSTGRESDB_DATABASE: yolpol_n8n
+      DB_POSTGRESDB_USER: n8n_runtime
+      DB_POSTGRESDB_PASSWORD_FILE: /run/secrets/n8n_database_password
+      N8N_ENCRYPTION_KEY_FILE: /run/secrets/n8n_encryption_key
+      CREDENTIALS_OVERWRITE_DATA_FILE: /run/secrets/n8n_credential_overwrites
+      CREDENTIALS_OVERWRITE_PERSISTENCE: "false"
+      N8N_HOST: localhost
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_EDITOR_BASE_URL: http://localhost:5678
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      N8N_COMMUNITY_PACKAGES_PREVENT_LOADING: "true"
+      NODES_INCLUDE: '["n8n-nodes-base.manualTrigger","n8n-nodes-base.set","n8n-nodes-base.httpRequest"]'
+      N8N_CUSTOM_EXTENSIONS: /opt/empty-custom-nodes
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES: "true"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_PYTHON_ENABLED: "false"
+      EXECUTIONS_TIMEOUT: "30"
+      EXECUTIONS_TIMEOUT_MAX: "30"
+      EXECUTIONS_DATA_SAVE_ON_ERROR: none
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "false"
+      N8N_LOG_LEVEL: warn
+    secrets: [n8n_database_password, n8n_encryption_key, n8n_credential_overwrites]
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/opt/acquisition-workflows:ro
+    networks: [orchestration, n8n_database]
+    depends_on:
+      n8n-postgres: {condition: service_healthy}
+      customer-acquisition-api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    mem_limit: 768m
+    cpus: "1.00"
+
+networks:
+  orchestration: {internal: true}
+  acquisition_database: {internal: true}
+  n8n_database: {internal: true}
+
+volumes:
+  acquisition_data:
+  n8n_database_data:
+  n8n_data:
+
+secrets:
+  acquisition_admin_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/acquisition-admin-password"}
+  acquisition_migrator_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/acquisition-migrator-password"}
+  acquisition_runtime_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/acquisition-runtime-password"}
+  acquisition_api_token: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/acquisition-api-token"}
+  n8n_admin_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/n8n-admin-password"}
+  n8n_database_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/n8n-database-password"}
+  n8n_encryption_key: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/n8n-encryption-key"}
+  n8n_credential_overwrites: {file: "${ACQUISITION_SECRET_DIRECTORY:?Set a protected acquisition secret directory}/n8n-credential-overwrites.json"}

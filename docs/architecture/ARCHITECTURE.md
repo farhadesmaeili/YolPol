@@ -1,5 +1,20 @@
 # YolPol Architecture
 
+## Customer Acquisition boundary (Task 0082)
+
+The optional `customer-acquisition` feature owns synthetic company/contact identity,
+provenance, lead segments, deterministic qualification and suppression. Its five layers
+are composed into a dedicated Node HTTP process, outside the public App Router. n8n
+orchestrates only authenticated private API calls. Separate PostgreSQL containers,
+credentials and networks hold n8n internals and acquisition business data; neither
+receives the main application database. Independent Drizzle history and an explicit
+migration profile preserve the main application's migration/release contract.
+
+See [ADR 0004](../adr/0004-customer-acquisition-automation-boundary.md) and the
+[local subsystem runbook](../../deploy/customer-acquisition/README.md). This foundation
+has no real discovery, provider calls, sending or Production activation. Future AI and
+Telegram approval integrate through existing YOLPOL owners and narrow contracts.
+
 ## Privacy content boundary
 
 The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved public brand identity, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.
