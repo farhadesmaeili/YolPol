@@ -1,0 +1,1854 @@
+{
+  "id": "4ee4d37e-dfeb-4801-87d0-d08c2ccad835",
+  "prevId": "ee66d88b-a976-454b-b731-fdb92e53d17f",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.acquisition_qualification_assessments": {
+      "name": "acquisition_qualification_assessments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "market_match": {
+          "name": "market_match",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment_match": {
+          "name": "segment_match",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "packaging_relevance": {
+          "name": "packaging_relevance",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reasons": {
+          "name": "reasons",
+          "type": "varchar(32)[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_assessment_idempotency": {
+          "name": "acquisition_assessment_idempotency",
+          "columns": [
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "acquisition_assessment_history": {
+          "name": "acquisition_assessment_history",
+          "columns": [
+            {
+              "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_qualification_assessments_lead_id_acquisition_leads_id_fk": {
+          "name": "acquisition_qualification_assessments_lead_id_acquisition_leads_id_fk",
+          "tableFrom": "acquisition_qualification_assessments",
+          "tableTo": "acquisition_leads",
+          "columnsFrom": [
+            "lead_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_assessment_score": {
+          "name": "acquisition_assessment_score",
+          "value": "\"acquisition_qualification_assessments\".\"score\" between 0 and 100"
+        },
+        "acquisition_assessment_policy": {
+          "name": "acquisition_assessment_policy",
+          "value": "\"acquisition_qualification_assessments\".\"policy_version\" = 'foundation-v1'"
+        },
+        "acquisition_assessment_decision": {
+          "name": "acquisition_assessment_decision",
+          "value": "\"acquisition_qualification_assessments\".\"decision\" in ('REVIEW_REQUIRED','FOUNDATION_FIT','BLOCKED')"
+        },
+        "acquisition_assessment_reasons": {
+          "name": "acquisition_assessment_reasons",
+          "value": "cardinality(\"acquisition_qualification_assessments\".\"reasons\") between 1 and 4 and \"acquisition_qualification_assessments\".\"reasons\" <@ array['MARKET_MATCH','SEGMENT_MATCH','PACKAGING_RELEVANCE','SUPPRESSION_PRESENT','INSUFFICIENT_EVIDENCE']::varchar[]"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_companies": {
+      "name": "acquisition_companies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_company_possible_match": {
+          "name": "acquisition_company_possible_match",
+          "columns": [
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "country",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_company_name": {
+          "name": "acquisition_company_name",
+          "value": "length(trim(\"acquisition_companies\".\"name\")) between 1 and 160 and length(trim(\"acquisition_companies\".\"name_key\")) between 1 and 160"
+        },
+        "acquisition_company_country": {
+          "name": "acquisition_company_country",
+          "value": "\"acquisition_companies\".\"country\" ~ '^[A-Z]{2}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_contacts": {
+      "name": "acquisition_contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_email": {
+          "name": "original_email",
+          "type": "varchar(254)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "normalized_email": {
+          "name": "normalized_email",
+          "type": "varchar(254)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verification": {
+          "name": "verification",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'UNVERIFIED'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_contact_email": {
+          "name": "acquisition_contact_email",
+          "columns": [
+            {
+              "expression": "normalized_email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "acquisition_contact_company": {
+          "name": "acquisition_contact_company",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_contacts_company_id_acquisition_companies_id_fk": {
+          "name": "acquisition_contacts_company_id_acquisition_companies_id_fk",
+          "tableFrom": "acquisition_contacts",
+          "tableTo": "acquisition_companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_contact_name": {
+          "name": "acquisition_contact_name",
+          "value": "length(trim(\"acquisition_contacts\".\"name\")) between 1 and 160"
+        },
+        "acquisition_contact_email_format": {
+          "name": "acquisition_contact_email_format",
+          "value": "\"acquisition_contacts\".\"normalized_email\" ~ '^[^[:space:]@]+@[^[:space:]@]+$' and split_part(\"acquisition_contacts\".\"normalized_email\", '@', 2) = lower(split_part(\"acquisition_contacts\".\"normalized_email\", '@', 2))"
+        },
+        "acquisition_contact_verification": {
+          "name": "acquisition_contact_verification",
+          "value": "\"acquisition_contacts\".\"verification\" = 'UNVERIFIED'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_company_domains": {
+      "name": "acquisition_company_domains",
+      "schema": "",
+      "columns": {
+        "domain": {
+          "name": "domain",
+          "type": "varchar(253)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_primary_domain": {
+          "name": "acquisition_primary_domain",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"acquisition_company_domains\".\"is_primary\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_company_domains_company_id_acquisition_companies_id_fk": {
+          "name": "acquisition_company_domains_company_id_acquisition_companies_id_fk",
+          "tableFrom": "acquisition_company_domains",
+          "tableTo": "acquisition_companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_domain_format": {
+          "name": "acquisition_domain_format",
+          "value": "\"acquisition_company_domains\".\"domain\" = lower(\"acquisition_company_domains\".\"domain\") and \"acquisition_company_domains\".\"domain\" ~ '^[a-z0-9][a-z0-9.-]*[a-z0-9]$' and \"acquisition_company_domains\".\"domain\" not like '%..%'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_leads": {
+      "name": "acquisition_leads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment": {
+          "name": "segment",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NEW'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_company_segment": {
+          "name": "acquisition_company_segment",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "segment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_leads_company_id_acquisition_companies_id_fk": {
+          "name": "acquisition_leads_company_id_acquisition_companies_id_fk",
+          "tableFrom": "acquisition_leads",
+          "tableTo": "acquisition_companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_segment": {
+          "name": "acquisition_segment",
+          "value": "\"acquisition_leads\".\"segment\" ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'"
+        },
+        "acquisition_lead_state": {
+          "name": "acquisition_lead_state",
+          "value": "\"acquisition_leads\".\"state\" in ('NEW','REVIEW_REQUIRED','ASSESSED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_source_observations": {
+      "name": "acquisition_source_observations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "system": {
+          "name": "system",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_reference": {
+          "name": "run_reference",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_observation_idempotency": {
+          "name": "acquisition_observation_idempotency",
+          "columns": [
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "acquisition_observation_history": {
+          "name": "acquisition_observation_history",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "observed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_source_observations_company_id_acquisition_companies_id_fk": {
+          "name": "acquisition_source_observations_company_id_acquisition_companies_id_fk",
+          "tableFrom": "acquisition_source_observations",
+          "tableTo": "acquisition_companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "acquisition_source_observations_contact_id_acquisition_contacts_id_fk": {
+          "name": "acquisition_source_observations_contact_id_acquisition_contacts_id_fk",
+          "tableFrom": "acquisition_source_observations",
+          "tableTo": "acquisition_contacts",
+          "columnsFrom": [
+            "contact_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_observation_target": {
+          "name": "acquisition_observation_target",
+          "value": "(\"acquisition_source_observations\".\"outcome\" = 'ACCEPTED' and num_nonnulls(\"acquisition_source_observations\".\"company_id\", \"acquisition_source_observations\".\"contact_id\") = 1) or (\"acquisition_source_observations\".\"outcome\" = 'REVIEW_REQUIRED' and num_nonnulls(\"acquisition_source_observations\".\"company_id\", \"acquisition_source_observations\".\"contact_id\") = 0)"
+        },
+        "acquisition_observation_fingerprint": {
+          "name": "acquisition_observation_fingerprint",
+          "value": "\"acquisition_source_observations\".\"fingerprint\" ~ '^[a-f0-9]{64}$'"
+        },
+        "acquisition_observation_source": {
+          "name": "acquisition_observation_source",
+          "value": "\"acquisition_source_observations\".\"system\" ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and \"acquisition_source_observations\".\"run_reference\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_operations": {
+      "name": "acquisition_operations",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "varchar(128)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_operation_key": {
+          "name": "acquisition_operation_key",
+          "value": "\"acquisition_operations\".\"key\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'"
+        },
+        "acquisition_operation_kind": {
+          "name": "acquisition_operation_kind",
+          "value": "\"acquisition_operations\".\"kind\" in ('INGEST','QUALIFY','SUPPRESS','RELEASE')"
+        },
+        "acquisition_operation_fingerprint": {
+          "name": "acquisition_operation_fingerprint",
+          "value": "\"acquisition_operations\".\"fingerprint\" ~ '^[a-f0-9]{64}$'"
+        },
+        "acquisition_operation_result": {
+          "name": "acquisition_operation_result",
+          "value": "jsonb_typeof(\"acquisition_operations\".\"result\") = 'object' and octet_length(\"acquisition_operations\".\"result\"::text) <= 2048"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_source_identities": {
+      "name": "acquisition_source_identities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "system": {
+          "name": "system",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "acquisition_source_identity": {
+          "name": "acquisition_source_identity",
+          "columns": [
+            {
+              "expression": "system",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_source_identities_company_id_acquisition_companies_id_fk": {
+          "name": "acquisition_source_identities_company_id_acquisition_companies_id_fk",
+          "tableFrom": "acquisition_source_identities",
+          "tableTo": "acquisition_companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_source_identity_format": {
+          "name": "acquisition_source_identity_format",
+          "value": "\"acquisition_source_identities\".\"system\" ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and \"acquisition_source_identities\".\"record_id\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_suppression_entries": {
+      "name": "acquisition_suppression_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "varchar(254)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_reference": {
+          "name": "source_reference",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "acquisition_active_suppression": {
+          "name": "acquisition_active_suppression",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"acquisition_suppression_entries\".\"released_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "acquisition_suppression_kind": {
+          "name": "acquisition_suppression_kind",
+          "value": "\"acquisition_suppression_entries\".\"kind\" in ('DOMAIN','EMAIL')"
+        },
+        "acquisition_suppression_target": {
+          "name": "acquisition_suppression_target",
+          "value": "length(trim(\"acquisition_suppression_entries\".\"target\")) between 3 and 254 and (\"acquisition_suppression_entries\".\"kind\" <> 'DOMAIN' or (\"acquisition_suppression_entries\".\"target\" = lower(\"acquisition_suppression_entries\".\"target\") and \"acquisition_suppression_entries\".\"target\" not like '%@%')) and (\"acquisition_suppression_entries\".\"kind\" <> 'EMAIL' or \"acquisition_suppression_entries\".\"target\" ~ '^[^[:space:]@]+@[^[:space:]@]+$')"
+        },
+        "acquisition_suppression_reason": {
+          "name": "acquisition_suppression_reason",
+          "value": "\"acquisition_suppression_entries\".\"reason\" in ('TEST_OPT_OUT','MANUAL_REVIEW')"
+        },
+        "acquisition_suppression_release": {
+          "name": "acquisition_suppression_release",
+          "value": "\"acquisition_suppression_entries\".\"released_at\" is null or \"acquisition_suppression_entries\".\"released_at\" >= \"acquisition_suppression_entries\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_batches": {
+      "name": "acquisition_discovery_batches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "synthetic": {
+          "name": "synthetic",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_key": {
+          "name": "policy_key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_fingerprint": {
+          "name": "policy_fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_snapshot": {
+          "name": "policy_snapshot",
+          "type": "varchar(4096)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_identity": {
+          "name": "source_identity",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_reference": {
+          "name": "run_reference",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_batch_bounds": {
+          "name": "discovery_batch_bounds",
+          "value": "\"acquisition_discovery_batches\".\"synthetic\" and \"acquisition_discovery_batches\".\"count\" between 1 and 20 and \"acquisition_discovery_batches\".\"method\" = 'SYNTHETIC_FIXTURE' and \"acquisition_discovery_batches\".\"policy_fingerprint\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_candidates": {
+      "name": "acquisition_discovery_candidates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain": {
+          "name": "domain",
+          "type": "varchar(253)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_identity": {
+          "name": "source_identity",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment": {
+          "name": "segment",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "discovery_batch_position": {
+          "name": "discovery_batch_position",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_domain_lookup": {
+          "name": "discovery_domain_lookup",
+          "columns": [
+            {
+              "expression": "domain",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_source_lookup": {
+          "name": "discovery_source_lookup",
+          "columns": [
+            {
+              "expression": "source_identity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_name_lookup": {
+          "name": "discovery_name_lookup",
+          "columns": [
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "country",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_discovery_candidates_batch_id_acquisition_discovery_batches_id_fk": {
+          "name": "acquisition_discovery_candidates_batch_id_acquisition_discovery_batches_id_fk",
+          "tableFrom": "acquisition_discovery_candidates",
+          "tableTo": "acquisition_discovery_batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_candidate_bounds": {
+          "name": "discovery_candidate_bounds",
+          "value": "\"acquisition_discovery_candidates\".\"position\" between 1 and 20 and length(trim(\"acquisition_discovery_candidates\".\"name\")) between 1 and 160 and length(trim(\"acquisition_discovery_candidates\".\"name_key\")) between 1 and 160 and \"acquisition_discovery_candidates\".\"country\" ~ '^[A-Z]{2}$' and \"acquisition_discovery_candidates\".\"version\" >= 0 and \"acquisition_discovery_candidates\".\"fingerprint\" ~ '^[a-f0-9]{64}$'"
+        },
+        "discovery_candidate_domain": {
+          "name": "discovery_candidate_domain",
+          "value": "\"acquisition_discovery_candidates\".\"domain\" = lower(\"acquisition_discovery_candidates\".\"domain\") and \"acquisition_discovery_candidates\".\"domain\" ~ '^[a-z0-9][a-z0-9.-]*[a-z0-9]$' and \"acquisition_discovery_candidates\".\"domain\" not like '%..%' and (\"acquisition_discovery_candidates\".\"domain\" like '%.example' or \"acquisition_discovery_candidates\".\"domain\" like '%.test' or \"acquisition_discovery_candidates\".\"domain\" ~ '(^|[.])example[.](com|org|net)$')"
+        },
+        "discovery_candidate_retention": {
+          "name": "discovery_candidate_retention",
+          "value": "\"acquisition_discovery_candidates\".\"expires_at\" > \"acquisition_discovery_candidates\".\"created_at\" and \"acquisition_discovery_candidates\".\"expires_at\" <= \"acquisition_discovery_candidates\".\"created_at\" + interval '7 days'"
+        },
+        "discovery_candidate_state": {
+          "name": "discovery_candidate_state",
+          "value": "\"acquisition_discovery_candidates\".\"state\" in ('PENDING_REVIEW','NEEDS_EVIDENCE','IDENTITY_CONFLICT','APPROVED','REJECTED','SUPPRESSED','DUPLICATE')"
+        },
+        "discovery_candidate_identifiers": {
+          "name": "discovery_candidate_identifiers",
+          "value": "\"acquisition_discovery_candidates\".\"record_id\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$' and \"acquisition_discovery_candidates\".\"source_identity\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$' and \"acquisition_discovery_candidates\".\"segment\" ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_evidence": {
+      "name": "acquisition_discovery_evidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finding": {
+          "name": "finding",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "discovery_source_evidence": {
+          "name": "discovery_source_evidence",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"acquisition_discovery_evidence\".\"kind\" = 'SOURCE'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_discovery_evidence_candidate_id_acquisition_discovery_candidates_id_fk": {
+          "name": "acquisition_discovery_evidence_candidate_id_acquisition_discovery_candidates_id_fk",
+          "tableFrom": "acquisition_discovery_evidence",
+          "tableTo": "acquisition_discovery_candidates",
+          "columnsFrom": [
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_evidence_kind": {
+          "name": "discovery_evidence_kind",
+          "value": "\"acquisition_discovery_evidence\".\"kind\" in ('SOURCE','WEBSITE','SEGMENT','PACKAGING') and \"acquisition_discovery_evidence\".\"finding\" in ('OBSERVED','SUPPORTS','CONTRADICTS') and ((\"acquisition_discovery_evidence\".\"kind\" = 'SOURCE') = (\"acquisition_discovery_evidence\".\"finding\" = 'OBSERVED'))"
+        },
+        "discovery_evidence_reference": {
+          "name": "discovery_evidence_reference",
+          "value": "\"acquisition_discovery_evidence\".\"reference\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$' and \"acquisition_discovery_evidence\".\"observed_at\" <= \"acquisition_discovery_evidence\".\"created_at\""
+        },
+        "discovery_evidence_url": {
+          "name": "discovery_evidence_url",
+          "value": "\"acquisition_discovery_evidence\".\"url\" ~ '^https://([a-z0-9-]+[.])+(example|test)/[^?#[:space:]]*$|^https://([a-z0-9-]+[.])*example[.](com|org|net)/[^?#[:space:]]*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_identity_matches": {
+      "name": "acquisition_discovery_identity_matches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_candidate_id": {
+          "name": "other_candidate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "discovery_match_pair": {
+          "name": "discovery_match_pair",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "other_candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_match_owner": {
+          "name": "discovery_match_owner",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_discovery_identity_matches_candidate_id_acquisition_discovery_candidates_id_fk": {
+          "name": "acquisition_discovery_identity_matches_candidate_id_acquisition_discovery_candidates_id_fk",
+          "tableFrom": "acquisition_discovery_identity_matches",
+          "tableTo": "acquisition_discovery_candidates",
+          "columnsFrom": [
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "acquisition_discovery_identity_matches_other_candidate_id_acquisition_discovery_candidates_id_fk": {
+          "name": "acquisition_discovery_identity_matches_other_candidate_id_acquisition_discovery_candidates_id_fk",
+          "tableFrom": "acquisition_discovery_identity_matches",
+          "tableTo": "acquisition_discovery_candidates",
+          "columnsFrom": [
+            "other_candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_match_kind": {
+          "name": "discovery_match_kind",
+          "value": "\"acquisition_discovery_identity_matches\".\"candidate_id\" <> \"acquisition_discovery_identity_matches\".\"other_candidate_id\" and \"acquisition_discovery_identity_matches\".\"kind\" in ('EXACT_DUPLICATE','STRONG_CONFLICT','POSSIBLE_NAME_MATCH')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_operations": {
+      "name": "acquisition_discovery_operations",
+      "schema": "",
+      "columns": {
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "acquisition_discovery_operations_principal_id_key_kind_pk": {
+          "name": "acquisition_discovery_operations_principal_id_key_kind_pk",
+          "columns": [
+            "principal_id",
+            "key",
+            "kind"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_operation_bounds": {
+          "name": "discovery_operation_bounds",
+          "value": "\"acquisition_discovery_operations\".\"kind\" in ('BATCH','EVIDENCE','REVIEW') and \"acquisition_discovery_operations\".\"key\" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$' and \"acquisition_discovery_operations\".\"fingerprint\" ~ '^[a-f0-9]{64}$' and jsonb_typeof(\"acquisition_discovery_operations\".\"result\") = 'object' and octet_length(\"acquisition_discovery_operations\".\"result\"::text) <= 2048"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_policies": {
+      "name": "acquisition_discovery_policies",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "varchar(4096)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked": {
+          "name": "revoked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "provisioned_by": {
+          "name": "provisioned_by",
+          "type": "varchar(63)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "session_user"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "acquisition_discovery_policies_key_version_pk": {
+          "name": "acquisition_discovery_policies_key_version_pk",
+          "columns": [
+            "key",
+            "version"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_policy_fingerprint": {
+          "name": "discovery_policy_fingerprint",
+          "value": "\"acquisition_discovery_policies\".\"fingerprint\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_principal_bindings": {
+      "name": "acquisition_discovery_principal_bindings",
+      "schema": "",
+      "columns": {
+        "database_role": {
+          "name": "database_role",
+          "type": "varchar(63)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "principal_id": {
+          "name": "principal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capability": {
+          "name": "capability",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked": {
+          "name": "revoked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "provisioned_by": {
+          "name": "provisioned_by",
+          "type": "varchar(63)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "session_user"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {
+        "discovery_binding_principal": {
+          "name": "discovery_binding_principal",
+          "columns": [
+            {
+              "expression": "principal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_binding_capability": {
+          "name": "discovery_binding_capability",
+          "value": "(\"acquisition_discovery_principal_bindings\".\"database_role\" = 'discovery_intake' and \"acquisition_discovery_principal_bindings\".\"capability\" = 'INTAKE') or (\"acquisition_discovery_principal_bindings\".\"database_role\" = 'discovery_reviewer' and \"acquisition_discovery_principal_bindings\".\"capability\" = 'REVIEW')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_reviews": {
+      "name": "acquisition_discovery_reviews",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewer_id": {
+          "name": "reviewer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finding_id": {
+          "name": "finding_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "discovery_review_version": {
+          "name": "discovery_review_version",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "acquisition_discovery_reviews_candidate_id_acquisition_discovery_candidates_id_fk": {
+          "name": "acquisition_discovery_reviews_candidate_id_acquisition_discovery_candidates_id_fk",
+          "tableFrom": "acquisition_discovery_reviews",
+          "tableTo": "acquisition_discovery_candidates",
+          "columnsFrom": [
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "discovery_review_finding_owner": {
+          "name": "discovery_review_finding_owner",
+          "tableFrom": "acquisition_discovery_reviews",
+          "tableTo": "acquisition_discovery_identity_matches",
+          "columnsFrom": [
+            "finding_id",
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "id",
+            "candidate_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_review_decision": {
+          "name": "discovery_review_decision",
+          "value": "\"acquisition_discovery_reviews\".\"version\" > 0 and \"acquisition_discovery_reviews\".\"decision\" in ('APPROVE','REJECT','SUPPRESS','DUPLICATE','NEEDS_EVIDENCE','RESOLVE_DISTINCT') and (\"acquisition_discovery_reviews\".\"finding_id\" is not null) = (\"acquisition_discovery_reviews\".\"decision\" in ('DUPLICATE','RESOLVE_DISTINCT'))"
+        },
+        "discovery_review_reason": {
+          "name": "discovery_review_reason",
+          "value": "\"acquisition_discovery_reviews\".\"reason\" in ('EVIDENCE_REVIEWED','INSUFFICIENT_EVIDENCE','IDENTITY_REVIEWED','MANUAL_SUPPRESSION')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.acquisition_discovery_suppression_marks": {
+      "name": "acquisition_discovery_suppression_marks",
+      "schema": "",
+      "columns": {
+        "suppression_id": {
+          "name": "suppression_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain": {
+          "name": "domain",
+          "type": "varchar(254)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "acquisition_discovery_suppression_marks_suppression_id_event_pk": {
+          "name": "acquisition_discovery_suppression_marks_suppression_id_event_pk",
+          "columns": [
+            "suppression_id",
+            "event"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "discovery_suppression_event": {
+          "name": "discovery_suppression_event",
+          "value": "\"acquisition_discovery_suppression_marks\".\"event\" in ('ACTIVE','RELEASE')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

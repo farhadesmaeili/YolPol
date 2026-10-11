@@ -1,6 +1,17 @@
 # Task 0082: Customer Acquisition Automation Foundation
 
-## Starting state and scope
+## Subsequent repository status — Task 0083 preflight
+
+PR #168 merged into develop at `7731cf1b38f851a044be0e90e825379afbd0c959`.
+The Task 0083 preflight verified that commit, a clean worktree/index and the protected
+Conversation AI stash. Statements below about unstaged/uncommitted work describe
+Task 0082's historical implementation/review checkpoints, not its current merge state.
+
+Latest historical Task 0082 evidence is 70 acquisition tests, 22 PostgreSQL integration
+tests and 2,595 full-suite tests. Earlier verification tables remain historical evidence.
+Task 0083's own executed checks are recorded in its separate task document.
+
+## Historical starting state and scope
 
 Implementation began on `feature/customer-acquisition-automation-foundation` at
 `46822c96ce983bf7d19067224e8f1181c4c97917`, with a clean worktree and the protected

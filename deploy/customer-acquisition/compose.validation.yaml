@@ -4,6 +4,8 @@ services:
     volumes: !override
       - ./postgres/acquisition-init.sql:/docker-entrypoint-initdb.d/01-acquisition.sql:ro
       - ./postgres/disposable-marker.txt:/disposable-task0082:ro
+      - ./postgres/discovery-disposable-init.sql:/docker-entrypoint-initdb.d/02-discovery.sql:ro
+    secrets: [acquisition_admin_password, acquisition_migrator_password, acquisition_runtime_password, discovery_intake_password, discovery_reviewer_password]
     tmpfs: [/var/lib/postgresql/data:size=256m]
   n8n-postgres:
     volumes: !override
@@ -27,10 +29,15 @@ services:
       ACQUISITION_ADMIN_PASSWORD_FILE: /run/secrets/acquisition_admin_password
       ACQUISITION_MIGRATOR_PASSWORD_FILE: /run/secrets/acquisition_migrator_password
       ACQUISITION_RUNTIME_PASSWORD_FILE: /run/secrets/acquisition_runtime_password
-    secrets: [acquisition_admin_password, acquisition_migrator_password, acquisition_runtime_password]
+      ACQUISITION_DISCOVERY_INTAKE_PASSWORD_FILE: /run/secrets/discovery_intake_password
+      ACQUISITION_DISCOVERY_REVIEWER_PASSWORD_FILE: /run/secrets/discovery_reviewer_password
+    secrets: [acquisition_admin_password, acquisition_migrator_password, acquisition_runtime_password, discovery_intake_password, discovery_reviewer_password]
     networks: [acquisition_database]
     depends_on:
       acquisition-postgres: {condition: service_healthy}
     mem_limit: 768m
     cpus: "1.00"
 volumes: !reset {}
+secrets:
+  discovery_intake_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Disposable secrets required}/discovery-intake-password"}
+  discovery_reviewer_password: {file: "${ACQUISITION_SECRET_DIRECTORY:?Disposable secrets required}/discovery-reviewer-password"}

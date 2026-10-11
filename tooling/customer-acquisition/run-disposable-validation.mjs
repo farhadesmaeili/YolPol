@@ -1,6 +1,6 @@
-import {randomUUID} from "node:crypto";
+import {randomBytes, randomUUID} from "node:crypto";
 import {spawnSync} from "node:child_process";
-import {chmodSync, mkdtempSync, readdirSync, realpathSync, rmSync} from "node:fs";
+import {chmodSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -30,6 +30,9 @@ export function runDisposableValidation(runtime = false) {
   const temporary = mkdtempSync(join(tmpdir(), "yolpol-acq-test-"));
   const secretDirectory = join(temporary, "secrets");
   createLocalAcquisitionSecrets(secretDirectory);
+  for (const name of ["discovery-intake-password", "discovery-reviewer-password"]) {
+    writeFileSync(join(secretDirectory, name), randomBytes(32).toString("hex"), {flag: "wx", mode: 0o600});
+  }
   // The enclosing directory is private. Inside containers, different non-root UIDs
   // need read access to their individually mounted disposable secrets.
   for (const name of readdirSync(secretDirectory)) chmodSync(join(secretDirectory, name), 0o644);
@@ -52,7 +55,15 @@ export function runDisposableValidation(runtime = false) {
     const model = JSON.parse(run(["config", "--format", "json"], true));
     assertDisposableCompose(model, project); inspected = true;
     run(["build", "tests", "migrate", "customer-acquisition-api"]);
-    run(["up", "-d", "--wait", "--wait-timeout", "90", "acquisition-postgres", "n8n-postgres"]);
+    try { run(["up", "-d", "--wait", "--wait-timeout", "90", "acquisition-postgres", "n8n-postgres"]); }
+    catch (error) {
+      const logs = run(["logs", "--no-color", "acquisition-postgres"], true);
+      // Surface only fixed bootstrap failures, never SQL statements or secret data.
+      for (const message of ["Disposable discovery provisioning refused", "permission denied", "syntax error"]) {
+        if (logs.includes(message)) console.error(`Disposable PostgreSQL bootstrap: ${message}`);
+      }
+      throw error;
+    }
     const sentinel = project.slice("yolpol-acq-test-".length);
     for (const [service, user, database] of [["acquisition-postgres", "acquisition_admin", "yolpol_acquisition"], ["n8n-postgres", "n8n_admin", "yolpol_n8n"]]) {
       const expected = {log_error_verbosity: "terse", log_statement: "none", log_min_error_statement: "panic", log_parameter_max_length_on_error: "0", log_min_messages: "warning", log_min_duration_statement: "-1", log_min_duration_sample: "-1", log_transaction_sample_rate: "0", log_duration: "off", log_destination: "stderr", logging_collector: "off"};
@@ -61,6 +72,8 @@ export function runDisposableValidation(runtime = false) {
       if (Object.entries(expected).some(([key, value]) => settings[key] !== value)) throw new Error("PostgreSQL logging configuration rejected.");
     }
     run(["run", "--rm", "--no-deps", "migrate"]);
+    // Only the guarded disposable administrator removes installation-only authority.
+    run(["exec", "-T", "acquisition-postgres", "psql", "-XAt", "-v", "ON_ERROR_STOP=1", "-U", "acquisition_admin", "-d", "yolpol_acquisition", "-c", "REVOKE CREATE ON SCHEMA public FROM discovery_mutation_owner"], true);
     run(["run", "--rm", "--no-deps", "-e", `ACQUISITION_LOG_SENTINEL=${sentinel}`, "tests"]);
     // A connection-local table tests n8n's PostgreSQL logging without touching its schema.
     // Expected errors are captured, never echoed with client-side DETAIL/payloads.

@@ -145,7 +145,15 @@ describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable a
     const migratorRole = await admin.query("select rolsuper, rolcreatedb, rolcreaterole from pg_roles where rolname='acquisition_migrator'");
     expect(migratorRole.rows[0]).toEqual({rolsuper: false, rolcreatedb: false, rolcreaterole: false});
     const tables = await runtime.query("select tablename from pg_tables where schemaname='public'");
-    expect(tables.rows).toHaveLength(9);
+    expect(tables.rows.map(row => row.tablename).sort()).toEqual([
+      "acquisition_companies", "acquisition_company_domains", "acquisition_contacts", "acquisition_leads",
+      "acquisition_source_identities", "acquisition_source_observations", "acquisition_qualification_assessments",
+      "acquisition_suppression_entries", "acquisition_operations",
+      "acquisition_discovery_batches", "acquisition_discovery_candidates", "acquisition_discovery_evidence",
+      "acquisition_discovery_identity_matches", "acquisition_discovery_reviews", "acquisition_discovery_operations",
+      "acquisition_discovery_principal_bindings", "acquisition_discovery_policies",
+      "acquisition_discovery_suppression_marks",
+    ].sort());
     expect(tables.rows.every((row) => row.tablename.startsWith("acquisition_"))).toBe(true);
   });
   it("returns the exact winner for concurrent identical keys", async () => {

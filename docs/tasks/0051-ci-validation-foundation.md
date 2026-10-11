@@ -1,5 +1,16 @@
 # CI Validation Foundation
 
+## Subsequent acquisition coverage — Task 0083
+
+The current CI workflow also runs `pnpm db:acquisition:check` and
+`pnpm test:acquisition:disposable`. Phase A discovery tests reside under the existing
+customer-acquisition paths, so these jobs and the ordinary `pnpm test` invocation
+already discover them. No extra job, secret, external source or production activation
+is introduced. The acquisition harness verifies its UUID project, internal networks,
+tmpfs databases, disposable marker and cleanup ownership. Its initial migration and
+main-application migration boundaries remain regression-tested. The sections below
+describe Task 0051's historical foundation scope.
+
 ## Goal and scope
 
 This feature establishes the first automated repository safety gate for pull requests and protected-branch development. GitHub Actions validates pull requests plus pushes to `develop` and `main`; it does not deploy, publish, connect to a server, mutate DNS, configure Telegram, create releases, or write to a Development or Production database.
