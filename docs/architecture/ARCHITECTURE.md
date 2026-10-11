@@ -15,6 +15,37 @@ See [ADR 0004](../adr/0004-customer-acquisition-automation-boundary.md) and the
 has no real discovery, provider calls, sending or Production activation. Future AI and
 Telegram approval integrate through existing YOLPOL owners and narrow contracts.
 
+## Company Discovery candidate boundary (Task 0083 Phase A)
+
+Discovery uses separate types, validation, application operations, persistence and
+private capability-scoped routes inside customer-acquisition. Nine additive acquisition
+tables retain synthetic batches/candidates, evidence, identity findings, reviews,
+idempotent receipts, protected principal/policy authority and server-observed suppression
+history. No canonical-company operation or public App Router is involved.
+
+Runtime composition hardwires a registry with no approved source. Approved synthetic
+fixtures are test-injected only and absent from the runtime bundle. Intake and reviewer
+HTTP credentials and PostgreSQL intake/reviewer logins are separate from Task 0082.
+Protected database bindings derive the audited UUID from `session_user`, not input or
+session variables. Restricted SECURITY DEFINER functions independently check versioned
+policy authority and reject stale transaction isolation. No runtime direct discovery
+table privilege exists. Database privileges and transaction guards protect immutable
+facts/history, review transitions and seven-day deadlines. Suppression and expiry
+are checked before advancing candidates or replaying operations. Receipt DTOs contain
+no eligibility state. Discovery-only ACTIVE/RELEASE observations retain suppression
+overlap despite backdated Task 0082 release metadata, without rewriting Task 0082 rows
+or grants. Normal Compose does not provision or activate discovery credentials.
+
+Phase A uses authorization-time validity and fresh eligibility checks at every subsequent use. It does not guarantee that PostgreSQL commits occur before the candidate's retention deadline.
+
+This is the explicitly approved SEC-0083-04 contract revision. Historical state is
+retained; batch/queue projections separately expose versioned, database-wall-clock
+`eligibility` (including EXPIRED, POLICY_DENIED and SUPPRESSED). The private shared
+status policy is also checked at review/evidence authorization and on replay. No
+cached approval or receipt grants a later action. Physical disposal remains deferred;
+Phase B must independently revalidate eligibility if promotion is ever implemented.
+Independent re-audit remains required. See [ADR 0005](../adr/0005-company-discovery-candidate-review-boundary.md).
+
 ## Privacy content boundary
 
 The multilingual Privacy Policy is static legal content owned by the localized App Router and shared presentation modules rather than an artificial transactional feature. Approved public brand identity, contact, retention, and stable policy-date facts live in typed shared configuration. Locale catalogs own public wording; the route remains a Server Component and emits localized metadata plus Breadcrumb JSON-LD only. The footer exposes a dedicated legal link, while the Inquiry Server Component passes an active-locale Privacy path and narrow consent labels to the existing Client Component.

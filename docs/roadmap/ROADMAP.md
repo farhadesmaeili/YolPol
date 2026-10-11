@@ -1,6 +1,6 @@
 # YolPol Roadmap
 
-## Customer Acquisition — Task 0082
+## Customer Acquisition — Tasks 0082 and 0083 Phase A
 
 NOW: implemented and disposable-runtime-validated local, synthetic-only foundation: isolated
 n8n, independent acquisition persistence/migrations, authenticated internal API,
@@ -8,14 +8,29 @@ company/contact deduplication, immutable provenance, deterministic qualification
 suppression. Status and executed verification are recorded in
 [Task 0082](../tasks/0082-customer-acquisition-automation-foundation.md).
 
-The 2026-10-09 focused audit corrections are verified: post-normalization/derived-key
-Unicode bounds and terse PostgreSQL error-detail logging. Task 0082 records 56 focused
-tests, 14 PostgreSQL tests, both database log-privacy probes and the 2,581-test full
-suite. Neither correction activates persistent or Production resources.
+Task 0082 merged through PR #168 at `7731cf1b38f851a044be0e90e825379afbd0c959`.
+Its latest historical evidence is 70 acquisition tests, 22 PostgreSQL tests and
+2,595 full-suite tests; earlier audit tables remain in its task record.
 
-NEXT: approve one Company Discovery source with terms/rate limits/privacy/retention,
-then design Contact Discovery, Email Verification, provider-neutral AI qualification
-and Telegram human approval through existing application boundaries.
+Task 0083 Phase A adds synthetic discovery batches, immutable company evidence,
+candidate identity findings, authenticated human review, expiry/suppression and
+separate transactional receipts. Normal runtime approves no discovery source;
+positive fixture policy injection is test-only. No canonical promotion or real-data
+collection is implemented. The repository/disposable security redesign separates SQL
+intake/reviewer roles and protected principal/policy authority. SEC-0083-04 now uses
+the explicitly approved authorization-time/current-eligibility contract. Historical
+approval is separate from current expiry, revocation and suppression eligibility.
+Local implementation awaits independent re-audit and is
+uncommitted. See [Task 0083](../tasks/0083-company-discovery-foundation.md) for current
+verification and operational limits.
+
+Phase A uses authorization-time validity and fresh eligibility checks at every subsequent use. It does not guarantee that PostgreSQL commits occur before the candidate's retention deadline.
+
+NEXT: independently re-audit Phase A, including all subsequent-use eligibility checks.
+Physical disposal remains deferred; Phase B must independently revalidate eligibility.
+Real-source permission, disposal, Phase B promotion
+and any real-data pilot require separate authorization. Contact Discovery, Email
+Verification, AI qualification and Telegram approval remain later work.
 
 LATER: sending, SMTP/IMAP, follow-ups, replies, campaigns, CRM and VPS/Production
 activation. Broad scraping, LinkedIn scraping and shared Production database access
@@ -162,4 +177,4 @@ The final target operating model treats servers as disposable and rebuildable. S
 - Content review in all locales
 - Accessibility, performance, SEO, and end-to-end validation
 
-Public Product persistence, public authentication, payments, a CMS and a catalog admin dashboard remain outside the current phase. Customer acquisition is limited to the Task 0082 local synthetic foundation above; real outreach and deployment remain deferred. The active Inquiry PostgreSQL flow and deployed Production runtime do not by themselves establish that public Production cutover is complete.
+Public Product persistence, public authentication, payments, a CMS and a catalog admin dashboard remain outside the current phase. Customer acquisition is limited to the Task 0082 foundation and Task 0083 Phase A synthetic candidate review above; real outreach and deployment remain deferred. The active Inquiry PostgreSQL flow and deployed Production runtime do not by themselves establish that public Production cutover is complete.

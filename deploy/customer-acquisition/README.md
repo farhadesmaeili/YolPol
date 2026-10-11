@@ -1,5 +1,129 @@
 # Customer Acquisition: local synthetic foundation
 
+## Task 0083 Phase A — inactive discovery candidate review
+
+The private Node service additionally composes discovery; normal Compose still has
+no discovery credentials and all runtime source policies reject intake. Do not mount
+test fixtures or approve a source to activate this phase. No network adapter, sending,
+AI integration, public route, promotion or canonical-table write is implemented.
+
+The optional `ACQUISITION_DISCOVERY_AUTH_FILE` points to a protected local JSON file
+with exactly two objects, `intake` and `reviewer`, each containing `principalId` (UUID)
+and `token` (independent 32 random bytes encoded as 64 lowercase hex characters).
+Do not put tokens in environment values, workflow definitions, command arguments,
+documentation or logs. Both tokens and UUIDs must differ; neither token may reuse the
+Task 0082 token. Missing configuration denies discovery; malformed configuration
+fails startup. POSIX permissions must prohibit group/other access; Windows operators
+must enforce equivalent private ACLs. This task creates no persistent credential file
+or Compose mount. A shared reviewer token identifies its configured principal but
+does not independently identify the physical individual who used it.
+
+When HTTP discovery authentication is configured, composition also requires protected
+`ACQUISITION_DISCOVERY_INTAKE_PASSWORD_FILE` and
+`ACQUISITION_DISCOVERY_REVIEWER_PASSWORD_FILE` files. These configure fixed, separate
+PostgreSQL identities (`discovery_intake`, `discovery_reviewer`); passwords must differ
+from each other and Task 0082's database password. No arbitrary connection URL/role
+is accepted. POSIX mode must exclude group/other access; Windows requires private ACLs.
+The process holding both credentials remains trusted for both capabilities.
+
+Provisioning is **disposable-only** in this task. The validation overlay creates the
+two limited LOGIN roles, `discovery_mutation_owner` (NOLOGIN), and
+`discovery_provisioner` (NOLOGIN). Runtime roles have no stronger memberships.
+The administrator grants installation-only owner CREATE for function ownership
+transfer and revokes it before tests; migration authority can SET ROLE to install
+owner functions, but no runtime identity can. Protected session-user bindings and
+approved synthetic policy versions are inserted only by guarded integration fixtures.
+The ordinary migration seeds no approved source/binding. Existing persistent stacks
+are not provisioned by this work; do not apply this migration to them without separate
+reviewed provisioning authorization. Docker Desktop test secrets are copied into
+private files inside the disposable test container, not accepted through a permission bypass.
+
+| Private route | Capability and response |
+| --- | --- |
+| POST `/v1/discovery/batches` | Intake only; 1–20 synthetic candidates, maximum 64 KiB; receipt and batch ID |
+| GET `/v1/discovery/batches/{id}` | Submitting intake principal or reviewer; opaque candidate status only |
+| GET `/v1/discovery/review-queue?after={uuid}` | Reviewer only; at most 20 candidates and opaque next cursor |
+| POST `/v1/discovery/candidates/{id}/evidence` | Reviewer only; bounded typed evidence, maximum 8 KiB |
+| POST `/v1/discovery/candidates/{id}/reviews` | Reviewer only; expected version, decision, reason and appropriate finding ID, maximum 8 KiB |
+
+Authentication/capability checks precede body parsing and business access. Shared
+Node transport retains 8 KiB headers, 32 connections and 10-second request deadline.
+Discovery uses 60 attempts/minute/process; its transactions use 3-second lock,
+5-second statement and 8-second transaction limits. Errors contain fixed codes;
+logs contain request ID/status/duration only. Queue payloads are reviewer-only.
+Receipt replay returns historical opaque IDs, not current eligibility. Status reads
+explicitly include `expired`, `suppressed` and `policyAllowed` alongside historical
+`state`, plus `eligibility: {contract: "authorization-time-v1", evaluatedAt, status}`.
+Use this timestamped current observation, not APPROVED history alone. Neither is
+a reusable authorization: every later operation must pass fresh protected checks.
+
+Batch inputs contain `synthetic:true`, an idempotency key, policy key/version, fixture
+method, run reference, and candidates with name/country/domain/source record ID,
+segment, source URL and observed timestamp. All nested fields are allow-listed.
+Domains/URLs must use reserved synthetic namespaces. No personal/contact, pricing,
+credential, raw HTML or arbitrary provider-response field exists. Fixture policy
+approval is injected only by tests, not by environment variables or a request flag.
+
+Evidence kinds are WEBSITE, SEGMENT and PACKAGING with SUPPORTS/CONTRADICTS findings;
+SOURCE provenance is inserted by intake. Evidence is capped at 32 records/candidate.
+Review decisions are APPROVE, REJECT, SUPPRESS, DUPLICATE, NEEDS_EVIDENCE and
+RESOLVE_DISTINCT. Identity decisions reference a finding belonging to that candidate.
+Only weak name/country findings can be resolved as distinct; strong conflicts remain
+blocked from approval. Approval needs supporting evidence in all three categories,
+no contradictory evidence and no unresolved finding. No website is fetched.
+
+Rejection, suppression and duplicate decisions are terminal. APPROVED can only move
+to SUPPRESSED and means approval of a synthetic Phase A candidate, not a real company
+or permission to contact anyone. Reviewer identity is never a request field. Review
+history is append-only, capped at 32 decisions, and candidate versions reject stale
+decisions. Matches are append-only and capped at 20/candidate; excess fails closed.
+
+Deadlines are server-calculated from receipt time and policy expiry, with a seven-day
+maximum. Strong identity reintake inherits the earliest prior deadline; expired
+identity reintake is rejected. Replays do not extend retention. Exact-domain Task 0082
+suppression is consulted read-only. Discovery suppression follows either exact domain
+or source-scoped record identity across batches. Releasing Task 0082 suppression does
+not revive discovery candidates. Discovery-owned ACTIVE/RELEASE event history uses
+database wall-clock timestamps; even a backdated Task 0082 release cannot erase an
+overlap. A suppression released before the first candidate does not taint that new
+identity. Task 0082 rows, grants and release behavior are not rewritten.
+Phase A uses authorization-time validity and fresh eligibility checks at every subsequent use. It does not guarantee that PostgreSQL commits occur before the candidate's retention deadline.
+
+Expiry is checked at mutation authorization/current reads without a scheduler.
+Historical decisions remain immutable after expiry, policy revocation or suppression;
+current eligibility becomes EXPIRED, POLICY_DENIED or SUPPRESSED respectively.
+No data is physically deleted.
+Restricted disposal must be designed before real-data use.
+
+Migration `0001_company_discovery_foundation` adds nine tables and explicit grants;
+`0000` and its snapshot are unchanged. `acquisition_runtime` gets no discovery grants.
+Discovery logins execute only permitted functions, with no direct table writes/reads,
+DDL, TEMP, DELETE or TRUNCATE. Functions derive attribution from protected `session_user`
+bindings and recheck database policy/fingerprint authority; repeatable/serializable
+transaction snapshots are refused. PostgreSQL guards enforce complete batches/source evidence, bounded
+retention, terminal states, linked reviews, ownership and approval evidence. There is
+no DELETE/TRUNCATE/DDL or new canonical-table grant. The existing advisory lock also
+coordinates suppression. Idempotency is scoped by principal, operation kind and key;
+canonical facts and policy metadata participate in discovery-only fingerprints.
+
+The early `SET CONSTRAINTS ALL IMMEDIATE` reproduction is retained under the explicitly
+approved SEC-0083-04 contract revision: an authorized review may commit after expiry,
+but subsequent status is EXPIRED and evidence, review and replay cannot advance it.
+Authorization time is the final private status-policy wall-clock sample in the history
+insert guard, recorded in `created_at`; it is not transaction start or a caller timestamp.
+Deferred checks and timeouts are not proof of exact commit-time rejection. The queue
+retains historical rows with explicit current eligibility, not just actionable rows.
+Phase B must independently revalidate eligibility inside any future promotion boundary.
+Do not activate this phase; independent re-audit and separate authorization remain required.
+
+Validation uses the existing commands below and the same guarded disposable harness.
+Tests inject synthetic policy and temporary credential files; the ordinary runtime
+bundle excludes those fixtures. No persistent start is necessary for Phase A proof.
+See [Task 0083](../../docs/tasks/0083-company-discovery-foundation.md) and
+[ADR 0005](../../docs/adr/0005-company-discovery-candidate-review-boundary.md).
+
+## Task 0082 foundation and historical operational instructions
+
 Task 0082 is an optional subsystem. Starting normal YOLPOL Development or deploying
 the application does not start it. Nothing here activates Staging, Production, email,
 discovery, Telegram or AI. Never supply real company/contact records or provider keys.
