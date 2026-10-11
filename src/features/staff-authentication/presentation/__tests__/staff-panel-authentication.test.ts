@@ -18,6 +18,7 @@ const principal: StaffPrincipal = Object.freeze({
 const capabilities = Object.freeze({
   mayAccessStaffPanel: true,
   mayViewInquiries: true,
+  mayViewDiscoveryCandidates: true,
   mayViewCustomerConversation: true,
   mayReplyToCustomerConversation: true,
   mayPublishStaffTyping: true,

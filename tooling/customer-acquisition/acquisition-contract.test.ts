@@ -112,6 +112,14 @@ describe("acquisition deployment boundaries", () => {
       expect(source).not.toMatch(/from ["'][^"']*\/(infrastructure|testing)\//u);
       if (layer === "domain") expect(source).not.toMatch(/from ["'](?:node:|pg|drizzle|next|react|[^"']*\/application\/)/u);
     }
-    for (const file of files(resolve("src/app"))) if (/\.[tj]sx?$/u.test(file)) expect(readFileSync(file, "utf8")).not.toContain("customer-acquisition");
+    const staffDiscoveryPage = resolve("src/app/[locale]/staff/(protected)/acquisition/page.tsx");
+    for (const file of files(resolve("src/app"))) if (/\.[tj]sx?$/u.test(file)) {
+      const source = readFileSync(file, "utf8");
+      if (file === staffDiscoveryPage) {
+        expect(source).not.toMatch(/from ["'][^"']*\/customer-acquisition\/(?:infrastructure|testing)\//u);
+      } else {
+        expect(source).not.toContain("customer-acquisition");
+      }
+    }
   });
 });

@@ -24,6 +24,7 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
 
   mayAccessStaffPanel(principal: StaffPrincipal): boolean { return this.valid(principal); }
   mayViewInquiries(principal: StaffPrincipal): boolean { return this.valid(principal); }
+  mayViewDiscoveryCandidates(principal: StaffPrincipal): boolean { return this.valid(principal) && principal.role !== "VIEWER"; }
   mayViewCustomerConversation(principal: StaffPrincipal): boolean { return this.valid(principal); }
 
   mayReplyToCustomerConversation(principal: StaffPrincipal): boolean {
@@ -71,6 +72,7 @@ export class StaffAuthorizationPolicy implements StaffAuthorization {
     return Object.freeze({
       mayAccessStaffPanel: this.mayAccessStaffPanel(principal),
       mayViewInquiries: this.mayViewInquiries(principal),
+      mayViewDiscoveryCandidates: this.mayViewDiscoveryCandidates(principal),
       mayViewCustomerConversation: this.mayViewCustomerConversation(principal),
       mayReplyToCustomerConversation: this.mayReplyToCustomerConversation(principal),
       mayControlConversationAi: this.mayControlConversationAi(principal),

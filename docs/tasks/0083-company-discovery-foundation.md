@@ -1,5 +1,15 @@
 # Task 0083: Company Discovery Foundation — Phase A
 
+## Subsequent repository status — Task 0084 preflight (2026-10-11)
+
+Task 0083 was merged through PR #169 at `cb05f8e4a4fc731f170df2445f851d130efa24e5`.
+The reported post-merge GitHub CI passed Production build, Quality and disposable
+PostgreSQL integration checks. The local Task 0084 preflight confirmed that commit
+as `develop` and cached `origin/develop`. Earlier uncommitted and audit-pending
+statements below record their historical task-time state; they do not describe the
+current repository publication status. Real discovery and Staff reader authority
+remain inactive.
+
 The initial implementation report below is historical, before independent security
 audit. Its privilege claims, all-green verification and file inventory are superseded
 by the subsequent security-correction handoff at the end of this document.

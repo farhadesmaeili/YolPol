@@ -124,6 +124,7 @@ describe("StaffAuthorizationPolicy", () => {
     expect(capabilities).toEqual({
       mayAccessStaffPanel: true,
       mayViewInquiries: mayView,
+      mayViewDiscoveryCandidates: role !== "VIEWER",
       mayViewCustomerConversation: mayView,
       mayReplyToCustomerConversation: mayWrite,
       mayControlConversationAi: mayWrite,

@@ -12,6 +12,17 @@ describe("discovery architecture boundaries", () => {
     expect(Object.keys(bundle.metafile!.inputs).some(path => /(?:testing|__tests__|fixture)/i.test(path))).toBe(false);
     expect(bundle.outputFiles[0].text).not.toContain('status: "APPROVED", method: "SYNTHETIC_FIXTURE"');
   });
+  it("keeps the Staff read composition free of reviewer credentials, database adapters and fixtures", () => {
+    const bundle = buildSync({entryPoints: [resolve("src/composition/customer-acquisition/staff-discovery.ts")], bundle: true, platform: "node", target: "node22", format: "cjs", external: ["server-only"], write: false, metafile: true});
+    const inputs = Object.keys(bundle.metafile!.inputs).join("\n");
+    expect(inputs).not.toMatch(/(?:testing|__tests__|fixture|postgres-discovery|discovery-database-config|discovery-auth-config)/i);
+    const composition = read("src/composition/customer-acquisition/staff-discovery.ts");
+    expect(composition).toContain("new UnconfiguredStaffDiscoveryReader()");
+    expect(composition).not.toMatch(/process\.env|Pool|fetch\(|fixture|REVIEW/);
+    const port = read("src/features/customer-acquisition/application/ports/staff-discovery-reader.ts");
+    expect(port).toContain("listCandidates(");
+    expect(port).not.toMatch(/\b(?:submit|review|approve|reject|suppress|update|delete|evidence)\s*\(/i);
+  });
   it("has no approved runtime or fixture policy", () => {
     for (const key of ["ege-exporters", "tobb-registry", "official-company-websites", "synthetic-fixture", "unknown"]) {
       expect(() => assertDiscoveryPolicy(runtimeDiscoverySourceRegistry.find(key, key === "synthetic-fixture" ? "fixture-1" : "review-1"), new Date())).toThrow();
