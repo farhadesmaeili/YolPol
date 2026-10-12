@@ -20,13 +20,20 @@ collection is implemented. The repository/disposable security redesign separates
 intake/reviewer roles and protected principal/policy authority. SEC-0083-04 now uses
 the explicitly approved authorization-time/current-eligibility contract. Historical
 approval is separate from current expiry, revocation and suppression eligibility.
-Local implementation awaits independent re-audit and is
-uncommitted. See [Task 0083](../tasks/0083-company-discovery-foundation.md) for current
-verification and operational limits.
+Task 0083 was merged through PR #169 at
+`cb05f8e4a4fc731f170df2445f851d130efa24e5`. Post-merge Production build,
+Quality and disposable PostgreSQL CI checks passed. Its earlier local audit and
+uncommitted status remain historical evidence in [Task 0083](../tasks/0083-company-discovery-foundation.md).
+The merged foundation does not activate a real discovery source or Staff reader.
 
 Phase A uses authorization-time validity and fresh eligibility checks at every subsequent use. It does not guarantee that PostgreSQL commits occur before the candidate's retention deadline.
 
-NEXT: independently re-audit Phase A, including all subsequent-use eligibility checks.
+Task 0084 adds a Staff read-only presentation foundation with an intentionally
+unconfigured production reader. See [Task 0084](../tasks/0084-staff-discovery-read-only-foundation.md).
+
+NEXT: independently audit the Task 0084 Staff boundary and design a distinct restricted
+reader authority before connecting candidate data. Preserve Phase A's fresh
+subsequent-use eligibility checks.
 Physical disposal remains deferred; Phase B must independently revalidate eligibility.
 Real-source permission, disposal, Phase B promotion
 and any real-data pilot require separate authorization. Contact Discovery, Email

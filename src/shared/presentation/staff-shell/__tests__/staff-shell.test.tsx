@@ -10,7 +10,7 @@ vi.mock("@/i18n/navigation", () => ({
 }));
 
 vi.mock("@/shared/presentation/staff-shell/staff-navigation", () => ({
-  StaffNavigation: () => <nav data-staff-navigation="true" />,
+  StaffNavigation: ({items}: {items: readonly {href: string; label: string}[]}) => <nav data-staff-navigation="true">{items.map(item => <span key={item.href}>{item.label}</span>)}</nav>,
 }));
 
 vi.mock("@/features/staff-authentication/presentation/components/staff-logout-button", () => ({
@@ -37,6 +37,7 @@ const labels: StaffShellLabels = {
   aiProviders: "AI Providers",
   dashboard: "Dashboard",
   inquiries: "Inquiries",
+  discovery: "Discovery",
   translationSettings: "Translation Settings",
   logout: "Log out",
   logoutError: "Logout failed",
@@ -54,6 +55,7 @@ const labels: StaffShellLabels = {
 const capabilities = {
   mayAccessStaffPanel: true,
   mayViewInquiries: true,
+  mayViewDiscoveryCandidates: true,
   mayViewCustomerConversation: true,
   mayReplyToCustomerConversation: true,
   mayControlConversationAi: true,
@@ -76,6 +78,12 @@ const capabilities = {
 } as const;
 
 describe("StaffShell logout surfaces", () => {
+  it("shows discovery navigation only with the dedicated capability", () => {
+    const visible = renderToStaticMarkup(<StaffShell principal={principal} capabilities={capabilities} labels={labels} locale="en"><p>Content</p></StaffShell>);
+    const hidden = renderToStaticMarkup(<StaffShell principal={{...principal, role: "VIEWER"}} capabilities={{...capabilities, mayViewDiscoveryCandidates: false}} labels={labels} locale="en"><p>Content</p></StaffShell>);
+    expect(visible).toContain("Discovery</span>");
+    expect(hidden).not.toContain("Discovery</span>");
+  });
   it("uses the dark variant in the desktop sidebar and the light variant in the mobile header", () => {
     const html = renderToStaticMarkup(<StaffShell principal={principal} capabilities={capabilities} labels={labels} locale="en"><p>Content</p></StaffShell>);
     expect(html.match(/data-logout-variant="dark"/gu)).toHaveLength(1);

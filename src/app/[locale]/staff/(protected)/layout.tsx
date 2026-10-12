@@ -39,6 +39,7 @@ export default async function ProtectedStaffLayout({children, params}: Protected
         aiOperations: t("navigation.aiOperations"),
         aiProviders: t("navigation.aiProviders"),
         inquiries: t("navigation.inquiries"),
+        discovery: t("navigation.discovery"),
         translationSettings: t("navigation.translationSettings"),
         team: t("navigation.team"),
         notificationDestinations: t("navigation.notificationDestinations"),

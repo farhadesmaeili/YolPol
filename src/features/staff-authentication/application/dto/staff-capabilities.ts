@@ -1,6 +1,7 @@
 export type StaffCapabilities = Readonly<{
   mayAccessStaffPanel: boolean;
   mayViewInquiries: boolean;
+  mayViewDiscoveryCandidates: boolean;
   mayViewCustomerConversation: boolean;
   mayReplyToCustomerConversation: boolean;
   mayControlConversationAi: boolean;

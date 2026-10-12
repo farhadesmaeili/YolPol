@@ -61,6 +61,7 @@ export interface StaffAuthorization {
   capabilitiesFor(principal: StaffPrincipal): StaffCapabilities;
   mayAccessStaffPanel(principal: StaffPrincipal): boolean;
   mayViewInquiries(principal: StaffPrincipal): boolean;
+  mayViewDiscoveryCandidates(principal: StaffPrincipal): boolean;
   mayViewCustomerConversation(principal: StaffPrincipal): boolean;
   mayReplyToCustomerConversation(principal: StaffPrincipal): boolean;
   mayControlConversationAi(principal: StaffPrincipal): boolean;
