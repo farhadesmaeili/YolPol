@@ -30,7 +30,7 @@ export function runDisposableValidation(runtime = false) {
   const temporary = mkdtempSync(join(tmpdir(), "yolpol-acq-test-"));
   const secretDirectory = join(temporary, "secrets");
   createLocalAcquisitionSecrets(secretDirectory);
-  for (const name of ["discovery-intake-password", "discovery-reviewer-password"]) {
+  for (const name of ["discovery-intake-password", "discovery-reviewer-password", "discovery-staff-reader-password"]) {
     writeFileSync(join(secretDirectory, name), randomBytes(32).toString("hex"), {flag: "wx", mode: 0o600});
   }
   // The enclosing directory is private. Inside containers, different non-root UIDs
@@ -74,6 +74,23 @@ export function runDisposableValidation(runtime = false) {
     run(["run", "--rm", "--no-deps", "migrate"]);
     // Only the guarded disposable administrator removes installation-only authority.
     run(["exec", "-T", "acquisition-postgres", "psql", "-XAt", "-v", "ON_ERROR_STOP=1", "-U", "acquisition_admin", "-d", "yolpol_acquisition", "-c", "REVOKE CREATE ON SCHEMA public FROM discovery_mutation_owner"], true);
+    run(["exec", "-T", "acquisition-postgres", "psql", "-XAt", "-v", "ON_ERROR_STOP=1", "-U", "acquisition_admin", "-d", "yolpol_acquisition", "-c", "REVOKE CREATE ON SCHEMA public FROM discovery_staff_read_owner"], true);
+    // Exercise the container's Unix socket separately from the TCP tests. The
+    // password stays in the container and all failed-authentication text is private.
+    const socketProof = run(["exec", "-T", "acquisition-postgres", "sh", "-s"], true, `
+      set -eu
+      export PGPASSWORD="$(cat /run/secrets/discovery_staff_reader_password)"
+      test "$(psql -XqAt -h /var/run/postgresql -U discovery_staff_reader -d yolpol_acquisition -c 'select current_database()')" = yolpol_acquisition
+      psql -XqAt -v ON_ERROR_STOP=1 -U acquisition_admin -d yolpol_acquisition -c 'create database audit_discovery_socket_hba' >/dev/null
+      for database in $(psql -XqAt -v ON_ERROR_STOP=1 -U acquisition_admin -d yolpol_acquisition -c 'select datname from pg_database where datallowconn and datname <> current_database() order by datname'); do
+        if failure="$(psql -XqAt -h /var/run/postgresql -U discovery_staff_reader -d "$database" -c 'select 1' 2>&1)"; then exit 1; fi
+        case "$failure" in *'pg_hba.conf rejects connection'*) ;; *) exit 1 ;; esac
+      done
+      psql -XqAt -v ON_ERROR_STOP=1 -U acquisition_admin -d yolpol_acquisition -c 'drop database audit_discovery_socket_hba' >/dev/null
+      printf 'disposable-socket-boundary-passed'
+    `);
+    if (socketProof.trim() !== "disposable-socket-boundary-passed") throw new Error("Disposable discovery socket boundary failed.");
+    console.info("Disposable reader Unix-socket allowlist passed for current and newly created databases.");
     run(["run", "--rm", "--no-deps", "-e", `ACQUISITION_LOG_SENTINEL=${sentinel}`, "tests"]);
     // A connection-local table tests n8n's PostgreSQL logging without touching its schema.
     // Expected errors are captured, never echoed with client-side DETAIL/payloads.

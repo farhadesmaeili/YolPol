@@ -3,8 +3,10 @@ import {mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from "vitest";
-import {Pool, type PoolClient} from "pg";
+import {Client, Pool, type PoolClient} from "pg";
 import {discoveryDatabaseConfig} from "@/features/customer-acquisition/infrastructure/config/discovery-database-config";
+import {staffDiscoveryDatabaseConfig} from "@/features/customer-acquisition/infrastructure/config/staff-discovery-database-config";
+import {closeStaffDiscoveryReaderPool, PostgresStaffDiscoveryReader} from "@/features/customer-acquisition/infrastructure/readers/postgres-staff-discovery-reader";
 import {canonicalDiscoveryPolicy} from "@/features/customer-acquisition/domain/services/discovery-source-policy";
 import {discoveryEligibility} from "@/features/customer-acquisition/domain/services/discovery-eligibility";
 import {acquisitionDatabaseConfig, readAcquisitionSecret} from "@/features/customer-acquisition/infrastructure/config/acquisition-config";
@@ -14,11 +16,64 @@ import {fixtureBatch, fixtureCandidate, fixturePolicy} from "@/features/customer
 import type {DiscoveryPolicy, DiscoveryPrincipal, EvidenceInput, ReviewInput} from "@/features/customer-acquisition/domain/types/discovery-types";
 
 describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable discovery PostgreSQL", () => {
-  let admin: Pool; let runtime: Pool; let intakePool: Pool; let reviewerPool: Pool; let app: CompanyDiscovery; let policy: DiscoveryPolicy;
+  let admin: Pool; let runtime: Pool; let intakePool: Pool; let reviewerPool: Pool; let staffPool: Pool; let staffReader: PostgresStaffDiscoveryReader; let app: CompanyDiscovery; let policy: DiscoveryPolicy;
   let credentialDirectory: string | undefined;
+  let staffEnvironment: Readonly<Record<string, string | undefined>>;
   const intake: DiscoveryPrincipal = {id: randomUUID(), capability: "INTAKE"};
   const reviewer: DiscoveryPrincipal = {id: randomUUID(), capability: "REVIEW"};
   const tableNames = ["acquisition_discovery_suppression_marks", "acquisition_discovery_reviews", "acquisition_discovery_operations", "acquisition_discovery_identity_matches", "acquisition_discovery_evidence", "acquisition_discovery_candidates", "acquisition_discovery_batches"];
+  const activityObserver = () => new Client({...acquisitionDatabaseConfig(process.env, "migration"), user: "acquisition_admin",
+    password: readAcquisitionSecret(process.env.ACQUISITION_ADMIN_PASSWORD_FILE), connectionTimeoutMillis: 3000});
+  async function readerActivity(observer: Client) {
+    // Keep activity snapshots fresh and outside the transaction holding the authority lock.
+    await observer.query("select pg_stat_clear_snapshot()");
+    return (await observer.query<{total: number; waiting: number; active: number}>(`select count(*)::int as total,
+      count(*) filter (where wait_event='advisory')::int as waiting,
+      count(*) filter (where state='active')::int as active
+      from pg_stat_activity where usename='discovery_staff_reader'`)).rows[0];
+  }
+  function observeReaderActivity(observer: Client) {
+    let latest: Awaited<ReturnType<typeof readerActivity>> | undefined;
+    let maximum = 0;
+    let stopped = false;
+    const deadline = Date.now() + 9000;
+    const sample = async () => {
+      latest = await readerActivity(observer);
+      maximum = Math.max(maximum, latest.total);
+      return latest;
+    };
+    const sampling = (async () => {
+      while (!stopped) {
+        await sample();
+        if (Date.now() >= deadline) throw new Error("Reader observation deadline exceeded.");
+        if (!stopped) await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      await sample();
+      return maximum;
+    })();
+    // Attach the rejection handler immediately, even if the test fails before stop().
+    const outcome = sampling.then(value => ({status: "fulfilled" as const, value}), error => ({status: "rejected" as const, error}));
+    return {
+      latest: () => latest,
+      sample,
+      stop: async () => {
+        stopped = true;
+        const result = await outcome;
+        if (result.status === "rejected") throw result.error;
+        return result.value;
+      },
+    };
+  }
+  async function waitForReaderActivity(observation: ReturnType<typeof observeReaderActivity>, matches: (activity: Awaited<ReturnType<typeof readerActivity>>) => boolean) {
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+      const latest = observation.latest();
+      if (latest && matches(latest)) return latest;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    throw new Error("Expected reader sessions were not observed.");
+  }
+  const expectReaderBudget = (count: number) => expect(count).toBeLessThanOrEqual(2);
   beforeAll(async () => {
     admin = new Pool({...acquisitionDatabaseConfig(process.env, "migration"), user: "acquisition_admin", password: readAcquisitionSecret(process.env.ACQUISITION_ADMIN_PASSWORD_FILE)});
     const marker = await admin.query("select current_database() as name, pg_read_file('/disposable-task0082') as marker");
@@ -28,13 +83,16 @@ describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable d
     // disposable test process only, copy these random secrets into private files.
     credentialDirectory = mkdtempSync(join(tmpdir(), "discovery-credentials-"));
     const environment = {...process.env};
-    for (const key of ["ACQUISITION_DISCOVERY_INTAKE_PASSWORD_FILE", "ACQUISITION_DISCOVERY_REVIEWER_PASSWORD_FILE"]) {
+    for (const key of ["ACQUISITION_DISCOVERY_INTAKE_PASSWORD_FILE", "ACQUISITION_DISCOVERY_REVIEWER_PASSWORD_FILE", "ACQUISITION_DISCOVERY_STAFF_READER_PASSWORD_FILE"]) {
       const path = join(credentialDirectory, key);
       writeFileSync(path, readAcquisitionSecret(process.env[key]), {flag: "wx", mode: 0o600});
       environment[key] = path;
     }
+    staffEnvironment = environment;
     intakePool = new Pool(discoveryDatabaseConfig(environment, "INTAKE"));
     reviewerPool = new Pool(discoveryDatabaseConfig(environment, "REVIEW"));
+    staffPool = new Pool(staffDiscoveryDatabaseConfig(environment));
+    staffReader = new PostgresStaffDiscoveryReader(environment);
     app = new CompanyDiscovery(new PostgresDiscoveryRepository({intake: intakePool, reviewer: reviewerPool}, {find: (key, version) => key === policy.key && version === policy.version ? policy : undefined}));
   });
   beforeEach(async () => {
@@ -46,7 +104,8 @@ describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable d
     await provisionPolicy();
   });
   afterAll(async () => {
-    await Promise.all([runtime?.end(), intakePool?.end(), reviewerPool?.end(), admin?.end()]);
+    await closeStaffDiscoveryReaderPool();
+    await Promise.all([runtime?.end(), intakePool?.end(), reviewerPool?.end(), staffPool?.end(), admin?.end()]);
     if (credentialDirectory) rmSync(credentialDirectory, {recursive: true});
   });
   const fingerprint = () => createHash("sha256").update(JSON.stringify(canonicalDiscoveryPolicy(policy))).digest("hex");
@@ -269,8 +328,8 @@ describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable d
     expect(functions.rows).toHaveLength(7);
     for (const fn of functions.rows) { expect(fn.rolname).toBe("discovery_mutation_owner"); expect(fn.proconfig).toContain("search_path=pg_catalog, pg_temp"); }
     const roles = await admin.query("select rolname,rolcanlogin,rolsuper,rolinherit,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls from pg_roles where rolname like 'discovery_%'");
-    expect(roles.rows).toHaveLength(4);
-    for (const role of roles.rows) expect(role).toMatchObject({rolcanlogin: ["discovery_intake", "discovery_reviewer"].includes(role.rolname), rolsuper: false, rolinherit: false, rolcreaterole: false, rolcreatedb: false, rolreplication: false, rolbypassrls: false});
+    expect(roles.rows).toHaveLength(6);
+    for (const role of roles.rows) expect(role).toMatchObject({rolcanlogin: ["discovery_intake", "discovery_reviewer", "discovery_staff_reader"].includes(role.rolname), rolsuper: false, rolinherit: false, rolcreaterole: false, rolcreatedb: false, rolreplication: false, rolbypassrls: false});
     expect((await admin.query("select has_schema_privilege('discovery_mutation_owner','public','CREATE') as allowed")).rows[0].allowed).toBe(false);
   });
   it("SEC-0083-01 does not apply a suppression released before the first candidate", async () => {
@@ -637,5 +696,312 @@ describe.runIf(process.env.ACQUISITION_DISPOSABLE_TEST === "true")("disposable d
     const snapshot = async () => (await runtime.query("select (select count(*) from acquisition_companies)::int as companies, (select count(*) from acquisition_company_domains)::int as domains, (select count(*) from acquisition_leads)::int as leads, (select count(*) from acquisition_contacts)::int as contacts, (select count(*) from acquisition_source_identities)::int as identities")).rows;
     const before = await snapshot(); const {candidate} = await create(); await support(candidate.id); await app.review(reviewer, candidate.id, review("APPROVE"));
     expect(await snapshot()).toEqual(before);
+  });
+  it("restricts the Staff login and function owner to read authority", async () => {
+    const identities = (await admin.query(`select rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+      from pg_roles where rolname in ('discovery_staff_reader','discovery_staff_read_owner') order by rolname`)).rows;
+    expect(identities).toEqual([
+      {rolname: "discovery_staff_read_owner", rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false},
+      {rolname: "discovery_staff_reader", rolcanlogin: true, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false},
+    ]);
+    const authority = (await admin.query(`select p.prosecdef, p.proowner::regrole::text as owner,
+      has_function_privilege('discovery_staff_reader',p.oid,'EXECUTE') as reader_execute,
+      exists(select 1 from aclexplode(p.proacl) grant_entry where grant_entry.grantee=0 and grant_entry.privilege_type='EXECUTE') as public_execute
+      from pg_proc p where p.oid='public.acquisition_staff_discovery_queue(uuid)'::regprocedure`)).rows[0];
+    expect(authority).toEqual({prosecdef: true, owner: "discovery_staff_read_owner", reader_execute: true, public_execute: false});
+    const grants = (await admin.query(`select
+      has_table_privilege('discovery_staff_reader','public.acquisition_discovery_candidates','SELECT') as candidates,
+      has_table_privilege('discovery_staff_reader','public.acquisition_discovery_policies','SELECT') as policies,
+      has_table_privilege('discovery_staff_reader','public.acquisition_discovery_principal_bindings','SELECT') as bindings,
+      has_table_privilege('discovery_staff_reader','public.acquisition_companies','SELECT') as companies,
+      has_table_privilege('discovery_staff_reader','public.acquisition_contacts','SELECT') as contacts,
+      has_database_privilege('discovery_staff_reader','yolpol_acquisition','CREATE') as create_database,
+      has_database_privilege('discovery_staff_reader','yolpol_acquisition','TEMP') as create_temp,
+      has_schema_privilege('discovery_staff_reader','public','CREATE') as create_schema,
+      has_schema_privilege('discovery_staff_read_owner','public','CREATE') as owner_create_schema,
+      pg_has_role('discovery_staff_reader','discovery_mutation_owner','SET') as can_set_mutation_role`)).rows[0];
+    expect(Object.values(grants)).toEqual(Array(10).fill(false));
+    const memberships = (await admin.query(`select member::regrole::text as member, roleid::regrole::text as role,
+      inherit_option, set_option from pg_auth_members where member='acquisition_migrator'::regrole
+      and roleid in ('discovery_mutation_owner'::regrole,'discovery_staff_read_owner'::regrole) order by role`)).rows;
+    expect(memberships).toEqual([
+      {member: "acquisition_migrator", role: "discovery_mutation_owner", inherit_option: false, set_option: true},
+      {member: "acquisition_migrator", role: "discovery_staff_read_owner", inherit_option: false, set_option: true},
+    ]);
+    expect((await admin.query("select has_schema_privilege('discovery_mutation_owner','public','CREATE') as mutation, has_schema_privilege('discovery_staff_read_owner','public','CREATE') as reader")).rows[0])
+      .toEqual({mutation: false, reader: false});
+    const owner = await admin.connect();
+    try {
+      await owner.query("begin");
+      await owner.query("set local role discovery_staff_read_owner");
+      await expect(owner.query("update public.acquisition_discovery_candidates set state='APPROVED'")).rejects.toMatchObject({code: "42501"});
+    } finally { await owner.query("rollback"); owner.release(); }
+  });
+  it("confines the actual Staff password to the acquisition database over TCP", async () => {
+    const rules = (await admin.query(`select type, database, user_name, address, auth_method, error
+      from pg_hba_file_rules where 'discovery_staff_reader'=any(user_name) order by line_number`)).rows;
+    expect(rules).toEqual([
+      {type: "local", database: ["yolpol_acquisition"], user_name: ["discovery_staff_reader"], address: null, auth_method: "scram-sha-256", error: null},
+      {type: "local", database: ["all"], user_name: ["discovery_staff_reader"], address: null, auth_method: "reject", error: null},
+      {type: "host", database: ["yolpol_acquisition"], user_name: ["discovery_staff_reader"], address: "all", auth_method: "scram-sha-256", error: null},
+      {type: "host", database: ["all"], user_name: ["discovery_staff_reader"], address: "all", auth_method: "reject", error: null},
+    ]);
+    const loadedBefore = (await admin.query("select pg_conf_load_time() as loaded")).rows[0].loaded as Date;
+    expect((await admin.query("select pg_reload_conf() as reloaded")).rows[0].reloaded).toBe(true);
+    let loadedAfter = loadedBefore;
+    for (let attempt = 0; attempt < 20 && loadedAfter.getTime() <= loadedBefore.getTime(); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      loadedAfter = (await admin.query("select pg_conf_load_time() as loaded")).rows[0].loaded as Date;
+    }
+    expect(loadedAfter.getTime()).toBeGreaterThan(loadedBefore.getTime());
+    const config = staffDiscoveryDatabaseConfig(staffEnvironment);
+    const connect = async (database: string, denied: boolean) => {
+      const client = new Client({...config, database});
+      try {
+        if (denied) {
+          await expect(client.connect()).rejects.toMatchObject({code: "28000", message: expect.stringContaining("pg_hba.conf rejects connection")});
+        } else {
+          await client.connect();
+          expect((await client.query("select current_database() as database")).rows[0].database).toBe("yolpol_acquisition");
+          await expect(client.query("create temp table reader_forbidden(id int)")).rejects.toMatchObject({code: "42501"});
+        }
+      } finally { await client.end().catch(() => undefined); }
+    };
+    await connect("yolpol_acquisition", false);
+    const databases = (await admin.query("select datname from pg_database where datallowconn and datname <> 'yolpol_acquisition' order by datname")).rows.map(row => row.datname as string);
+    expect(databases).toEqual(expect.arrayContaining(["postgres", "template1"]));
+    for (const database of databases) await connect(database, true);
+
+    const futureDatabase = `audit_reader_${randomUUID().replaceAll("-", "")}`;
+    await admin.query(`create database ${futureDatabase}`);
+    try { await connect(futureDatabase, true); }
+    finally { await admin.query(`drop database ${futureDatabase}`); }
+
+    for (const [user, file] of [["discovery_intake", process.env.ACQUISITION_DISCOVERY_INTAKE_PASSWORD_FILE],
+      ["discovery_reviewer", process.env.ACQUISITION_DISCOVERY_REVIEWER_PASSWORD_FILE],
+      ["acquisition_runtime", process.env.ACQUISITION_RUNTIME_PASSWORD_FILE],
+      ["acquisition_migrator", process.env.ACQUISITION_MIGRATOR_PASSWORD_FILE]] as const) {
+      const client = new Client({host: "acquisition-postgres", database: "postgres", user, password: readAcquisitionSecret(file)});
+      try { await client.connect(); expect((await client.query("select current_user as role")).rows[0].role).toBe(user); }
+      finally { await client.end(); }
+    }
+    expect((await admin.query("select rolconnlimit from pg_roles where rolname='discovery_staff_reader'")).rows[0].rolconnlimit).toBe(4);
+  });
+  it("rejects direct Staff writes, authority reads, mutation functions and role switching", async () => {
+    const {candidate} = await create();
+    const denial = async (sql: string, parameters: unknown[] = []) => {
+      await expect(staffPool.query(sql, parameters)).rejects.toMatchObject({code: "42501"});
+    };
+    await denial("insert into public.acquisition_discovery_evidence select * from public.acquisition_discovery_evidence where false");
+    await denial("update public.acquisition_discovery_candidates set state='APPROVED' where id=$1", [candidate.id]);
+    await denial("delete from public.acquisition_discovery_reviews where candidate_id=$1", [candidate.id]);
+    await denial("truncate public.acquisition_discovery_evidence");
+    await denial("create table public.reader_forbidden(id int)");
+    await denial("create temp table reader_forbidden(id int)");
+    await denial("select * from public.acquisition_discovery_principal_bindings");
+    await denial("select * from public.acquisition_companies");
+    await denial("select * from public.acquisition_contacts");
+    await denial("update public.acquisition_discovery_policies set revoked=true");
+    await denial("update public.acquisition_suppression_entries set released_at=now()");
+    await denial("set role discovery_mutation_owner");
+    await denial("select public.acquisition_discovery_submit($1,$2::jsonb,$3)", [intake.id, "{}", "0".repeat(64)]);
+    await denial("select public.acquisition_discovery_evidence($1,$2,$3::jsonb)", [reviewer.id, candidate.id, "{}"]);
+    await denial("select public.acquisition_discovery_review($1,$2,$3::jsonb)", [reviewer.id, candidate.id, "{}"]);
+    await denial("select public.acquisition_discovery_queue(null::uuid)");
+    expect((await admin.query("select state,version from public.acquisition_discovery_candidates where id=$1", [candidate.id])).rows[0]).toEqual({state: "PENDING_REVIEW", version: 0});
+  });
+  it("reads a bounded Staff projection and refreshes historical approval eligibility", async () => {
+    const {candidate} = await create();
+    const initial = await staffReader.listCandidates(null);
+    expect(initial.status).toBe("available");
+    if (initial.status !== "available") throw new Error("Reader unavailable.");
+    expect(initial.page.candidates[0]).toMatchObject({id: candidate.id, state: "PENDING_REVIEW", eligibility: {contract: "authorization-time-v1", status: "EVIDENCE_REQUIRED"}});
+    expect(Object.keys(initial.page.candidates[0].evidence[0]).sort()).toEqual(["finding", "id", "kind"]);
+    await support(candidate.id);
+    await app.review(reviewer, candidate.id, review("APPROVE"));
+    expect((await staffReader.listCandidates(null)).status).toBe("available");
+    const approved = await staffReader.listCandidates(null);
+    if (approved.status !== "available") throw new Error("Reader unavailable.");
+    expect(approved.page.candidates[0]).toMatchObject({state: "APPROVED", eligibility: {status: "CURRENTLY_APPROVED"}});
+    await alterPolicy("revoked");
+    const revoked = await staffReader.listCandidates(null);
+    if (revoked.status !== "available") throw new Error("Reader unavailable.");
+    expect(revoked.page.candidates[0]).toMatchObject({state: "APPROVED", policyAllowed: false, eligibility: {status: "POLICY_DENIED"}});
+  });
+  it("reflects suppression and expiry without changing historical state", async () => {
+    const {candidate} = await create();
+    await runtime.query("insert into acquisition_suppression_entries(id,kind,target,reason,source_reference) values($1,'DOMAIN',$2,'MANUAL_REVIEW','discovery-test')", [randomUUID(), fixtureCandidate().domain]);
+    const suppressed = await staffReader.listCandidates(null);
+    if (suppressed.status !== "available") throw new Error("Reader unavailable.");
+    expect(suppressed.page.candidates[0]).toMatchObject({state: "PENDING_REVIEW", suppressed: true, eligibility: {status: "SUPPRESSED"}});
+    await admin.query("alter table acquisition_discovery_candidates disable trigger acquisition_discovery_candidate_guard");
+    try { await admin.query("update acquisition_discovery_candidates set created_at=now()-interval '2 days', expires_at=now()-interval '1 day' where id=$1", [candidate.id]); }
+    finally { await admin.query("alter table acquisition_discovery_candidates enable trigger acquisition_discovery_candidate_guard"); }
+    const expired = await staffReader.listCandidates(null);
+    if (expired.status !== "available") throw new Error("Reader unavailable.");
+    expect(expired.page.candidates[0]).toMatchObject({state: "PENDING_REVIEW", expired: true, eligibility: {status: "EXPIRED"}});
+  });
+  it("bounds pagination, rejects invalid cursors and fails closed on missing credentials", async () => {
+    for (let index = 0; index < 21; index++) {
+      await create(`staff-page-${index}`, {domain: `staff-page-${index}.example`, recordId: `staff-page-${index}`});
+    }
+    const first = await staffReader.listCandidates(null);
+    if (first.status !== "available") throw new Error("Reader unavailable.");
+    expect(first.page.candidates).toHaveLength(20);
+    expect(first.page.nextCursor).toMatch(/^[A-Za-z0-9_-]{52}$/u);
+    const second = await staffReader.listCandidates(first.page.nextCursor);
+    if (second.status !== "available") throw new Error("Reader unavailable.");
+    expect(second.page.candidates).toHaveLength(1);
+    expect(second.page.nextCursor).toBeNull();
+    expect(new Set([...first.page.candidates, ...second.page.candidates].map(item => item.id)).size).toBe(21);
+    expect(await staffReader.listCandidates("' OR true --")).toEqual({status: "unavailable", reason: "service_failure"});
+    const missing = new PostgresStaffDiscoveryReader({...process.env, ACQUISITION_DISCOVERY_STAFF_READER_PASSWORD_FILE: undefined});
+    expect(await missing.listCandidates(null)).toEqual({status: "unavailable", reason: "service_failure"});
+  });
+  it("rejects excessive stored evidence rather than returning an unbounded projection", async () => {
+    const {candidate} = await create();
+    await admin.query("alter table acquisition_discovery_evidence disable trigger acquisition_discovery_evidence_guard");
+    try {
+      for (let index = 0; index < 32; index++) {
+        await admin.query(`insert into acquisition_discovery_evidence(id,candidate_id,principal_id,kind,finding,url,reference,observed_at,created_at)
+          values($1,$2,$3,'WEBSITE','SUPPORTS','https://source.example/evidence',$4,now(),now())`,
+        [randomUUID(), candidate.id, reviewer.id, `excess-${index}`]);
+      }
+      expect(await staffReader.listCandidates(null)).toEqual({status: "unavailable", reason: "service_failure"});
+      expect((await admin.query("select count(*)::int as active from pg_stat_activity where application_name='yolpol-discovery-staff-reader' and state='active'")).rows[0].active).toBe(0);
+    } finally {
+      await admin.query("alter table acquisition_discovery_evidence enable trigger acquisition_discovery_evidence_guard");
+    }
+  });
+  it("rejects 33 stored reviews even when the candidate version matches", async () => {
+    const {candidate} = await create();
+    await admin.query("alter table acquisition_discovery_candidates disable trigger acquisition_discovery_candidate_guard");
+    await admin.query("alter table acquisition_discovery_reviews disable trigger acquisition_discovery_review_guard");
+    const client = await admin.connect();
+    try {
+      await client.query("begin");
+      await client.query("update acquisition_discovery_candidates set version=33 where id=$1", [candidate.id]);
+      await client.query(`insert into acquisition_discovery_reviews(id,candidate_id,reviewer_id,decision,reason,version,state,created_at)
+        select gen_random_uuid(),$1,$2,'NEEDS_EVIDENCE','INSUFFICIENT_EVIDENCE',n,'NEEDS_EVIDENCE',clock_timestamp()
+        from generate_series(1,33) n`, [candidate.id, reviewer.id]);
+      await client.query("commit");
+      expect(await staffReader.listCandidates(null)).toEqual({status: "unavailable", reason: "service_failure"});
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await admin.query("alter table acquisition_discovery_reviews enable trigger acquisition_discovery_review_guard");
+      await admin.query("alter table acquisition_discovery_candidates enable trigger acquisition_discovery_candidate_guard");
+    }
+  });
+  it("waits for a concurrent authority change before evaluating the Staff page", async () => {
+    const {candidate} = await create();
+    const writer = await admin.connect();
+    try {
+      await writer.query("begin");
+      await writer.query("set local role discovery_provisioner");
+      await writer.query("update acquisition_discovery_policies set revoked=true");
+      const pending = staffReader.listCandidates(null);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await writer.query("commit");
+      const result = await pending;
+      if (result.status !== "available") throw new Error("Reader unavailable.");
+      expect(result.page.candidates[0]).toMatchObject({id: candidate.id, eligibility: {status: "POLICY_DENIED"}});
+    } finally {
+      await writer.query("rollback");
+      writer.release();
+    }
+  });
+  it("detects four simultaneous reader sessions as a connection-budget violation", async () => {
+    await closeStaffDiscoveryReaderPool();
+    await staffPool.end();
+    staffPool = new Pool(staffDiscoveryDatabaseConfig(staffEnvironment));
+    const observer = activityObserver();
+    const readers = Array.from({length: 4}, () => new Client(staffDiscoveryDatabaseConfig(staffEnvironment)));
+    try {
+      await observer.connect();
+      expect((await readerActivity(observer)).total).toBe(0);
+      await Promise.all(readers.map(reader => reader.connect()));
+      const measured = await readerActivity(observer);
+      expect(measured.total).toBe(4);
+      expect(() => expectReaderBudget(measured.total)).toThrow();
+    } finally {
+      try { await Promise.all(readers.map(reader => reader.end())); } finally { await observer.end(); }
+    }
+  });
+  it("detects reader sessions opening after the original observation window and lock release", async () => {
+    await closeStaffDiscoveryReaderPool();
+    await staffPool.end();
+    staffPool = new Pool(staffDiscoveryDatabaseConfig(staffEnvironment));
+    await create();
+    const writer = await admin.connect();
+    const observer = activityObserver();
+    const readers = Array.from({length: 4}, () => new Client(staffDiscoveryDatabaseConfig(staffEnvironment)));
+    let observation: ReturnType<typeof observeReaderActivity> | undefined;
+    try {
+      await observer.connect();
+      expect((await readerActivity(observer)).total).toBe(0);
+      await writer.query("begin");
+      await writer.query("select pg_advisory_xact_lock(820082)");
+      observation = observeReaderActivity(observer);
+      await Promise.all(readers.slice(0, 2).map(reader => reader.connect()));
+      const firstQueries = Promise.allSettled(readers.slice(0, 2).map(reader => reader.query("select public.acquisition_staff_discovery_queue(null::uuid)")));
+      await waitForReaderActivity(observation, activity => activity.waiting === 2);
+      // Cross the former 300 ms cutoff before allowing the other two connections.
+      await new Promise(resolve => setTimeout(resolve, 350));
+      await writer.query("commit");
+      expect((await firstQueries).every(result => result.status === "fulfilled")).toBe(true);
+      await Promise.all(readers.slice(2).map(reader => reader.connect()));
+      const measured = await waitForReaderActivity(observation, activity => activity.total === 4);
+      expect(measured.total).toBe(4);
+      console.info(`Delayed reader connection control observed ${measured.total} sessions.`);
+      expect(() => expectReaderBudget(measured.total)).toThrow();
+    } finally {
+      try { await writer.query("rollback"); } finally {
+        writer.release();
+        try { if (observation) await observation.stop(); } finally {
+          try { await Promise.allSettled(readers.map(reader => reader.end())); } finally { await observer.end(); }
+        }
+      }
+    }
+  });
+  it("bounds 24 concurrent Staff reads and releases connections after success and timeout", async () => {
+    await create();
+    const writer = await admin.connect();
+    const observer = activityObserver();
+    let observation: ReturnType<typeof observeReaderActivity> | undefined;
+    let highestConnectionCount = 0;
+    let requests: Array<ReturnType<typeof staffReader.listCandidates>> = [];
+    try {
+      await observer.connect();
+      expect((await readerActivity(observer)).total).toBe(0);
+      await writer.query("begin");
+      await writer.query("select pg_advisory_xact_lock(820082)");
+      observation = observeReaderActivity(observer);
+      requests = Array.from({length: 24}, () => staffReader.listCandidates(null));
+      expect(await Promise.all(requests.slice(4))).toEqual(Array(20).fill({status: "unavailable", reason: "service_failure"}));
+      await waitForReaderActivity(observation, activity => activity.waiting >= 2);
+      expect((await Promise.all([intakePool.query("select 1 as available"), reviewerPool.query("select 1 as available")]))
+        .map(result => result.rows[0].available)).toEqual([1, 1]);
+      await writer.query("commit");
+      expect((await Promise.all(requests)).filter(result => result.status === "available")).toHaveLength(4);
+      expect((await observation.sample()).active).toBe(0);
+
+      await writer.query("begin");
+      await writer.query("select pg_advisory_xact_lock(820082)");
+      expect(await staffReader.listCandidates(null)).toEqual({status: "unavailable", reason: "service_failure"});
+      expect((await observation.sample()).active).toBe(0);
+    } finally {
+      try { await writer.query("rollback"); } finally {
+        writer.release();
+        try {
+          await Promise.allSettled(requests);
+          if (observation) highestConnectionCount = await observation.stop();
+        } finally { await observer.end(); }
+      }
+    }
+    console.info(`24-request reader connection maximum: ${highestConnectionCount}.`);
+    expectReaderBudget(highestConnectionCount);
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    expect((await admin.query("select count(*)::int as total from pg_stat_activity where application_name='yolpol-discovery-staff-reader'")).rows[0].total).toBe(0);
   });
 });

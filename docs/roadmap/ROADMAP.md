@@ -1,6 +1,6 @@
 # YolPol Roadmap
 
-## Customer Acquisition — Tasks 0082 and 0083 Phase A
+## Customer Acquisition — Tasks 0082, 0083, 0084 and 0086 Phase A
 
 NOW: implemented and disposable-runtime-validated local, synthetic-only foundation: isolated
 n8n, independent acquisition persistence/migrations, authenticated internal API,
@@ -31,9 +31,18 @@ Phase A uses authorization-time validity and fresh eligibility checks at every s
 Task 0084 adds a Staff read-only presentation foundation with an intentionally
 unconfigured production reader. See [Task 0084](../tasks/0084-staff-discovery-read-only-foundation.md).
 
-NEXT: independently audit the Task 0084 Staff boundary and design a distinct restricted
-reader authority before connecting candidate data. Preserve Phase A's fresh
-subsequent-use eligibility checks.
+Task 0086 adds a separately owned, read-only PostgreSQL queue function and a
+disposable-only Staff reader adapter. Implementation is complete and the final
+independent security audit passed; controlled commit approval and Git integration
+remain pending. The normal Staff page remains unconfigured; there is no private
+Next.js-to-Acquisition transport or persistent credential.
+See [Task 0086](../tasks/0086-restricted-discovery-reader.md).
+
+NEXT: The project owner has not selected the next feature to implement. Any
+future Staff-to-Acquisition connection requires a reviewed private transport,
+protected persistent credential provisioning and explicit operational/security
+approval. No real-company pilot is authorized or active. Preserve Phase A's
+fresh subsequent-use eligibility checks.
 Physical disposal remains deferred; Phase B must independently revalidate eligibility.
 Real-source permission, disposal, Phase B promotion
 and any real-data pilot require separate authorization. Contact Discovery, Email

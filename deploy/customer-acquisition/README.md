@@ -122,6 +122,47 @@ bundle excludes those fixtures. No persistent start is necessary for Phase A pro
 See [Task 0083](../../docs/tasks/0083-company-discovery-foundation.md) and
 [ADR 0005](../../docs/adr/0005-company-discovery-candidate-review-boundary.md).
 
+## Task 0086 restricted Staff reader boundary
+
+Additive acquisition migration `0002_restricted_staff_discovery_reader` grants a
+dedicated `discovery_staff_read_owner` NOLOGIN role SELECT on only the eight tables
+needed by the existing current-status helpers. It grants that owner EXECUTE on
+`acquisition_discovery_status`, `acquisition_discovery_policy` and
+`acquisition_discovery_blocked`. The owner holds the SECURITY DEFINER
+`public.acquisition_staff_discovery_queue(uuid)` function. The separate
+`discovery_staff_reader` LOGIN role has CONNECT, public schema USAGE and an
+explicit EXECUTE grant on that queue function; it has no table privileges, role
+membership, CREATE or mutation function grants. PUBLIC has no EXECUTE on the
+queue function. The historical Task 0082 `acquisition_release_once()` trigger
+function retains PostgreSQL's default PUBLIC EXECUTE ACL, but a trigger function
+cannot be called directly and the reader has no write access to its table.
+The trusted `acquisition_migrator` retains membership in `discovery_staff_read_owner` and
+`discovery_mutation_owner` with `INHERIT FALSE, SET TRUE`. Neither capability LOGIN
+has those memberships. The guarded disposable runner revokes only the two owners'
+installation-only public-schema CREATE grants after migration; the membership remains.
+
+Only `compose.validation.yaml` provisions these roles and mounts the randomly
+generated, disposable `discovery-staff-reader-password` secret. Normal Compose and
+the normal Next.js Staff composition have no reader credential or database path.
+The disposable PostgreSQL initializer prepends reader-specific Unix-socket and TCP
+`pg_hba.conf` rules before the image defaults. Only `yolpol_acquisition` accepts this
+LOGIN; every other database, including future databases, is rejected at connection
+time without changing PUBLIC grants for existing clients. The reader role has a
+cluster-wide connection limit of four. The adapter accepts only the guarded
+disposable environment, reads a protected secret file, connects to the fixed
+internal `acquisition-postgres` service, applies timeouts, validates a closed Staff
+DTO and returns only newly constructed allowlisted fields. A module-shared pool has
+at most two connections; four reads may be admitted, with excess requests rejected
+safely and the pool wait bounded by the connection timeout. It has no write methods.
+The Staff page therefore still displays its localized unconfigured state.
+A future Staff integration needs an independently reviewed private transport,
+credential distribution and explicit activation approval; do not bridge by publishing
+PostgreSQL or sharing the reviewer identity. See
+[Task 0086](../../docs/tasks/0086-restricted-discovery-reader.md).
+
+Real company collection, real-source permission, physical disposal, contact
+discovery, outbound messaging and Production activation remain unauthorized.
+
 ## Task 0082 foundation and historical operational instructions
 
 Task 0082 is an optional subsystem. Starting normal YOLPOL Development or deploying
