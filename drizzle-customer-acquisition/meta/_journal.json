@@ -15,6 +15,13 @@
       "when": 1791577531582,
       "tag": "0001_company_discovery_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791763200000,
+      "tag": "0002_restricted_staff_discovery_reader",
+      "breakpoints": true
     }
   ]
 }
