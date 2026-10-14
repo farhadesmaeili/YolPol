@@ -82,12 +82,13 @@ describe("Product Card presentation contract", () => {
     expect(cardSource).toContain("motion-reduce:transition-none");
   });
 
-  it("keeps responsive images and mobile-safe actions", () => {
+  it("keeps responsive images and stacks actions until the cards fit both labels", () => {
     expect(cardSource).toContain("object-contain");
     expect(cardSource).toContain('sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw"');
     expect(cardSource).not.toContain("priority");
     expect(cardSource).toContain("grid-cols-1");
-    expect(cardSource).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
+    expect(cardSource).toContain("xl:grid-cols-[minmax(0,1fr)_auto]");
+    expect(cardSource).not.toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
     expect(cardSource).toContain("min-h-12");
   });
 

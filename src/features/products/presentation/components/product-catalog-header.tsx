@@ -1,3 +1,5 @@
+import { productCatalogHeadingFrameClassName } from "@/features/products/presentation/components/product-catalog-section";
+
 export type ProductCatalogStatusItem = Readonly<{ label: string; value: string; ltr?: boolean }>;
 
 export function ProductCatalogHeader({
@@ -20,7 +22,7 @@ export function ProductCatalogHeader({
   isRtl: boolean;
 }) {
   return (
-    <div className="mb-10 border-b border-stone-950/[0.10] pb-8 sm:mb-12 sm:pb-9 lg:mb-14">
+    <div className={productCatalogHeadingFrameClassName}>
       <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-4xl">
           <div className="flex items-center gap-4">

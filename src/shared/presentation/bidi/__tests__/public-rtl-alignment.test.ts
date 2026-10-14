@@ -19,7 +19,7 @@ describe("public RTL alignment", () => {
   it("centers physical decorations independently of document direction", () => {
     const centeredSources = [
       source("src/shared/presentation/home/components/home-hero.tsx"),
-      source("src/features/products/presentation/components/product-catalog-page.tsx"),
+      source("src/features/products/presentation/components/product-catalog-section.tsx"),
       source("src/shared/presentation/site-shell/site-navigation.tsx"),
     ].join("\n");
     expect(centeredSources).toContain("left-1/2");
@@ -29,7 +29,7 @@ describe("public RTL alignment", () => {
   it("gives major public page shells and Product facts an explicit logical baseline", () => {
     for (const path of [
       "src/shared/presentation/marketing/premium-page-shell.tsx",
-      "src/features/products/presentation/components/product-catalog-page.tsx",
+      "src/features/products/presentation/components/product-catalog-section.tsx",
       "src/features/products/presentation/components/product-details.tsx",
       "src/features/products/presentation/components/product-specifications.tsx",
       "src/features/products/presentation/components/product-packaging.tsx",
