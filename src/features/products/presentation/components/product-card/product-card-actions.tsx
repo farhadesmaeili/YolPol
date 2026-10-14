@@ -16,7 +16,7 @@ export function ProductCardActions({
   isRtl: boolean;
 }) {
   return (
-    <div className="mt-auto grid grid-cols-1 gap-2.5 pt-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+    <div className="mt-auto grid grid-cols-1 gap-2.5 pt-6 xl:grid-cols-[minmax(0,1fr)_auto]">
       <Link
         href={`/products/${productSlug}`}
         aria-label={`${viewLabel}: ${productName}`}
